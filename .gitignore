@@ -1,0 +1,27 @@
+# Dependencies and generated output
+**/node_modules/
+**/dist/
+**/.toolchains/
+**/artifacts/
+**/.gradle/
+**/build/
+**/.idea/
+
+# Local reverse-engineering inputs and extracted third-party material
+*.apk
+*.aab
+*.xapk
+research/
+gpt-5.6-instruct-v42/
+
+# Secrets and machine-specific files
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+key.properties
+keystore.properties
+*.log
+.DS_Store
+Thumbs.db

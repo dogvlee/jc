@@ -1,0 +1,3 @@
+[submodule "label-printer-app"]
+	path = label-printer-app
+	url = https://github.com/dogvlee/label-printer-app.git

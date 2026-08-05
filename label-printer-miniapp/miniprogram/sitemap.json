@@ -1,0 +1,9 @@
+{
+  "desc": "本地工具页不参与搜索索引",
+  "rules": [
+    {
+      "action": "disallow",
+      "page": "*"
+    }
+  ]
+}

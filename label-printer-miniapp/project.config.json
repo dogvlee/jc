@@ -1,0 +1,19 @@
+{
+  "appid": "touristappid",
+  "compileType": "miniprogram",
+  "libVersion": "2.32.3",
+  "miniprogramRoot": "miniprogram/",
+  "projectname": "label-printer-miniapp",
+  "description": "本地标签设计与 BLE 打印",
+  "setting": {
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true,
+    "urlCheck": false,
+    "checkInvalidKey": true,
+    "checkSiteMap": true,
+    "useCompilerPlugins": false
+  },
+  "condition": {}
+}
