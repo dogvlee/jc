@@ -1,0 +1,32 @@
+{
+  "name": "niim-label-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "精臣风格标签模板编辑与 BLE 打印 App（离线模板 + 蓝牙打印）",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/dev.mjs",
+    "serve": "node scripts/serve.mjs",
+    "test": "node --test tests/*.test.js",
+    "smoke": "node scripts/smoke-template-to-print.mjs && node scripts/smoke-editor-and-data.mjs",
+    "verify": "npm run build && npm test",
+    "android:add": "npx cap add android",
+    "android:sync": "npm run build && npx cap sync android",
+    "android:open": "npx cap open android",
+    "android:debug": "npm run android:sync && cd android && gradlew.bat assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor-community/bluetooth-le": "7.3.2",
+    "@capacitor/android": "7.6.8",
+    "@capacitor/app": "^7.1.2",
+    "@capacitor/camera": "7.0.5",
+    "@capacitor/core": "7.6.8",
+    "@capacitor/filesystem": "7.1.8",
+    "@capacitor/preferences": "7.0.4",
+    "@capacitor/share": "7.0.4"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "7.6.8",
+    "esbuild": "0.25.12"
+  }
+}

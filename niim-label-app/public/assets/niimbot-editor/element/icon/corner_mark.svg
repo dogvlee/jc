@@ -1,0 +1,15 @@
+<svg width="20" height="14" viewBox="0 0 20 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Frame 734607894">
+<path id="Intersect" fill-rule="evenodd" clip-rule="evenodd" d="M0.742188 0.104065C6.65701 0.324536 10.3914 1.01101 13.2734 3.14844C14.5373 4.08585 15.6561 5.20461 16.5935 6.46857C18.0549 8.43907 18.8381 10.8081 19.2577 14H10.3422C6.98187 14 5.30171 14 4.01824 13.346C2.88927 12.7708 1.97139 11.8529 1.39615 10.7239C0.742188 9.44047 0.742188 7.76032 0.742188 4.4V0.104065Z" fill="url(#paint0_linear_17178_138697)"/>
+<g id="AI">
+<path id="Vector" d="M11.2295 4H12.3995V11.14H11.2295V4Z" fill="white"/>
+<path id="Vector_2" d="M6.47219 4H7.80219L10.5322 11.14H9.28219L8.63219 9.35H5.64219L4.99219 11.14H3.74219L6.47219 4ZM5.99219 8.39H8.28219L7.16219 5.26H7.12219L5.99219 8.39Z" fill="white"/>
+</g>
+</g>
+<defs>
+<linearGradient id="paint0_linear_17178_138697" x1="2.84622" y1="1.95686" x2="20.9851" y2="7.64598" gradientUnits="userSpaceOnUse">
+<stop stop-color="#FF5858"/>
+<stop offset="1" stop-color="#BCAFFF"/>
+</linearGradient>
+</defs>
+</svg>

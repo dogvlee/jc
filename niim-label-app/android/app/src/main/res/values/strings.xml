@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">精臣标签</string>
+    <string name="title_activity_main">精臣标签</string>
+    <string name="package_name">com.jc.niimlabel</string>
+    <string name="custom_url_scheme">com.jc.niimlabel</string>
+</resources>

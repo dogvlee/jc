@@ -1,0 +1,11 @@
+{
+  "appId": "com.jc.niimlabel",
+  "appName": "精臣标签",
+  "webDir": "dist",
+  "backgroundColor": "#f04a3e",
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true
+  }
+}
