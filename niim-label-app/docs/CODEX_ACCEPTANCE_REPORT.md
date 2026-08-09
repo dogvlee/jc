@@ -6,13 +6,15 @@ App: `com.jc.niimlabel` on `emulator-5554`
 
 Release commit: `91546865f0d46fe7ee24dd0807be2ffd79503fcc` (`9154686`)
 
-Remote: `origin/main` is at the same commit after push.
+Final report commit: `ff9e6072375018d69622c906e797dba2b49a01a2` (`ff9e607`)
+
+Remote: `origin/main` is at the final report commit after push.
 
 ## Commands
 
 | cmd | result |
 |-----|--------|
-| git | **PASS** `main...origin/main` is clean with no ahead/behind; release commit `9154686` is pushed. Unrelated parent-worktree changes were preserved and excluded. |
+| git | **PASS** `main...origin/main` is synchronized (`0` ahead/behind); tracked app files are clean. Unrelated parent-worktree changes and local QA artifacts were preserved and excluded. |
 | npm test | **PASS** `118/118`, `0` failures. |
 | node --check | **PASS** `src/app/main.js`, `src/app/views.js`, `src/core/renderer.js`, `src/core/document.js`, `src/core/borders.js`, `src/core/date-links.js`, and `src/core/text-style.js`. |
 | git diff --check | **PASS** for the staged release changes. |
@@ -34,7 +36,7 @@ Remote: `origin/main` is at the same commit after push.
 | R05 | PARTIAL | Long press (`450 ms`), drag, selection frame/handles, panel transitions, and horizontal movement passed the functional checks. | Full visual-fidelity PASS requires a reproducible reference screenshot/video pixel diff, which is not available in the repository. |
 | R06 | PASS | Date-link tests cover primary/companion synchronization, offsets, realtime/format fields, and unlink cleanup; browser check found no VIP marker/pill. | Legacy imported `vip` metadata/selectors remain only for compatibility and are not rendered. |
 | R07 | PARTIAL | `clear-text-style` resets typography defaults; browser selection chrome and handle hit checks pass. | Exact blue-box/handle pixel parity still lacks a reference-image regression fixture. |
-| R08 | PASS | Release commit `91546865f0d46fe7ee24dd0807be2ffd79503fcc` is present on `origin/main`. | Other computers can pull the pushed `main` branch. |
+| R08 | PASS | Release commit `91546865f0d46fe7ee24dd0807be2ffd79503fcc` and final report commit `ff9e6072375018d69622c906e797dba2b49a01a2` are present on `origin/main`. | Other computers can pull the pushed `main` branch. |
 | R09 | PASS | Horizontal drag check returned `dx=8 > 4`; browser long press moved the element by about `7.72 mm`. | Left/right movement remains available with snap and clamp. |
 | R10 | PASS | Border/table/shape unit coverage passes for the 20-entry catalog; browser verified picker, shape controls, and editable `3x2` table (six cells). | Narrow-screen border grid remains usable. |
 | R11 | PASS | `clear-content` persists an empty string immediately; renderer draws display-only `双击编辑` placeholder instead of an empty box. | Placeholder is excluded from the content input value. |
