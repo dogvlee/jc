@@ -1,6 +1,6 @@
 /** Built-in monochrome materials for thermal labels (vector, 0..1 unit box). */
 const MATERIAL_CHIPS = [
-  '最新', '热门', '可爱', 'VIP', '饰品', '祝福', '园艺',
+  '最新', '热门', '可爱', '饰品', '祝福', '园艺',
   '标记', '警示', '物流', '箭头', '联系', '餐饮', '零售', '形状'
 ];
 

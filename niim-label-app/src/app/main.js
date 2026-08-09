@@ -3,8 +3,10 @@ const {
   cloneDocument,
   createDocument,
   createElement,
-  hitTest
+  hitTest,
+  placeNewElement
 } = require('../core/document');
+const { linkedPrimary, syncLinkedDates, unlinkDate } = require('../core/date-links');
 const {
   alignedCanvasSize,
   evaluatePrintability,
@@ -19,8 +21,10 @@ const {
   resizeRotatedElement,
   snapElementPosition
 } = require('../core/geometry');
+const { resetTextStyle } = require('../core/text-style');
 const { renderDocument, renderSelection, validateDocument, contentHandleLocalMm } = require('../core/renderer');
 const { drawMaterialSymbol } = require('../core/materials');
+const { drawBorderStyle, borderById, BORDER_CATALOG } = require('../core/borders');
 const { Capacitor } = require('@capacitor/core');
 const { App: CapacitorApp } = require('@capacitor/app');
 const { BleSession } = require('../services/ble-session');
@@ -61,6 +65,7 @@ const printer = new PrinterClient(session);
 let canvasState = null;
 let scanTimer = null;
 let longPressTimer = null;
+let floatLayoutObserver = null;
 
 function clearLongPressTimer() {
   if (longPressTimer) {
@@ -90,6 +95,7 @@ function renderModalOnly() {
     if (state.modal === 'print') renderPrintPreview();
     if (state.modal === 'template-preview') renderTemplatePreview();
     paintMaterialThumbs();
+    paintBorderThumbs();
   });
 }
 
@@ -122,11 +128,30 @@ function paintMaterialThumbs() {
   });
 }
 
+function paintBorderThumbs() {
+  document.querySelectorAll('[data-border-thumb]').forEach((node) => {
+    const id = node.getAttribute('data-border-thumb') || 'simple';
+    const canvas = node.querySelector('canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = '#000';
+    ctx.fillStyle = '#000';
+    const b = borderById(id); drawBorderStyle(ctx, (b && b.draw) || id, 6, 6, w - 12, h - 12, 1.5);
+  });
+}
+
 function afterRender() {
   if (state.route === 'editor' && state.document) {
     initializeEditorCanvas();
     bindElementPager();
     positionFloatChrome();
+    bindFloatLayoutObserver();
     positionTabIndicator(false);
     bindKeyboardInset();
     const shell = document.querySelector('.niim-editor');
@@ -138,6 +163,10 @@ function afterRender() {
     }
   } else {
     unbindKeyboardInset();
+    if (floatLayoutObserver) {
+      floatLayoutObserver.disconnect();
+      floatLayoutObserver = null;
+    }
   }
   if (state.modal === 'print') {
     renderPrintPreview();
@@ -147,6 +176,7 @@ function afterRender() {
   }
   paintTemplateThumbs();
   paintMaterialThumbs();
+  paintBorderThumbs();
 }
 
 let kbInsetBound = false;
@@ -219,6 +249,9 @@ function positionFloatChrome() {
   bar.style.top = `${top}px`;
   bar.style.transform = 'none';
   bar.style.right = 'auto';
+  if (!canvasState || !canvasState.drag || !canvasState.drag.moved) {
+    bar.style.pointerEvents = '';
+  }
 }
 
 
@@ -446,6 +479,7 @@ function drawEditorCanvas() {
 function preferredPanelTabForElement(element, reason) {
   if (!element) return 'elements';
   if (element.type === 'rect' || element.type === 'line') return 'style';
+  if (element.type === 'table') return 'style';
   // Date always opens 时间 tab; new text/barcode → content; select → style
   if (element.type === 'date') return 'content';
   if (reason === 'add' || reason === 'content') {
@@ -517,12 +551,21 @@ function handleBlankCanvasTap() {
 }
 
 /** Mode B: one or more selected */
-function enterSelectedMode(ids, options) {
+/** Update selection state without remounting panel/float (safe mid-gesture). */
+function applySelectionState(ids, options) {
   const opts = options || {};
   const valid = Array.from(new Set((ids || []).filter((id) => state.document && state.document.elements.some((item) => item.id === id))));
   if (!valid.length) {
-    enterAddMode(opts);
-    return;
+    if (state.editorMode === 'content') finalizeContentUndo();
+    state.selectedIds = [];
+    state.selectedId = '';
+    state.multiSelect = false;
+    state.editorPanelTab = 'elements';
+    state.editorMode = 'add';
+    if (opts.collapsed != null) state.panelCollapsed = !!opts.collapsed;
+    else if (!opts.keepCollapsed) state.panelCollapsed = false;
+    state.editorMenu = false;
+    return [];
   }
   if (state.editorMode === 'content' && opts.reason !== 'content') finalizeContentUndo();
   state.selectedIds = valid;
@@ -539,6 +582,21 @@ function enterSelectedMode(ids, options) {
   } else {
     const el = selectedElement(state);
     state.editorPanelTab = preferredPanelTabForElement(el, opts.reason || 'select');
+  }
+  return valid;
+}
+
+function enterSelectedMode(ids, options) {
+  const opts = options || {};
+  const valid = applySelectionState(ids, opts);
+  if (!valid.length) {
+    enterAddMode(opts);
+    return;
+  }
+  if (opts.soft) {
+    // Mid-gesture: canvas paint only — no panel/float remount (preserves pointer capture & drag)
+    drawEditorCanvas();
+    return;
   }
   if (opts.render === 'full') render();
   else refreshEditorChrome();
@@ -794,7 +852,8 @@ function localPoint(element, point) {
 
 function selectionHandle(element, point) {
   const local = localPoint(element, point);
-  const radius = 1.5;
+  // Tight hit radius so body drag is not stolen by E/S/rotate (esp. short text content box)
+  const radius = 0.85;
   const h = typeof contentHandleLocalMm === 'function'
     ? contentHandleLocalMm(element)
     : { e: { x: element.width / 2, y: 0 }, s: { x: 0, y: element.height / 2 }, se: { x: element.width / 2, y: element.height / 2 } };
@@ -816,6 +875,7 @@ function bindCanvasGestures(selection) {
         startDistance: Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y),
         startZoom: state.zoom
       };
+      canvasState.pendingChrome = false;
       canvasState.drag = null;
       selection.setPointerCapture(event.pointerId);
       return;
@@ -855,28 +915,31 @@ function bindCanvasGestures(selection) {
       return;
     }
 
-    // Select element → Mode B (tap uses style tab, not content)
-    const already = currentIds.length === 1 && currentIds[0] === element.id;
-    if (!state.multiSelect || !currentIds.includes(element.id)) {
+    // Already-selected BEFORE this gesture? Handles only then; first press = move.
+    const singleAlready = currentIds.length === 1 && currentIds[0] === element.id;
+    const handleNow = (singleAlready && !element.locked)
+      ? (activeHandle || selectionHandle(element, point) || "")
+      : "";
+
+    // Soft-select: do not remount float/panel mid-pointerdown (breaks drag on WebView).
+    // Do not collapse multi-selection when pressing a member already selected.
+    const alreadyInSelection = currentIds.includes(element.id);
+    if (!alreadyInSelection) {
       enterSelectedMode([element.id], {
-        reason: 'select',
-        keepTab: already && state.editorMode === 'selected',
-        tab: already && state.editorMode === 'selected' ? state.editorPanelTab : undefined
+        reason: "select",
+        soft: true,
+        keepTab: false
       });
+      if (canvasState) canvasState.pendingChrome = true;
     }
 
-    // Tapping an already-selected text/barcode/QR opens its content editor.
-    // Keeps single tap = select + drag (per EDITOR_INTERACTION_SPEC I1/I2)
-    // while removing the need to land a fast double tap to change the words.
-    const tapToContent = already
+    const tapToContent = singleAlready
       && !element.locked
-      && !activeHandle
-      && state.editorMode === 'selected'
+      && !handleNow
+      && state.editorMode === "selected"
       && ["text", "barcode", "qrcode", "date", "serial"].includes(element.type);
 
-    const mode = element.locked
-      ? 'locked'
-      : (activeHandle || (selectedItems().length === 1 ? selectionHandle(element, point) : '') || 'move');
+    const mode = element.locked ? "locked" : (handleNow || "move");
     const originals = selectedElements(state).map((item) => ({
       id: item.id, x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation
     }));
@@ -893,14 +956,13 @@ function bindCanvasGestures(selection) {
       rotateCenter: { x: element.x + element.width / 2, y: element.y + element.height / 2 },
       startPointerAngle: pointerAngle(point, { x: element.x + element.width / 2, y: element.y + element.height / 2 }),
       moved: false,
-      passedDeadzone: mode !== 'move',
+      passedDeadzone: mode !== "move",
       tapToContent,
       guides: []
     };
-    selection.setPointerCapture(event.pointerId);
-    // Long-press on element (not handle) enables multi-select
+    try { selection.setPointerCapture(event.pointerId); } catch (_) { /* ignore */ }
     clearLongPressTimer();
-    if (!activeHandle && element && !state.multiSelect) {
+    if (!handleNow && element && !state.multiSelect) {
       const pressId = element.id;
       longPressTimer = setTimeout(() => {
         longPressTimer = null;
@@ -909,8 +971,10 @@ function bindCanvasGestures(selection) {
         state.multiSelect = true;
         const ids = Array.isArray(state.selectedIds) ? state.selectedIds.slice() : [];
         if (!ids.includes(pressId)) ids.push(pressId);
-        enterSelectedMode(ids, { tab: 'arrange', reason: 'select' });
-        toast('多选已开启');
+        enterSelectedMode(ids, { tab: "arrange", reason: "select", soft: true });
+        if (canvasState) canvasState.pendingChrome = true;
+        toast("多选已开启");
+        drawEditorCanvas();
       }, 450);
     }
     drawEditorCanvas();
@@ -981,6 +1045,8 @@ function bindCanvasGestures(selection) {
     }
     drag.moved = true;
     clearLongPressTimer();
+    const bar = document.querySelector(".niim-float-bar, .niim-float-multi");
+    if (bar) bar.style.pointerEvents = "none";
     drawEditorCanvas();
   };
 
@@ -1045,15 +1111,22 @@ function finishCanvasGesture(event) {
   }
   const openContent = !drag.moved && drag.tapToContent && !state.multiSelect;
   if (drag) drag.guides = [];
-  canvasState.drag = null;
+  const needChrome = !!(canvasState && canvasState.pendingChrome);
+  if (canvasState) {
+    canvasState.drag = null;
+    canvasState.pendingChrome = false;
+  }
   if (openContent) {
     enterContentMode(selectedElement(state));
     return;
   }
-  // Keep canvas mounted — only repaint selection/guides
-  drawEditorCanvas();
-  positionFloatChrome();
-  patchHistoryButtons();
+  if (needChrome) {
+    refreshEditorChrome({ animateBody: false, animateIndicator: false });
+  } else {
+    drawEditorCanvas();
+    positionFloatChrome();
+    patchHistoryButtons();
+  }
 }
 
 function autosave() {
@@ -1073,6 +1146,7 @@ function commit(mutator) {
   const before = cloneDocument(state.document);
   try {
     mutator(state.document);
+    syncLinkedDates(state.document);
     state.document.elements.forEach((element) => clampElement(element, state.document));
     previewCanvasSize(state.document, currentProfile().dpi);
     state.undo.push(before);
@@ -1097,6 +1171,7 @@ function softCommit(mutator, options) {
   const before = cloneDocument(state.document);
   try {
     mutator(state.document);
+    syncLinkedDates(state.document);
     state.document.elements.forEach((element) => clampElement(element, state.document));
     state.undo.push(before);
     if (state.undo.length > 30) state.undo.shift();
@@ -1161,6 +1236,7 @@ function softUpdate(mutator, options) {
   const opts = options || {};
   try {
     mutator(state.document);
+    syncLinkedDates(state.document);
     state.document.elements.forEach((element) => clampElement(element, state.document));
     if (opts.undoSnapshot) {
       state.undo.push(opts.undoSnapshot);
@@ -1198,7 +1274,33 @@ function documentFromTemplateId(id) {
 
 function openTemplate(id) {
   openDocument(state, documentFromTemplateId(id));
+  // Keep the editor landing state idle. `openDocument` selects the first
+  // element for its state-level contract; the UI template flow starts with
+  // the add-elements panel and lets the first tap select the canvas item.
+  state.selectedId = '';
+  state.selectedIds = [];
+  state.multiSelect = false;
+  state.editorMode = 'add';
+  state.editorPanelTab = 'elements';
+  state.panelCollapsed = false;
   render();
+}
+
+/**
+ * The editor panel animates its height when switching between add/selected/content
+ * modes. The canvas is vertically centered in the remaining stage, so its screen
+ * position changes during that transition even when its own size does not. Observe
+ * the stage and re-position the floating bar while the layout settles.
+ */
+function bindFloatLayoutObserver() {
+  if (typeof ResizeObserver === 'undefined') return;
+  const stage = document.querySelector('.niim-stage');
+  if (!stage) return;
+  if (floatLayoutObserver) floatLayoutObserver.disconnect();
+  floatLayoutObserver = new ResizeObserver(() => {
+    if (state.route === 'editor' && state.document) positionFloatChrome();
+  });
+  floatLayoutObserver.observe(stage);
 }
 
 function applySizeToDocument(documentValue, widthMm, heightMm) {
@@ -1440,6 +1542,7 @@ async function addImage(replace, capture) {
       let element = replace ? selectedElement(state) : null;
       if (!element || element.type !== 'image') {
         element = createElement('image', documentValue);
+        placeNewElement(element, documentValue);
         documentValue.elements.push(element);
         setSelection(state.multiSelect ? [...state.selectedIds, element.id] : [element.id]);
       }
@@ -1930,6 +2033,11 @@ function selectedItems() {
   return selectedElements(state);
 }
 
+function dateControlElement(element) {
+  if (!element || element.type !== 'date' || !state.document) return element;
+  return linkedPrimary(state.document, element) || element;
+}
+
 function commitSelected(mutator, includeLocked) {
   const items = selectedItems();
   if (!items.length) return;
@@ -2179,8 +2287,9 @@ async function handleAction(action, target) {
       const el = selectedElement(state);
       if (!el || el.locked || el.type !== 'date') break;
       commit(() => {
-        const element = selectedElement(state);
-        if (!element) return;
+        const selected = selectedElement(state);
+        const element = dateControlElement(selected);
+        if (!element || element.locked) return;
         element.linkedExpire = true;
         if (!element.expirePresetHours) element.expirePresetHours = 24;
         element.expireMode = element.expireMode || 'preset';
@@ -2188,20 +2297,13 @@ async function handleAction(action, target) {
         const exists = state.document.elements.some((e) => e.type === 'date' && e.linkedFrom === element.id);
         if (!exists) {
           const linked = createElement('date', state.document);
-          linked.label = '保质期至';
-          linked.dateRole = 'expire';
           linked.linkedFrom = element.id;
-          linked.baseTime = element.baseTime;
-          linked.autoUpdate = element.autoUpdate !== false;
-          linked.offsetDays = element.offsetDays || 0;
-          linked.expirePresetHours = element.expirePresetHours || 24;
-          linked.expireMode = element.expireMode || 'preset';
-          linked.showTime = element.showTime !== false;
           linked.x = element.x;
           linked.y = Math.min(state.document.heightMm - element.height - 0.5, element.y + element.height + 0.8);
           linked.width = element.width;
           linked.height = element.height;
           linked.fontSize = element.fontSize;
+          placeNewElement(linked, state.document, { preferred: { x: linked.x, y: linked.y } });
           state.document.elements.push(linked);
         }
       });
@@ -2213,8 +2315,7 @@ async function handleAction(action, target) {
       commit(() => {
         const element = selectedElement(state);
         if (!element) return;
-        element.linkedExpire = false;
-        state.document.elements = state.document.elements.filter((e) => !(e.type === 'date' && e.linkedFrom === element.id));
+        unlinkDate(state.document, element);
       });
       break;
     }
@@ -2224,18 +2325,7 @@ async function handleAction(action, target) {
       softCommit(() => {
         const target = selectedElement(state);
         if (!target) return;
-        target.bold = false;
-        target.underline = false;
-        target.strike = false;
-        target.italic = false;
-        target.reverse = false;
-        target.letterSpacing = 0;
-        target.lineSpacing = 0;
-        target.wordWrap = false;
-        target.color = '#000000';
-        target.align = 'left';
-        target.verticalAlign = 'middle';
-        target.direction = 'horizontal';
+        resetTextStyle(target);
       }, { refreshChrome: true });
       break;
     }
@@ -2253,6 +2343,12 @@ async function handleAction(action, target) {
       }
       const el = selectedElement(state);
       if (state.editorMode === 'content' && nextTab !== 'content') finalizeContentUndo();
+      if (nextTab === 'content' && el && el.locked) {
+        state.editorPanelTab = preferredPanelTabForElement(el, 'select');
+        state.editorMode = 'selected';
+        refreshEditorChrome({ animateBody: true });
+        break;
+      }
       state.editorPanelTab = nextTab;
       // Keyboard content mode ONLY for text/barcode/qrcode on 内容 tab
       if (nextTab === 'content' && el && isKeyboardContentType(el.type)) {
@@ -2292,9 +2388,10 @@ async function handleAction(action, target) {
       if (!el || el.locked) break;
       if (!contentUndoBefore) contentUndoBefore = cloneDocument(state.document);
       softUpdate(() => {
+        // Keep the placeholder out of persisted content; the renderer paints it for empty text.
         if (el.type === 'text') el.text = '';
         else if (el.type === 'barcode' || el.type === 'qrcode') el.value = '';
-      }, { autosave: false });
+      }, { autosave: true });
       const input = document.querySelector('.niim-content-line');
       if (input) input.value = '';
       const clearBtn = document.querySelector('.niim-content-clear');
@@ -2306,7 +2403,7 @@ async function handleAction(action, target) {
       const el = selectedElement(state);
       if (!el || el.locked || el.type !== 'date') break;
       commit(() => {
-        const element = selectedElement(state);
+        const element = dateControlElement(selectedElement(state));
         const label = target.value || '制作日期';
         element.label = label;
         if (label === '保质期至') {
@@ -2326,18 +2423,11 @@ async function handleAction(action, target) {
       const raw = target.value;
       if (!raw) break;
       commit(() => {
-        const element = selectedElement(state);
+        const element = dateControlElement(selectedElement(state));
         const d = new Date(raw);
         if (!Number.isNaN(d.getTime())) {
           element.baseTime = d.toISOString();
           element.autoUpdate = false;
-          // sync linked expire companion
-          state.document.elements.forEach((e) => {
-            if (e.type === 'date' && e.linkedFrom === element.id) {
-              e.baseTime = element.baseTime;
-              e.autoUpdate = false;
-            }
-          });
         }
       });
       break;
@@ -2347,7 +2437,7 @@ async function handleAction(action, target) {
       if (!el || el.locked || el.type !== 'date') break;
       const delta = Number(target.dataset.delta) || 0;
       commit(() => {
-        const element = selectedElement(state);
+        const element = dateControlElement(selectedElement(state));
         element.offsetDays = Math.max(-3650, Math.min(3650, (Number(element.offsetDays) || 0) + delta));
       });
       break;
@@ -2356,7 +2446,7 @@ async function handleAction(action, target) {
       const el = selectedElement(state);
       if (!el || el.locked || el.type !== 'date') break;
       commit(() => {
-        const element = selectedElement(state);
+        const element = dateControlElement(selectedElement(state));
         element.expireMode = target.dataset.value === 'custom' ? 'custom' : 'preset';
         if (element.label === '制作日期') {
           // switching to expire presets often means 保质期
@@ -2369,22 +2459,10 @@ async function handleAction(action, target) {
       if (!el || el.locked || el.type !== 'date') break;
       const hours = Number(target.dataset.hours) || 24;
       commit(() => {
-        const element = selectedElement(state);
+        const element = dateControlElement(selectedElement(state));
         element.expireMode = 'preset';
         element.expirePresetHours = hours;
-        if (element.linkedExpire) {
-          // keep primary as made; push hours to companions
-          state.document.elements.forEach((e) => {
-            if (e.type === 'date' && e.linkedFrom === element.id) {
-              e.expireMode = 'preset';
-              e.expirePresetHours = hours;
-              e.dateRole = 'expire';
-              e.label = '保质期至';
-              e.baseTime = element.baseTime;
-              e.autoUpdate = element.autoUpdate;
-            }
-          });
-        } else {
+        if (!element.linkedExpire) {
           element.dateRole = 'expire';
           if (!element.label || element.label === '制作日期') element.label = '保质期至';
         }
@@ -2396,7 +2474,7 @@ async function handleAction(action, target) {
       if (!el || el.locked || el.type !== 'date') break;
       const delta = Number(target.dataset.delta) || 0;
       commit(() => {
-        const element = selectedElement(state);
+        const element = dateControlElement(selectedElement(state));
         element.expireMode = 'custom';
         element.expirePresetHours = Math.max(1, Math.min(8760, (Number(element.expirePresetHours) || 24) + delta));
         element.dateRole = 'expire';
@@ -2499,6 +2577,10 @@ async function handleAction(action, target) {
     case 'edit-element': {
       const el = selectedElement(state);
       if (!el) break;
+      if (el.locked) {
+        enterSelectedMode([el.id], { tab: preferredPanelTabForElement(el, 'select'), reason: 'select' });
+        break;
+      }
       if (['text', 'date', 'serial', 'barcode', 'qrcode', 'table'].includes(el.type)) {
         enterContentMode(el);
       } else {
@@ -2570,6 +2652,7 @@ async function handleAction(action, target) {
         if (target.dataset.variant === 'shape') {
           element.shapeKind = 'rounded';
         }
+        placeNewElement(element, documentValue);
         documentValue.elements.push(element);
         const ids = state.multiSelect ? [...state.selectedIds, element.id] : [element.id];
         state.selectedIds = ids;
@@ -2589,7 +2672,114 @@ async function handleAction(action, target) {
       state.editorMenu = false;
       toast('多选已开启，继续点选元素');
       break;
-    case 'open-material-sheet':
+        case 'open-border-sheet':
+      state.pendingBorderAdd = !(selectedElement(state) && selectedElement(state).type === 'rect' && selectedElement(state).borderStyle);
+      state.modal = 'border';
+      renderModalOnly();
+      break;
+    case 'border-chip': {
+      const chip = target.dataset.chip || '最新';
+      if (chip === '搜索') {
+        state.borderSearchOpen = !state.borderSearchOpen;
+        if (state.borderSearchOpen) state.borderChip = '搜索';
+        else if (state.borderChip === '搜索') state.borderChip = '最新';
+      } else {
+        state.borderChip = chip;
+        state.borderSearchOpen = false;
+      }
+      if (state.modal === 'border') renderModalOnly();
+      else refreshEditorChrome();
+      paintBorderThumbs();
+      break;
+    }
+    case 'pick-border': {
+      const borderId = target.dataset.border || 'simple';
+      const selected = selectedElement(state);
+      if (selected && selected.type === 'rect' && selected.borderStyle && !state.pendingBorderAdd) {
+        commit(() => {
+          const el = selectedElement(state);
+          if (el && el.type === 'rect' && !el.locked) {
+            el.borderStyle = borderId;
+            el.filled = false;
+            el.shapeKind = 'rect';
+          }
+        });
+        state.modal = '';
+        state.pendingBorderAdd = false;
+        state.editorPanelTab = 'style';
+        state.editorMode = 'selected';
+        state.panelCollapsed = false;
+        render();
+      } else {
+        commit((documentValue) => {
+          const element = createElement('rect', documentValue);
+          element.borderStyle = borderId;
+          element.filled = false;
+          element.shapeKind = 'rect';
+          placeNewElement(element, documentValue);
+          documentValue.elements.push(element);
+          state.selectedIds = state.multiSelect ? [...state.selectedIds, element.id] : [element.id];
+          state.selectedId = element.id;
+          state.editorPanelTab = 'style';
+          state.editorMode = 'selected';
+          state.panelCollapsed = false;
+        });
+        state.modal = '';
+        state.pendingBorderAdd = false;
+        render();
+      }
+      break;
+    }
+    case 'nudge-table': {
+      const field = target.dataset.field || 'rows';
+      const delta = Number(target.dataset.delta) || 0;
+      commit(() => {
+        const el = selectedElement(state);
+        if (!el || el.locked || el.type !== 'table') return;
+        if (field === 'rows') {
+          el.rows = Math.max(1, Math.min(20, (Number(el.rows) || 3) + delta));
+        } else if (field === 'columns') {
+          el.columns = Math.max(1, Math.min(12, (Number(el.columns) || 2) + delta));
+        }
+        const cellCount = el.rows * el.columns;
+        el.cells = Array.from({ length: cellCount }, (_, index) => (el.cells || [])[index] || '');
+        const rowH = Number(el.rowH) || (el.height / Math.max(1, el.rows));
+        const colW = Number(el.colW) || (el.width / Math.max(1, el.columns));
+        el.rowH = rowH;
+        el.colW = colW;
+        el.height = rowH * el.rows;
+        el.width = colW * el.columns;
+      });
+      break;
+    }
+    case 'set-table-dim': {
+      const field = target.dataset.field || 'rowH';
+      const value = Number(target.value);
+      if (!Number.isFinite(value)) break;
+      softCommit(() => {
+        const el = selectedElement(state);
+        if (!el || el.locked || el.type !== 'table') return;
+        if (field === 'rowH') {
+          el.rowH = Math.max(2, Math.min(20, value));
+          el.height = el.rowH * Math.max(1, Number(el.rows) || 1);
+        } else if (field === 'colW') {
+          el.colW = Math.max(4, Math.min(40, value));
+          el.width = el.colW * Math.max(1, Number(el.columns) || 1);
+        }
+      }, { refreshChrome: true });
+      break;
+    }
+    case 'set-table-color': {
+      const field = target.dataset.field || 'textColor';
+      softCommit(() => {
+        const el = selectedElement(state);
+        if (!el || el.locked || el.type !== 'table') return;
+        el[field] = target.dataset.value || '#000000';
+        if (field === 'textColor') el.color = el.textColor;
+      }, { patchActive: true });
+      break;
+    }
+case 'open-material-sheet':
       state.pendingMaterialAdd = !(selectedElement(state) && selectedElement(state).type === 'material');
       state.modal = 'material';
       renderModalOnly();
@@ -2635,6 +2825,7 @@ async function handleAction(action, target) {
         commit((documentValue) => {
           const element = createElement('material', documentValue);
           element.symbol = symbol;
+          placeNewElement(element, documentValue);
           documentValue.elements.push(element);
           state.selectedIds = state.multiSelect ? [...state.selectedIds, element.id] : [element.id];
           state.selectedId = element.id;
@@ -2843,7 +3034,10 @@ async function handleAction(action, target) {
       const field = target.dataset.field;
       if (!field) break;
       softCommit(() => {
-        const element = selectedElement(state);
+        const selected = selectedElement(state);
+        const element = selected && selected.type === 'date' && ['autoUpdate', 'showTime', 'showSeconds'].includes(field)
+          ? dateControlElement(selected)
+          : selected;
         if (!element || element.locked) return;
         if (typeof target.checked === 'boolean' && target.type === 'checkbox') {
           element[field] = target.checked;
@@ -2958,6 +3152,14 @@ function handleField(action, target) {
     refreshEditorChrome();
     return;
   }
+  if (action === 'border-search') {
+    state.borderQuery = target.value;
+    const cursor = target.selectionStart;
+    if (state.modal === 'border') renderModalOnly();
+    else refreshEditorChrome();
+    paintBorderThumbs();
+    return;
+  }
   if (action === 'material-search') {
     state.materialQuery = target.value;
     const cursor = target.selectionStart;
@@ -2998,11 +3200,15 @@ function handleField(action, target) {
     render();
     return;
   }
+    if (action === 'set-table-dim') {
+    handleAction(action, target);
+    return;
+  }
   if (action === 'update-element') {
     const field = target.dataset.field;
     const numeric = [
       'x', 'y', 'width', 'height', 'rotation', 'fontSize', 'lineWidth', 'threshold',
-      'start', 'step', 'digits', 'rows', 'columns', 'lineSpacing', 'letterSpacing', 'document-width', 'document-height'
+      'start', 'step', 'digits', 'rows', 'columns', 'rowH', 'colW', 'lineSpacing', 'letterSpacing', 'document-width', 'document-height'
     ];
     const value = numeric.includes(field) ? Number(target.value) : target.value;
     if (numeric.includes(field) && !Number.isFinite(value)) return;
@@ -3045,6 +3251,18 @@ function handleField(action, target) {
         element[field] = Math.max(1, Math.min(field === 'rows' ? 20 : 12, Math.round(value)));
         const cellCount = element.rows * element.columns;
         element.cells = Array.from({ length: cellCount }, (_, index) => (element.cells || [])[index] || '');
+        const rowH = Number(element.rowH) || (element.height / Math.max(1, element.rows));
+        const colW = Number(element.colW) || (element.width / Math.max(1, element.columns));
+        element.rowH = rowH;
+        element.colW = colW;
+        element.height = rowH * element.rows;
+        element.width = colW * element.columns;
+      } else if (field === 'rowH') {
+        element.rowH = Math.max(2, Math.min(20, value));
+        element.height = element.rowH * Math.max(1, Number(element.rows) || 1);
+      } else if (field === 'colW') {
+        element.colW = Math.max(4, Math.min(40, value));
+        element.width = element.colW * Math.max(1, Number(element.columns) || 1);
       } else if (field === 'digits') {
         element[field] = Math.max(1, Math.min(12, Math.round(value)));
       } else {
@@ -3171,7 +3389,7 @@ appRoot.addEventListener('input', (event) => {
   const target = event.target.closest('[data-action]');
   if (!target) return;
   // Live: content typing + font size slider (no full remount)
-  if (['template-search', 'material-search', 'editor-tpl-search', 'update-data-cell', 'update-element', 'update-table-cell'].includes(target.dataset.action)) {
+  if (['template-search', 'material-search', 'editor-tpl-search', 'update-data-cell', 'update-element', 'update-table-cell', 'set-table-dim', 'border-search'].includes(target.dataset.action)) {
     handleField(target.dataset.action, target);
   }
 });

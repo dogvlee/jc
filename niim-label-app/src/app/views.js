@@ -5,6 +5,7 @@ const { icon, sprite } = require('./icons');
 const { STOCK_PRESETS } = require('./stock-presets');
 const { buildTemplateDocument } = require('./template-layouts');
 const { MATERIAL_CATALOG, MATERIAL_CHIPS, materialCategories, materialsForChip } = require('../core/materials');
+const { BORDER_CATALOG, BORDER_CHIPS, bordersForChip, borderById } = require('../core/borders');
 
 const DATE_EXPIRE_PRESETS = [
   { label: '2小时', hours: 2 },
@@ -638,7 +639,6 @@ function contextActions(state) {
       <button type="button" class="niim-float-btn" data-action="edit-element" title="编辑">${fs('floating_shortcut_edit.svg')}</button>
       <button type="button" class="niim-float-btn" data-action="delete-element" title="删除">${fs('floating_shortcut_remove.svg')}</button>
       <button type="button" class="niim-float-btn" data-action="duplicate-element" title="复制">${fs('floating_shortcut_copy.svg')}</button>
-      <button type="button" class="niim-float-btn" data-action="toggle-lock" title="解锁">${fs('floating_shortcut_unlock.svg')}</button>
     </div>`;
   }
   return `<div class="niim-float-bar niim-float-fixed" role="toolbar" aria-label="元素操作">
@@ -689,8 +689,7 @@ function materialBrowserHtml(state, activeSymbol, options) {
   }).join('');
   const tiles = items.map(function(item) {
     const active = (activeSymbol || 'check') === item.id ? ' active' : '';
-    const vip = item.vip ? '<i class="niim-mat-vip">VIP</i>' : '';
-    return '<button type="button" class="niim-mat-tile' + active + '" data-action="pick-material" data-symbol="' + item.id + '" title="' + escapeHtml(item.label) + '">' + vip + '<span class="niim-material-thumb" data-material-thumb="' + item.id + '"><canvas width="56" height="56"></canvas></span></button>';
+    return '<button type="button" class="niim-mat-tile' + active + '" data-action="pick-material" data-symbol="' + item.id + '" title="' + escapeHtml(item.label) + '">' + '<span class="niim-material-thumb" data-material-thumb="' + item.id + '"><canvas width="56" height="56"></canvas></span></button>';
   }).join('');
   const searchInput = searchOpen ? ('<input class="niim-mat-search" data-action="material-search" placeholder="搜索素材" value="' + escapeHtml(query) + '">') : '';
   return '<section class="niim-mat-browser' + (opts.embedded ? ' embedded' : '') + '">' +
@@ -723,6 +722,48 @@ function materialSheet(state) {
     '</section>';
 }
 
+function borderBrowserHtml(state, activeId, options) {
+  const opts = options || {};
+  const chip = state.borderChip || "最新";
+  const query = state.borderQuery || "";
+  const searchOpen = !!state.borderSearchOpen || chip === "搜索";
+  const items = bordersForChip(searchOpen ? "搜索" : chip, query);
+  const chipsHtml = BORDER_CHIPS.map(function(name) {
+    const active = (!searchOpen && chip === name) ? " active" : "";
+    return "<button type=\"button\" class=\"niim-mat-chip" + active + "\" data-action=\"border-chip\" data-chip=\"" + escapeHtml(name) + "\" role=\"tab\">" + escapeHtml(name) + "</button>";
+  }).join("");
+  const tiles = items.map(function(item) {
+    const active = (activeId || "") === item.id ? " active" : "";
+    return "<button type=\"button\" class=\"niim-mat-tile niim-border-tile" + active + "\" data-action=\"pick-border\" data-border=\"" + item.id + "\" title=\"" + escapeHtml(item.label) + "\">" +
+      "<span class=\"niim-border-thumb\" data-border-thumb=\"" + item.id + "\"><canvas width=\"72\" height=\"48\"></canvas></span>" +
+      "<span class=\"niim-border-label\">" + escapeHtml(item.label) + "</span></button>";
+  }).join("");
+  const searchInput = searchOpen ? ("<input class=\"niim-mat-search\" data-action=\"border-search\" placeholder=\"搜索边框\" value=\"" + escapeHtml(query) + "\">") : "";
+  return "<section class=\"niim-mat-browser niim-border-browser" + (opts.embedded ? " embedded" : "") + "\">" +
+    "<div class=\"niim-mat-chips\" role=\"tablist\">" +
+      "<button type=\"button\" class=\"niim-mat-chip search" + (searchOpen ? " active" : "") + "\" data-action=\"border-chip\" data-chip=\"搜索\" role=\"tab\">搜索</button>" +
+      chipsHtml +
+    "</div>" +
+    searchInput +
+    "<div class=\"niim-mat-grid niim-border-grid\">" + (tiles || "<p class=\"niim-hint\">暂无边框</p>") + "</div>" +
+  "</section>";
+}
+
+function borderSheet(state) {
+  const selected = selectedElement(state);
+  const active = selected && selected.type === "rect" && selected.borderStyle ? selected.borderStyle : "";
+  return "<div class=\"sheet-backdrop\" data-action=\"close-modal\"></div>" +
+    "<section class=\"bottom-sheet workbench-sheet niim-material-sheet niim-border-sheet\" role=\"dialog\" aria-modal=\"true\">" +
+      "<div class=\"sheet-handle\"></div>" +
+      "<div class=\"sheet-header\">" +
+        "<div><h2>边框</h2><div class=\"topbar-subtitle\">选择边框样式</div></div>" +
+        "<button class=\"icon-button\" data-action=\"close-modal\">" + icon("close") + "</button>" +
+      "</div>" +
+      "<div class=\"niim-material-sheet-body\">" +
+        borderBrowserHtml(state, active, { embedded: false }) +
+      "</div>" +
+    "</section>";
+}
 function elementPicker(state) {
   // Page 2 ship: 扫描 · 序列号 · 边框 · 形状 · 表格 · 线条
   const pages = [
@@ -739,7 +780,7 @@ function elementPicker(state) {
     [
       ['scan', 'features_icon_scan.svg', '扫描', 'scan-code'],
       ['serial', 'element_icon_serial.svg', '序列号', 'add-element'],
-      ['rect', 'element_icon_border.svg', '边框', 'add-element', 'border'],
+      ['rect', 'element_icon_border.svg', '边框', 'open-border-sheet'],
       ['rect', 'element_icon_graph.svg', '形状', 'add-element', 'shape'],
       ['table', 'element_icon_table.svg', '表格', 'add-element'],
       ['line', 'element_icon_line.svg', '线条', 'add-element']
@@ -812,7 +853,8 @@ function editorDataPanel(state) {
 
 function contentValue(element) {
   if (!element) return '';
-  if (element.type === 'text') return element.text || '';
+  // The canvas owns the visual placeholder. It is never user-entered content.
+  if (element.type === 'text') return element.text === '双击编辑' ? '' : (element.text || '');
   if (element.type === 'barcode' || element.type === 'qrcode') return element.value || '';
   if (element.type === 'date') return element.fixedValue || '';
   if (element.type === 'serial') {
@@ -838,7 +880,9 @@ function elementTimePanel(element) {
   const offsetDays = Number(element.offsetDays) || 0;
   const preset = Number(element.expirePresetHours) || 24;
   const expireMode = element.expireMode || 'preset';
-  const linked = !!element.linkedExpire;
+  // A companion is still part of the relationship when it is selected on its
+  // own; exposing another "add linked date" button there would create a chain.
+  const linked = !!element.linkedExpire || !!element.linkedFrom;
   const baseLocal = (() => {
     try {
       const d = element.baseTime ? new Date(element.baseTime) : new Date();
@@ -851,7 +895,7 @@ function elementTimePanel(element) {
   })();
   return `<section class="niim-time-panel">
     <div class="niim-realtime-row">
-      <span class="niim-realtime-label">实时时间 <i class="niim-vip-pill">VIP</i></span>
+      <span class="niim-realtime-label">实时时间 </span>
       <button type="button" class="niim-switch${element.autoUpdate !== false ? ' on' : ''}" data-action="toggle-element" data-field="autoUpdate" aria-label="实时时间"><i></i></button>
     </div>
     <div class="niim-time-primary">
@@ -985,11 +1029,7 @@ function elementContentPanel(element, state) {
     </section>`;
   }
   if (element.type === 'table') {
-    const count = Math.max(1, Math.min(240, Number(element.rows) * Number(element.columns)));
-    return `<section class="niim-content-panel">
-      <div class="niim-two-col">${numericField('行数', 'rows', element.rows, 1, 1, 20)}${numericField('列数', 'columns', element.columns, 1, 1, 12)}</div>
-      <div class="table-cell-editor">${Array.from({ length: count }, (_, i) => `<input data-action="update-table-cell" data-index="${i}" value="${escapeHtml((element.cells || [])[i] || '')}">`).join('')}</div>
-    </section>`;
+    return tableTextPanel(element);
   }
   if (element.type === 'material') {
     return '<section class="niim-content-panel niim-material-content">' +
@@ -1000,7 +1040,7 @@ function elementContentPanel(element, state) {
 }
 
 function elementFontPanel(element) {
-  if (!element || !['text', 'date', 'serial'].includes(element.type)) {
+  if (!element || !['text', 'date', 'serial', 'table'].includes(element.type)) {
     return `<section class="niim-font-panel"><p class="niim-hint">当前元素无字体设置</p></section>`;
   }
   return `<section class="niim-font-panel">
@@ -1119,12 +1159,93 @@ function shapeStylePanel(element) {
   </section>`;
 }
 
+function tableStylePanel(element) {
+  const rows = Math.max(1, Number(element.rows) || 3);
+  const cols = Math.max(1, Number(element.columns) || 2);
+  const rowH = round(element.rowH || (element.height / rows) || 4);
+  const colW = round(element.colW || (element.width / cols) || 8);
+  const lw = round(element.lineWidth || 0.4);
+  const textColor = (element.textColor || element.color || "#000000").toUpperCase();
+  const strokeColor = (element.strokeColor || element.color || "#000000").toUpperCase();
+  return `<section class="niim-style-panel niim-table-style">` +
+    `<div class="niim-form-row"><label>行数</label><div class="niim-pm wide">` +
+    `<button type="button" data-action="nudge-table" data-field="rows" data-delta="-1">−</button>` +
+    `<em>${rows}</em>` +
+    `<button type="button" data-action="nudge-table" data-field="rows" data-delta="1">+</button></div></div>` +
+    `<div class="niim-form-row"><label>列数</label><div class="niim-pm wide">` +
+    `<button type="button" data-action="nudge-table" data-field="columns" data-delta="-1">−</button>` +
+    `<em>${cols}</em>` +
+    `<button type="button" data-action="nudge-table" data-field="columns" data-delta="1">+</button></div></div>` +
+    `<div class="niim-form-row"><label>行高</label>` +
+    `<input class="niim-size-slider" type="range" min="2" max="20" step="0.1" value="${rowH}" data-action="set-table-dim" data-field="rowH">` +
+    `<em>${rowH.toFixed(1)}</em></div>` +
+    `<div class="niim-form-row"><label>列宽</label>` +
+    `<input class="niim-size-slider" type="range" min="4" max="40" step="0.1" value="${colW}" data-action="set-table-dim" data-field="colW">` +
+    `<em>${colW.toFixed(1)}</em></div>` +
+    `<div class="niim-form-row"><label>线粗</label><div class="niim-pm wide">` +
+    `<button type="button" data-action="nudge-line-width" data-delta="-0.1">−</button>` +
+    `<em>${lw.toFixed(1)}</em>` +
+    `<button type="button" data-action="nudge-line-width" data-delta="0.1">+</button></div></div>` +
+    `<div class="niim-form-row"><label>文本颜色</label><span class="niim-color-dots">` +
+    `<button type="button" class="niim-color-dot${textColor === "#000000" ? " active" : ""}" data-action="set-table-color" data-field="textColor" data-value="#000000" style="--dot:#000"></button>` +
+    `<button type="button" class="niim-color-dot${textColor === "#E53935" ? " active" : ""}" data-action="set-table-color" data-field="textColor" data-value="#E53935" style="--dot:#E53935"></button>` +
+    `</span></div>` +
+    `<div class="niim-form-row"><label>线条颜色</label><span class="niim-color-dots">` +
+    `<button type="button" class="niim-color-dot${strokeColor === "#000000" ? " active" : ""}" data-action="set-table-color" data-field="strokeColor" data-value="#000000" style="--dot:#000"></button>` +
+    `<button type="button" class="niim-color-dot${strokeColor === "#E53935" ? " active" : ""}" data-action="set-table-color" data-field="strokeColor" data-value="#E53935" style="--dot:#E53935"></button>` +
+    `</span></div></section>`;
+}
+
+function tableTextPanel(element) {
+  const size = round(element.fontSize || 2.8);
+  const align = element.align || 'center';
+  const vAlign = element.verticalAlign || 'middle';
+  const count = Math.max(1, Math.min(240, Number(element.rows) * Number(element.columns)));
+  const cellsHtml = Array.from({ length: count }, function(_, i) {
+    return '<input data-action="update-table-cell" data-index="' + i + '" value="' + escapeHtml((element.cells || [])[i] || '') + '">';
+  }).join('');
+  return '<section class="niim-style-panel niim-table-text">' +
+    '<div class="niim-style-toolbar">' +
+    '<button type="button" class="niim-tbtn' + (element.bold ? ' active' : '') + '" data-action="toggle-element" data-field="bold"><b>B</b></button>' +
+    '<button type="button" class="niim-tbtn' + (element.underline ? ' active' : '') + '" data-action="toggle-element" data-field="underline"><span class="u">U</span></button>' +
+    '<button type="button" class="niim-tbtn' + (element.strike ? ' active' : '') + '" data-action="toggle-element" data-field="strike"><span class="s">S</span></button>' +
+    '<button type="button" class="niim-tbtn' + (element.italic ? ' active' : '') + '" data-action="toggle-element" data-field="italic"><i>I</i></button></div>' +
+    '<div class="niim-size-row"><span class="niim-aa">A<span>A</span></span>' +
+    '<input class="niim-size-slider" type="range" min="1" max="20" step="0.1" value="' + size + '" data-action="update-element" data-field="fontSize">' +
+    '<button type="button" class="niim-size-btn" data-action="nudge-font" data-delta="-0.2">-</button>' +
+    '<button type="button" class="niim-size-btn" data-action="nudge-font" data-delta="0.2">+</button></div>' +
+    '<div class="niim-size-readout">' + size.toFixed(1) + '</div>' +
+    '<div class="niim-align-text-row">' +
+    '<button type="button" class="niim-align-t' + (align === 'left' ? ' active' : '') + '" data-action="set-align" data-value="left">左</button>' +
+    '<button type="button" class="niim-align-t' + (align === 'center' ? ' active' : '') + '" data-action="set-align" data-value="center">中</button>' +
+    '<button type="button" class="niim-align-t' + (align === 'right' ? ' active' : '') + '" data-action="set-align" data-value="right">右</button>' +
+    '<button type="button" class="niim-align-t' + (vAlign === 'top' ? ' active' : '') + '" data-action="set-vertical-align" data-value="top">顶</button>' +
+    '<button type="button" class="niim-align-t' + (vAlign === 'middle' ? ' active' : '') + '" data-action="set-vertical-align" data-value="middle">中</button>' +
+    '<button type="button" class="niim-align-t' + (vAlign === 'bottom' ? ' active' : '') + '" data-action="set-vertical-align" data-value="bottom">底</button></div>' +
+    '<div class="niim-spacing-pair"><div class="niim-spacing-item"><span>字距</span><div class="niim-pm">' +
+    '<button type="button" data-action="nudge-letter" data-delta="-0.1">-</button><em>' + round(element.letterSpacing || 0).toFixed(1) + '</em>' +
+    '<button type="button" data-action="nudge-letter" data-delta="0.1">+</button></div></div>' +
+    '<div class="niim-spacing-item"><span>行距</span><div class="niim-pm">' +
+    '<button type="button" data-action="nudge-line" data-delta="-0.05">-</button><em>' + round((element.lineSpacing != null ? element.lineSpacing : 0)).toFixed(1) + '</em>' +
+    '<button type="button" data-action="nudge-line" data-delta="0.05">+</button></div></div></div>' +
+    '<button type="button" class="niim-mirror-row" data-action="toggle-element" data-field="wordWrap">' +
+    '<span>按单词换行</span><span class="niim-switch' + (element.wordWrap ? ' on' : '') + '"><i></i></span></button>' +
+    '<div class="table-cell-editor">' + cellsHtml + '</div></section>';
+}
+
 /** Style tab from domestic screenshot: B/U/S/I · colors · size slider · align · spacing */
 function elementStylePanel(element) {
   if (!element) return '';
   if (element.type === 'barcode') return barcodeStylePanel(element);
   if (element.type === 'qrcode') return qrStylePanel(element);
-  if (element.type === 'rect' || element.type === 'line') return shapeStylePanel(element);
+  if (element.type === 'table') return tableStylePanel(element);
+  if (element.type === 'rect' || element.type === 'line') {
+    const shape = shapeStylePanel(element);
+    if (element.borderStyle) {
+      return shape + '<button type="button" class="niim-row-command" data-action="open-border-sheet"><span>更换边框</span></button>';
+    }
+    return shape;
+  }
   if (element.type === 'material') {
     const lw = round(element.lineWidth || 0.55);
     return `<section class="niim-style-panel niim-material-style">
@@ -1295,6 +1416,8 @@ function propertyPanel(state) {
       tabs = [['content', '时间'], ['style', '样式'], ['font', '字体'], ['arrange', '对齐/镜像']];
     } else if (element.type === 'serial') {
       tabs = [['content', '数值'], ['style', '样式'], ['font', '字体'], ['arrange', '对齐/镜像']];
+    } else if (element.type === 'table') {
+      tabs = [['style', '表格'], ['content', '文本'], ['font', '字体'], ['arrange', '对齐']];
     } else if (element.type === 'material') {
       tabs = [['content', '素材'], ['style', '样式'], ['arrange', '对齐/镜像']];
     } else if (textLike) {
@@ -1320,6 +1443,11 @@ function propertyPanel(state) {
 
   // Text/barcode content: system keyboard bar, hide footer. Date「时间」keeps 保存/打印.
   const contentMode = active === 'content' && element && ['text', 'barcode', 'qrcode'].includes(element.type);
+  const unlockCommand = element && element.locked && selection.length === 1
+    ? `<button type="button" class="niim-unlock-command" data-action="toggle-lock">
+      ${editorAsset('floating_shortcut/floating_shortcut_unlock.svg')}<span>解锁元素</span>
+    </button>`
+    : '';
   // Equal-width fixed tabs when editing an element (内容|样式|字体|对齐)
   const equalTabs = !!(element || selection.length > 1) && state.editorPanelTab !== 'layers';
 
@@ -1330,6 +1458,7 @@ function propertyPanel(state) {
       </div>
       <button type="button" class="niim-panel-fold" data-action="toggle-property-panel" title="${state.panelCollapsed ? '展开' : '收起'}">${editorAsset('common/attributeDown.svg')}</button>
     </div>
+    ${unlockCommand}
     <div class="niim-panel-body editor-panel-body${contentMode ? ' content-mode' : ''}" data-panel-body="${active}">${body}</div>
     ${contentMode ? '' : `<div class="niim-panel-footer">
       <button type="button" class="niim-panel-save" data-action="save-project">
@@ -1716,6 +1845,7 @@ function renderModal(state) {
   if (state.modal === 'cloud') return infoSheet('云端同步', '服务地址：<code>API_BASE_URL</code><br>对象存储：<code>STORAGE_PROVIDER</code>', '完成');
   if (state.modal === 'help') return infoSheet('帮助与反馈', '从首页「行业模板」选版式 → 编辑内容 → 连接打印机 → 打印。<br><br>反馈接口：<code>FEEDBACK_ENDPOINT</code>', '完成');
   if (state.modal === 'material') return materialSheet(state);
+  if (state.modal === 'border') return borderSheet(state);
   if (state.modal === 'advanced-qr') {
     return `<div class="sheet-backdrop" data-action="close-modal"></div>
       <section class="bottom-sheet workbench-sheet" role="dialog" aria-modal="true">

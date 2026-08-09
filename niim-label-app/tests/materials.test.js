@@ -58,13 +58,9 @@ test('chips and filter helper', () => {
   assert.ok(Array.isArray(MATERIAL_CHIPS));
   assert.ok(MATERIAL_CHIPS.length >= 10);
   assert.ok(MATERIAL_CHIPS.includes('\u70ed\u95e8'));
-  assert.ok(MATERIAL_CHIPS.includes('VIP'));
   const hot = materialsForChip('\u70ed\u95e8');
   assert.ok(hot.length > 0);
   assert.ok(hot.every((item) => (item.tags && item.tags.includes('\u70ed\u95e8')) || item.category === '\u70ed\u95e8'));
-  const vip = materialsForChip('VIP');
-  assert.ok(vip.length > 0);
-  assert.ok(vip.every((item) => item.vip));
   const q = materialsForChip('\u641c\u7d22', 'panda');
   assert.ok(q.some((item) => item.id === 'panda'));
   const cute = materialsForChip('\u53ef\u7231');

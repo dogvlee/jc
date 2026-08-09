@@ -2,6 +2,7 @@ const qrcode = require('../vendor/qrcode');
 const { encodeCode128B } = require('./code128');
 const { encodeEan13 } = require('./ean13');
 const { drawMaterialSymbol } = require('./materials');
+const { drawBorderStyle, borderById } = require('./borders');
 
 const QR_QUIET_ZONE_MODULES = 4;
 const thresholdImageCache = new WeakMap();
@@ -255,10 +256,14 @@ function drawText(context, element, dpi) {
     context.beginPath();
     context.rect(x, y, width, height);
     context.clip();
-    const ink = element.color || '#000000';
+    const rawText = String(element.text || '');
+    const isEmpty = rawText.trim().length === 0;
+    const displayText = isEmpty ? '双击编辑' : rawText;
+    const paintEl = Object.assign({}, element, { text: displayText });
+    const ink = isEmpty ? '#9aa3a8' : (element.color || '#000000');
     // Reverse/反白 (video): fill with element color, white glyphs + underline
-    if (element.reverse) {
-      context.fillStyle = ink;
+    if (element.reverse && rawText.trim().length > 0) {
+      context.fillStyle = element.color || '#000000';
       context.fillRect(x, y, width, height);
       context.fillStyle = '#ffffff';
       context.strokeStyle = '#ffffff';
@@ -266,12 +271,12 @@ function drawText(context, element, dpi) {
       context.fillStyle = ink;
       context.strokeStyle = ink;
     }
-    const fitted = fitText(context, element, width, height, dpi);
-    context.font = fontValue(element, fitted.fontPixels);
-    if (element.direction === 'vertical') {
-      drawVerticalText(context, element, fitted, x, y, width, height);
+    const fitted = fitText(context, paintEl, width, height, dpi);
+    context.font = fontValue(paintEl, fitted.fontPixels);
+    if (paintEl.direction === 'vertical') {
+      drawVerticalText(context, paintEl, fitted, x, y, width, height);
     } else {
-      drawHorizontalText(context, element, fitted, x, y, width, height);
+      drawHorizontalText(context, paintEl, fitted, x, y, width, height);
     }
     context.restore();
   });
@@ -474,9 +479,15 @@ function drawShape(context, element, dpi) {
   withElementTransform(context, element, dpi, (x, y, width, height) => {
     const ink = element.color || '#000000';
     const kind = element.shapeKind || (element.type === 'line' ? 'line' : 'rect');
+    const linePx = Math.max(1, mmToDots(element.lineWidth || 0.35, dpi));
     context.strokeStyle = ink;
     context.fillStyle = ink;
-    context.lineWidth = Math.max(1, mmToDots(element.lineWidth || 0.35, dpi));
+    context.lineWidth = linePx;
+    if (element.borderStyle) {
+      context.setLineDash([]);
+      const bstyle = (borderById(element.borderStyle) || {}).draw || element.borderStyle; drawBorderStyle(context, bstyle, x, y, width, height, linePx);
+      return;
+    }
     if (element.dashed) context.setLineDash([mmToDots(1.2, dpi), mmToDots(0.8, dpi)]);
     else context.setLineDash([]);
     if (kind === 'line' || element.type === 'line') {
@@ -603,10 +614,12 @@ function drawTable(context, element, dpi) {
     const rowHeight = height / rows;
     const columnWidth = width / columns;
     const cells = Array.isArray(element.cells) ? element.cells : [];
+    const strokeInk = element.strokeColor || element.color || '#000000';
+    const textInk = element.textColor || element.color || '#000000';
     context.save();
-    context.strokeStyle = '#000000';
-    context.fillStyle = '#000000';
-    context.lineWidth = Math.max(1, mmToDots(element.lineWidth || 0.3, dpi));
+    context.strokeStyle = strokeInk;
+    context.fillStyle = textInk;
+    context.lineWidth = Math.max(1, mmToDots(element.lineWidth || 0.4, dpi));
     context.strokeRect(x, y, width, height);
     for (let row = 1; row < rows; row += 1) {
       context.beginPath();
@@ -621,17 +634,66 @@ function drawTable(context, element, dpi) {
       context.stroke();
     }
     const fontPixels = Math.max(7, Math.min(mmToDots(element.fontSize || 2.8, dpi), rowHeight * 0.62));
-    context.font = `${fontPixels}px sans-serif`;
-    context.textAlign = 'center';
-    context.textBaseline = 'middle';
+    context.font = fontValue(element, fontPixels);
+    context.fillStyle = textInk;
+    const spacing = letterSpacingDots(element, dpi);
+    const align = element.align || 'center';
+    const vAlign = element.verticalAlign || 'middle';
+    const pad = 4;
+    const lineHeight = fontPixels * lineSpacingValue(element);
+    const decorationWidth = Math.max(1, fontPixels / 14);
     for (let row = 0; row < rows; row += 1) {
       for (let column = 0; column < columns; column += 1) {
         const value = String(cells[row * columns + column] || '');
+        if (!value) continue;
+        const cellX = x + column * columnWidth;
+        const cellY = y + row * rowHeight;
         context.save();
         context.beginPath();
-        context.rect(x + column * columnWidth + 2, y + row * rowHeight + 2, Math.max(0, columnWidth - 4), Math.max(0, rowHeight - 4));
+        context.rect(cellX + 2, cellY + 2, Math.max(0, columnWidth - 4), Math.max(0, rowHeight - 4));
         context.clip();
-        context.fillText(value, x + (column + 0.5) * columnWidth, y + (row + 0.5) * rowHeight, Math.max(0, columnWidth - 5));
+        const maxWidth = Math.max(0, columnWidth - pad * 2);
+        const lines = element.wordWrap
+          ? wrapText(context, value, maxWidth, spacing)
+          : value.split('\n');
+        const lineWidths = lines.map((line) => measureSpacedText(context, line, spacing));
+        const blockHeight = lines.length
+          ? fontPixels + Math.max(0, lines.length - 1) * lineHeight
+          : 0;
+        const startY = alignedStart(cellY + pad, Math.max(0, rowHeight - pad * 2), blockHeight, vAlign);
+        context.textBaseline = 'top';
+        context.textAlign = 'left';
+        context.strokeStyle = textInk;
+        lines.forEach((line, lineIndex) => {
+          const measured = lineWidths[lineIndex] || 0;
+          const lineY = startY + lineIndex * lineHeight;
+          let textX;
+          if (align === 'right') textX = cellX + columnWidth - pad - measured;
+          else if (align === 'left') textX = cellX + pad;
+          else textX = cellX + pad + Math.max(0, (maxWidth - measured) / 2);
+          if (spacing !== 0 && line.length > 0) {
+            let cursor = textX;
+            Array.from(line).forEach((character) => {
+              context.fillText(character, cursor, lineY);
+              cursor += context.measureText(character).width + spacing;
+            });
+          } else if (line) {
+            context.fillText(line, textX, lineY);
+          }
+          if ((element.underline || element.strike) && line) {
+            context.beginPath();
+            context.lineWidth = decorationWidth;
+            if (element.underline) {
+              context.moveTo(textX, lineY + fontPixels * 0.98);
+              context.lineTo(textX + measured, lineY + fontPixels * 0.98);
+            }
+            if (element.strike) {
+              context.moveTo(textX, lineY + fontPixels * 0.52);
+              context.lineTo(textX + measured, lineY + fontPixels * 0.52);
+            }
+            context.stroke();
+          }
+        });
         context.restore();
       }
     }
@@ -789,6 +851,7 @@ function renderSelection(context, selected, canvasSize, dpi, guides) {
         let sample = element.text || '';
         if (element.type === 'date') sample = formatDateValue(element);
         else if (element.type === 'serial') sample = serialValue(element);
+        if (element.type === 'text' && !String(sample).trim()) sample = '双击编辑';
         const fitted = fitText(context, Object.assign({}, element, { text: sample }), width, height, dpi);
         if (fitted && fitted.blockWidth > 0 && fitted.blockHeight > 0) {
           const hAlign = element.align === 'center' || element.align === 'middle' ? 'center'

@@ -158,6 +158,28 @@ test('vertical text auto-fit accounts for its widest glyph', () => {
   assert.ok(fitted.glyphWidth >= fitted.fontPixels * 1.5);
 });
 
+test('empty text renders the editor placeholder instead of an empty box', () => {
+  const context = createCanvasContext();
+  renderDocument(context, {
+    elements: [{
+      id: 'empty-text',
+      type: 'text',
+      x: 0,
+      y: 0,
+      width: 24,
+      height: 8,
+      text: '',
+      fontSize: 4,
+      align: 'left',
+      verticalAlign: 'middle',
+      direction: 'horizontal',
+      autoFit: true
+    }]
+  }, { width: 24, height: 8 }, 25.4, {});
+
+  assert.ok(context.textCalls.some((call) => call.value === '双击编辑'));
+});
+
 test('image binarization composites transparency onto white and honors the element threshold', (t) => {
   const sourcePixels = Uint8ClampedArray.from([
     200, 200, 200, 255,

@@ -1,7 +1,7 @@
 ﻿const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { clampElement, hitTest } = require('../src/core/document');
+const { clampElement, createDocument, createElement, hitTest, placeNewElement } = require('../src/core/document');
 
 test('hitTest follows element rotation instead of using an unrotated box', () => {
   const document = {
@@ -38,5 +38,23 @@ test('clampElement preserves local dimensions when a quarter-turn fits the page'
   assert.ok(centerX + element.height / 2 <= document.widthMm + 1e-9);
   assert.ok(centerY - element.width / 2 >= -1e-9);
   assert.ok(centerY + element.width / 2 <= document.heightMm + 1e-9);
+});
+
+test('placeNewElement keeps new items visible and avoids an existing default text element', () => {
+  const document = createDocument(50, 30);
+  document.elements = [];
+  const text = createElement('text', document);
+  placeNewElement(text, document);
+  document.elements.push(text);
+
+  const date = createElement('date', document);
+  placeNewElement(date, document);
+
+  const overlapWidth = Math.max(0, Math.min(text.x + text.width, date.x + date.width) - Math.max(text.x, date.x));
+  const overlapHeight = Math.max(0, Math.min(text.y + text.height, date.y + date.height) - Math.max(text.y, date.y));
+  assert.equal(overlapWidth * overlapHeight, 0);
+  assert.ok(date.x >= 0 && date.y >= 0);
+  assert.ok(date.x + date.width <= document.widthMm);
+  assert.ok(date.y + date.height <= document.heightMm);
 });
 

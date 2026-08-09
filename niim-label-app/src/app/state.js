@@ -278,7 +278,11 @@ function initialState() {
     editorTplQuery: '',
     materialChip: '热门',
     materialQuery: '',
-    materialSearchOpen: false
+    materialSearchOpen: false,
+    borderChip: '最新',
+    borderQuery: '',
+    borderSearchOpen: false,
+    pendingBorderAdd: false
   };
 
   // Merge full catalog + imported + online library (idempotent). v3 re-merges online pack.
