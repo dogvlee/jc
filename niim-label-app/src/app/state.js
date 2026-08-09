@@ -8,6 +8,7 @@ const { buildTemplateDocument } = require('./template-layouts');
 const { IMPORTED_TEMPLATES } = require('./imported-templates');
 const { ONLINE_TEMPLATES } = require('./online-templates-pack');
 const ONLINE_SEED = ONLINE_TEMPLATES;
+const { DEFAULT_MATERIAL_CHIP } = require('../core/materials');
 
 function templateDocument(template) {
   return buildTemplateDocument(template);
@@ -249,6 +250,7 @@ function initialState() {
     editorMode: 'add',
     editorPanelTab: 'elements',
     editorMenu: false,
+    textDirectionOpen: false,
     undo: [],
     redo: [],
     images: {},
@@ -276,7 +278,7 @@ function initialState() {
     editorTplSize: '全部尺寸',
     editorTplIndustry: '全部',
     editorTplQuery: '',
-    materialChip: '热门',
+    materialChip: DEFAULT_MATERIAL_CHIP,
     materialQuery: '',
     materialSearchOpen: false,
     borderChip: '最新',

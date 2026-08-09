@@ -3,6 +3,7 @@ const { encodeCode128B } = require('./code128');
 const { encodeEan13 } = require('./ean13');
 const { drawMaterialSymbol } = require('./materials');
 const { drawBorderStyle, borderById } = require('./borders');
+const { clampTextArcAngle, normalizeTextMode } = require('./text-direction');
 
 const QR_QUIET_ZONE_MODULES = 4;
 const thresholdImageCache = new WeakMap();
@@ -143,13 +144,143 @@ function horizontalLayout(context, element, width, dpi, fontPixels) {
   };
 }
 
+function isEastAsianGlyph(character) {
+  const code = String(character || '').codePointAt(0) || 0;
+  return (code >= 0x2e80 && code <= 0x9fff)
+    || (code >= 0x3040 && code <= 0x30ff)
+    || (code >= 0xac00 && code <= 0xd7af)
+    || (code >= 0xf900 && code <= 0xfaff)
+    || (code >= 0xff01 && code <= 0xff60);
+}
+
+function horizontalGlyphRotation(mode, character) {
+  if (mode === 'horizontal-90-words-rotate') return -Math.PI / 2;
+  if (mode === 'horizontal-90' && isEastAsianGlyph(character)) return -Math.PI / 2;
+  return 0;
+}
+
+function verticalGlyphRotation(mode, character) {
+  if (mode === 'vertical' && String(character).trim() && !isEastAsianGlyph(character)) return Math.PI / 2;
+  return 0;
+}
+
+function horizontalOrientedLayout(context, element, width, dpi, fontPixels, mode) {
+  context.font = fontValue(element, fontPixels);
+  const spacing = letterSpacingDots(element, dpi);
+  const lines = [];
+  const advances = [];
+  const rotations = [];
+  const lineHeights = [];
+  String(element.text || '').split('\n').forEach((paragraph) => {
+    const characters = Array.from(paragraph);
+    if (!characters.length) {
+      lines.push([]);
+      advances.push([]);
+      rotations.push([]);
+      lineHeights.push(fontPixels);
+      return;
+    }
+    let line = [];
+    let lineAdvances = [];
+    let lineRotations = [];
+    let lineWidth = 0;
+    let lineHeight = fontPixels;
+    const flush = () => {
+      lines.push(line);
+      advances.push(lineAdvances);
+      rotations.push(lineRotations);
+      lineHeights.push(lineHeight);
+      line = [];
+      lineAdvances = [];
+      lineRotations = [];
+      lineWidth = 0;
+      lineHeight = fontPixels;
+    };
+    characters.forEach((character) => {
+      const rotation = horizontalGlyphRotation(mode, character);
+      const measured = Math.max(0.1, context.measureText(character).width);
+      const advance = rotation ? fontPixels : measured;
+      const glyphHeight = rotation ? measured : fontPixels;
+      const candidate = lineWidth + (line.length ? spacing : 0) + advance;
+      if (line.length && candidate > width) flush();
+      if (line.length) lineWidth += spacing;
+      line.push(character);
+      lineAdvances.push(advance);
+      lineRotations.push(rotation);
+      lineWidth += advance;
+      lineHeight = Math.max(lineHeight, glyphHeight);
+    });
+    flush();
+  });
+  const lineWidths = advances.map((items) => items.reduce((sum, value) => sum + value, 0)
+    + Math.max(0, items.length - 1) * spacing);
+  const gap = Math.max(0, lineSpacingValue(element) - 1) * fontPixels;
+  const lineOffsets = [];
+  let blockHeight = 0;
+  lineHeights.forEach((lineHeight, index) => {
+    lineOffsets.push(blockHeight);
+    blockHeight += lineHeight + (index < lineHeights.length - 1 ? gap : 0);
+  });
+  return {
+    advances,
+    blockHeight,
+    blockWidth: lineWidths.length ? Math.max(...lineWidths) : 0,
+    fontPixels,
+    lineHeights,
+    lineOffsets,
+    lines,
+    lineWidths,
+    rotations,
+    spacing
+  };
+}
+
+function arcLayout(context, element, width, dpi, fontPixels) {
+  context.font = fontValue(element, fontPixels);
+  const characters = Array.from(String(element.text || '').replace(/\n/g, ''));
+  const spacing = letterSpacingDots(element, dpi);
+  const glyph = glyphMetrics(context, characters, fontPixels);
+  const advances = characters.map((character) => Math.max(0.1, context.measureText(character).width));
+  const arcAngle = clampTextArcAngle(element.textArcAngle);
+  const theta = arcAngle * Math.PI / 180;
+  const totalAdvance = advances.reduce((total, value) => total + value, 0)
+    + Math.max(0, advances.length - 1) * spacing;
+  if (characters.length < 2 || theta < 0.001) {
+    const flat = horizontalLayout(context, element, width, dpi, fontPixels);
+    return Object.assign({}, flat, { arcAngle: 0, arcFlat: true });
+  }
+  const radius = Math.max(fontPixels / 2, totalAdvance / theta);
+  const chord = 2 * radius * Math.sin(theta / 2);
+  const sagitta = radius * (1 - Math.cos(theta / 2));
+  return {
+    advances,
+    arcAngle,
+    blockHeight: fontPixels + sagitta,
+    blockWidth: chord + glyph.width,
+    characters,
+    fontPixels,
+    glyphWidth: glyph.width,
+    radius,
+    spacing,
+    theta,
+    totalAdvance
+  };
+}
+
 function fitText(context, element, width, height, dpi) {
   let fontPixels = Math.max(7, mmToDots(element.fontSize || 4, dpi));
   let layout;
+  const mode = normalizeTextMode(element);
   while (fontPixels >= 1) {
-    layout = element.direction === 'vertical'
-      ? verticalLayout(context, element, width, height, dpi, fontPixels)
-      : horizontalLayout(context, element, width, dpi, fontPixels);
+    if (mode === 'horizontal-90' || mode === 'horizontal-90-words-rotate') {
+      layout = horizontalOrientedLayout(context, element, width, dpi, fontPixels, mode);
+    } else if (mode === 'vertical' || mode === 'vertical-words-rotate') {
+      layout = verticalLayout(context, element, width, height, dpi, fontPixels);
+    } else if (mode === 'arc') {
+      layout = arcLayout(context, element, width, dpi, fontPixels);
+    } else {
+      layout = horizontalLayout(context, element, width, dpi, fontPixels);
+    }
     const fits = layout.blockWidth <= width + 0.001 && layout.blockHeight <= height + 0.001;
     if (element.autoFit === false || fits || fontPixels === 1) break;
     fontPixels -= 1;
@@ -218,7 +349,7 @@ function drawHorizontalText(context, element, fitted, x, y, width, height) {
   });
 }
 
-function drawVerticalText(context, element, fitted, x, y, width, height) {
+function drawVerticalText(context, element, fitted, x, y, width, height, rotationForCharacter) {
   context.textAlign = 'center';
   context.textBaseline = 'alphabetic';
   const horizontalAlignment = element.align === 'center' ? 'center' : element.align === 'right' ? 'right' : 'left';
@@ -229,7 +360,21 @@ function drawVerticalText(context, element, fitted, x, y, width, height) {
     const columnHeight = fitted.columnHeights[columnIndex];
     const startY = alignedStart(y, height, columnHeight, element.verticalAlign) + fitted.glyphAscent;
     characters.forEach((character, characterIndex) => {
-      context.fillText(character, columnX, startY + characterIndex * fitted.characterAdvance);
+      const characterY = startY + characterIndex * fitted.characterAdvance;
+      const glyphRotation = typeof rotationForCharacter === 'function'
+        ? rotationForCharacter(character)
+        : Number(rotationForCharacter) || 0;
+      if (glyphRotation) {
+        context.save();
+        context.translate(columnX, characterY - fitted.glyphAscent + fitted.glyphHeight / 2);
+        context.rotate(glyphRotation);
+        context.textBaseline = 'middle';
+        context.fillText(character, 0, 0);
+        context.restore();
+        context.textBaseline = 'alphabetic';
+      } else {
+        context.fillText(character, columnX, characterY);
+      }
     });
     if (element.underline || element.strike) {
       const lineTop = startY - fitted.glyphAscent;
@@ -247,6 +392,71 @@ function drawVerticalText(context, element, fitted, x, y, width, height) {
       }
       context.stroke();
     }
+  });
+}
+
+function drawHorizontalOrientedText(context, element, fitted, x, y, width, height) {
+  const startY = alignedStart(y, height, fitted.blockHeight, element.verticalAlign);
+  fitted.lines.forEach((characters, lineIndex) => {
+    const measured = fitted.lineWidths[lineIndex];
+    let cursor = element.align === 'center'
+      ? x + (width - measured) / 2
+      : element.align === 'right' ? x + width - measured : x;
+    const lineY = startY + fitted.lineOffsets[lineIndex];
+    characters.forEach((character, characterIndex) => {
+      const advance = fitted.advances[lineIndex][characterIndex];
+      const rotation = fitted.rotations[lineIndex][characterIndex];
+      context.save();
+      context.translate(cursor + advance / 2, lineY + fitted.lineHeights[lineIndex] / 2);
+      if (rotation) context.rotate(rotation);
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillText(character, 0, 0);
+      context.restore();
+      cursor += advance + fitted.spacing;
+    });
+    if ((element.underline || element.strike) && characters.length) {
+      const lineStart = element.align === 'center'
+        ? x + (width - measured) / 2
+        : element.align === 'right' ? x + width - measured : x;
+      context.beginPath();
+      context.lineWidth = Math.max(1, fitted.fontPixels / 14);
+      if (element.underline) {
+        context.moveTo(lineStart, lineY + fitted.lineHeights[lineIndex] * 0.98);
+        context.lineTo(lineStart + measured, lineY + fitted.lineHeights[lineIndex] * 0.98);
+      }
+      if (element.strike) {
+        context.moveTo(lineStart, lineY + fitted.lineHeights[lineIndex] * 0.52);
+        context.lineTo(lineStart + measured, lineY + fitted.lineHeights[lineIndex] * 0.52);
+      }
+      context.stroke();
+    }
+  });
+}
+
+function drawArcText(context, element, fitted, x, y, width, height) {
+  if (fitted.arcFlat) {
+    drawHorizontalText(context, element, fitted, x, y, width, height);
+    return;
+  }
+  const horizontalAlignment = element.align === 'center' ? 'center' : element.align === 'right' ? 'right' : 'left';
+  const blockX = alignedStart(x, width, fitted.blockWidth, horizontalAlignment);
+  const blockY = alignedStart(y, height, fitted.blockHeight, element.verticalAlign);
+  const centerX = blockX + fitted.blockWidth / 2;
+  const centerY = blockY + fitted.fontPixels * 0.72 + fitted.radius;
+  let cursor = 0;
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  fitted.characters.forEach((character, index) => {
+    const advance = fitted.advances[index];
+    const midpoint = cursor + advance / 2;
+    const angle = -Math.PI / 2 - fitted.theta / 2 + midpoint / fitted.radius;
+    context.save();
+    context.translate(centerX + fitted.radius * Math.cos(angle), centerY + fitted.radius * Math.sin(angle));
+    context.rotate(angle + Math.PI / 2);
+    context.fillText(character, 0, 0);
+    context.restore();
+    cursor += advance + fitted.spacing;
   });
 }
 
@@ -273,8 +483,15 @@ function drawText(context, element, dpi) {
     }
     const fitted = fitText(context, paintEl, width, height, dpi);
     context.font = fontValue(paintEl, fitted.fontPixels);
-    if (paintEl.direction === 'vertical') {
+    const mode = normalizeTextMode(paintEl);
+    if (mode === 'horizontal-90' || mode === 'horizontal-90-words-rotate') {
+      drawHorizontalOrientedText(context, paintEl, fitted, x, y, width, height);
+    } else if (mode === 'vertical-words-rotate') {
       drawVerticalText(context, paintEl, fitted, x, y, width, height);
+    } else if (mode === 'vertical') {
+      drawVerticalText(context, paintEl, fitted, x, y, width, height, (character) => verticalGlyphRotation(mode, character));
+    } else if (mode === 'arc') {
+      drawArcText(context, paintEl, fitted, x, y, width, height);
     } else {
       drawHorizontalText(context, paintEl, fitted, x, y, width, height);
     }
@@ -701,9 +918,28 @@ function drawTable(context, element, dpi) {
   });
 }
 
-function drawMaterial(context, element, dpi) {
+function drawMaterial(context, element, dpi, images) {
   withElementTransform(context, element, dpi, (x, y, width, height) => {
     const pad = Math.min(width, height) * 0.08;
+    const image = images && images[element.id];
+    if (image) {
+      const availableWidth = Math.max(1, width - pad * 2);
+      const availableHeight = Math.max(1, height - pad * 2);
+      const sourceWidth = image.naturalWidth || image.width || availableWidth;
+      const sourceHeight = image.naturalHeight || image.height || availableHeight;
+      const scale = Math.min(availableWidth / sourceWidth, availableHeight / sourceHeight);
+      const drawWidth = Math.max(1, sourceWidth * scale);
+      const drawHeight = Math.max(1, sourceHeight * scale);
+      const renderedImage = thresholdedImage(context, image, drawWidth, drawHeight, element.threshold);
+      context.drawImage(
+        renderedImage,
+        x + (width - drawWidth) / 2,
+        y + (height - drawHeight) / 2,
+        drawWidth,
+        drawHeight
+      );
+      return;
+    }
     const lineWidthPx = Math.max(1, mmToDots(element.lineWidth || 0.55, dpi));
     drawMaterialSymbol(
       context,
@@ -740,7 +976,7 @@ function renderDocument(context, document, canvasSize, dpi, images) {
     } else if (element.type === 'table') {
       drawTable(context, element, dpi);
     } else if (element.type === 'material') {
-      drawMaterial(context, element, dpi);
+      drawMaterial(context, element, dpi, images);
     }
   });
 }
@@ -841,12 +1077,13 @@ function renderSelection(context, selected, canvasSize, dpi, guides) {
     const isDate = element.type === 'date';
     const isTextLike = element.type === 'text' || element.type === 'date' || element.type === 'serial';
     const color = element.locked ? '#8b98a0' : (isDate ? '#F5A623' : '#2F80ED');
-    // Content-fitted stroke for text-like; handles stay on full element edges
+    // Text-like selections hug the painted content until the first manual
+    // handle drag promotes that fitted rectangle to the real element box.
     let sx = x;
     let sy = y;
     let sw = width;
     let sh = height;
-    if (isTextLike) {
+    if (isTextLike && element.selectionFit !== false) {
       try {
         let sample = element.text || '';
         if (element.type === 'date') sample = formatDateValue(element);
@@ -861,14 +1098,16 @@ function renderSelection(context, selected, canvasSize, dpi, guides) {
           sw = fitted.blockWidth + 2;
           sh = fitted.blockHeight + 2;
           // ratios of content box inside element (for handle hit-test in mm)
-          element._fit = {
+          Object.defineProperty(element, '_fit', { configurable: true, enumerable: false, writable: true, value: {
             left: (sx - x) / Math.max(1, width),
             top: (sy - y) / Math.max(1, height),
             w: sw / Math.max(1, width),
             h: sh / Math.max(1, height)
-          };
+          } });
         }
       } catch (_) { /* keep element box */ }
+    } else {
+      delete element._fit;
     }
     // Date: orange dashed + hatch (screenshot); text: solid blue
     context.strokeStyle = color;

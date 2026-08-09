@@ -59,6 +59,18 @@ function parseFontStyle(fontStyle) {
   };
 }
 
+function isMissingImagePath(value) {
+  const path = String(value == null ? '' : value).trim();
+  if (!path) return true;
+  return /(?:^|[\\/])(?:文件不存在|null|undefined|not[ _-]?found)(?:\.[^\\/]*)?$/i.test(path);
+}
+
+function resolveImagePath(raw = {}) {
+  return [raw.imageUrl, raw.localImageUrl, raw.ninePatchUrl, raw.localUrl]
+    .map((value) => String(value == null ? '' : value).trim())
+    .find((value) => !isMissingImagePath(value)) || '';
+}
+
 function elementText(raw) {
   const candidates = [raw.value, raw.valueText, raw.content, raw.text, raw.contentTitle];
   for (const item of candidates) {
@@ -156,6 +168,20 @@ function convertElement(raw, document, modify) {
     el.verticalAlign = mapAlignV(raw.textAlignVertical);
     el.letterSpacing = num(raw.letterSpacing, 0);
     el.lineSpacing = num(raw.lineSpacing, 0);
+    const typesettingMode = num(raw.typesettingMode, 1);
+    const wordsRotate = num(raw.wordsRotate, 0) === 1;
+    const textDirection = num(raw.textDirection, 0);
+    if (typesettingMode === 1 && textDirection === 1) {
+      el.textMode = wordsRotate ? 'horizontal-90-words-rotate' : 'horizontal-90';
+      el.direction = 'horizontal';
+    } else if (typesettingMode === 2) {
+      el.textMode = wordsRotate ? 'vertical-words-rotate' : 'vertical';
+      el.direction = 'vertical';
+    } else if (typesettingMode === 3) {
+      el.textMode = 'arc';
+      el.direction = 'horizontal';
+      el.textArcAngle = Math.max(0, Math.min(180, num(raw.typesettingParam?.[1], 180)));
+    }
     el.autoFit = true;
     if (raw.fieldName) el.fieldName = String(raw.fieldName);
     if (raw.fontFamily) el.fontFamily = String(raw.fontFamily);
@@ -212,8 +238,12 @@ function convertElement(raw, document, modify) {
   }
 
   if (type === 'image' || type === 'picture' || type === 'logo') {
+    const path = resolveImagePath(raw);
+    // A broken source marker is not an image. Dropping it prevents an empty
+    // selection box while preserving any valid sibling/background asset.
+    if (!path) return null;
     const el = createElement('image', document);
-    el.path = String(raw.imageUrl || raw.localImageUrl || raw.ninePatchUrl || '');
+    el.path = path;
     return applyGeometry(el, raw, docW, docH);
   }
 
@@ -304,5 +334,7 @@ module.exports = {
   mapAlignH,
   mapAlignV,
   parseFontStyle,
+  isMissingImagePath,
+  resolveImagePath,
   CODE_TYPE_MAP
 };

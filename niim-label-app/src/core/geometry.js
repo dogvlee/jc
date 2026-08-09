@@ -1,3 +1,5 @@
+const { legacyDirectionForMode, normalizeTextMode } = require('./text-direction');
+
 function degreesToRadians(value) {
   return Number(value || 0) * Math.PI / 180;
 }
@@ -13,7 +15,10 @@ function pointerAngle(point, center) {
 function changeTextDirection(element, direction, document) {
   const nextDirection = direction === 'vertical' ? 'vertical' : 'horizontal';
   const currentDirection = element.direction === 'vertical' ? 'vertical' : 'horizontal';
-  if (nextDirection === currentDirection) return element;
+  if (nextDirection === currentDirection) {
+    element.textMode = nextDirection;
+    return element;
+  }
   const centerX = element.x + element.width / 2;
   const centerY = element.y + element.height / 2;
   let width;
@@ -35,6 +40,22 @@ function changeTextDirection(element, direction, document) {
   element.x = Math.max(0, Math.min(centerX - element.width / 2, document.widthMm - element.width));
   element.y = Math.max(0, Math.min(centerY - element.height / 2, document.heightMm - element.height));
   element.direction = nextDirection;
+  element.textMode = nextDirection;
+  return element;
+}
+
+function changeTextMode(element, mode, document) {
+  const nextMode = normalizeTextMode(mode);
+  const nextDirection = legacyDirectionForMode(nextMode);
+  const currentDirection = legacyDirectionForMode(normalizeTextMode(element));
+  // Reuse the legacy dimension swap only when the mode changes orientation.
+  if (currentDirection !== nextDirection) {
+    element.direction = currentDirection;
+    changeTextDirection(element, nextDirection, document);
+  } else {
+    element.direction = nextDirection;
+  }
+  element.textMode = nextMode;
   return element;
 }
 
@@ -71,6 +92,35 @@ function resizeRotatedElement(original, handle, worldDelta, minimumSize) {
     width,
     height
   };
+}
+
+/**
+ * Promote the content-fitted selection rectangle to the element's real box
+ * before a handle drag. This keeps the visible blue handle under the pointer
+ * instead of resizing an invisible, wider text container.
+ */
+function fitElementToSelectionBounds(element, fitValue) {
+  const fit = fitValue || element?._fit;
+  if (!element || !fit || !Number.isFinite(fit.left) || !Number.isFinite(fit.top)
+    || !Number.isFinite(fit.w) || !Number.isFinite(fit.h)) return false;
+  const width = Math.max(0.1, Number(element.width) || 0.1);
+  const height = Math.max(0.1, Number(element.height) || 0.1);
+  const nextWidth = Math.max(0.1, width * fit.w);
+  const nextHeight = Math.max(0.1, height * fit.h);
+  const localCenterX = -width / 2 + width * fit.left + nextWidth / 2;
+  const localCenterY = -height / 2 + height * fit.top + nextHeight / 2;
+  const angle = degreesToRadians(element.rotation);
+  const worldCenterX = element.x + width / 2
+    + localCenterX * Math.cos(angle) - localCenterY * Math.sin(angle);
+  const worldCenterY = element.y + height / 2
+    + localCenterX * Math.sin(angle) + localCenterY * Math.cos(angle);
+  element.x = worldCenterX - nextWidth / 2;
+  element.y = worldCenterY - nextHeight / 2;
+  element.width = nextWidth;
+  element.height = nextHeight;
+  element.selectionFit = false;
+  delete element._fit;
+  return true;
 }
 
 /**
@@ -151,6 +201,8 @@ function snapElementPosition(element, document, others, threshold) {
 
 module.exports = {
   changeTextDirection,
+  changeTextMode,
+  fitElementToSelectionBounds,
   normalizeAngleDelta,
   pointerAngle,
   resizeRotatedElement,

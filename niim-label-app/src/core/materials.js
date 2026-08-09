@@ -1,10 +1,31 @@
 /** Built-in monochrome materials for thermal labels (vector, 0..1 unit box). */
+const ORIGINAL_MATERIAL_MANIFEST = require('../data/original-materials.json');
+
+// The reference screen used a paid-only tab. Product acceptance removes that
+// tab entirely, so the imported reference set lands on the ordinary 最新 tab.
+const DEFAULT_MATERIAL_CHIP = '最新';
+
+const ORIGINAL_MATERIAL_CATALOG = ORIGINAL_MATERIAL_MANIFEST.items.map((item) => ({
+  id: item.id,
+  remoteId: item.remoteId,
+  label: item.label,
+  category: item.category,
+  tags: item.tags.slice(),
+  sourceTier: item.sourceTier,
+  asset: item.asset,
+  sourceUrl: item.sourceUrl,
+  format: item.format,
+  width: item.width,
+  height: item.height,
+  sha256: item.sha256
+}));
+
 const MATERIAL_CHIPS = [
   '最新', '热门', '可爱', '饰品', '祝福', '园艺',
   '标记', '警示', '物流', '箭头', '联系', '餐饮', '零售', '形状'
 ];
 
-const MATERIAL_CATALOG = [
+const MATERIAL_CATALOG = ORIGINAL_MATERIAL_CATALOG.concat([
   { id: 'check', label: '对勾', category: '标记', tags: ["标记", "热门", "最新"] },
   { id: 'cross', label: '叉号', category: '标记', tags: ["标记"] },
   { id: 'star', label: '星星', category: '标记', tags: ["标记", "可爱", "最新", "热门"] },
@@ -38,19 +59,19 @@ const MATERIAL_CATALOG = [
   { id: 'thumb', label: '点赞', category: '表情', tags: ["可爱", "热门"] },
   { id: 'circle', label: '圆', category: '形状', tags: ["形状"] },
   { id: 'circle_fill', label: '实心圆', category: '形状', tags: ["形状"] },
-  { id: 'diamond', label: '菱形', category: '形状', tags: ["形状", "饰品", "VIP"], vip: true },
+  { id: 'diamond', label: '菱形', category: '形状', tags: ["形状", "饰品"] },
   { id: 'hexagon', label: '六边', category: '形状', tags: ["形状"] },
   { id: 'square_round', label: '圆角方', category: '形状', tags: ["形状"] },
   { id: 'panda', label: '熊猫', category: '表情', tags: ["可爱", "最新", "热门"] },
   { id: 'cake', label: '蛋糕', category: '通用', tags: ["祝福", "可爱", "最新"] },
-  { id: 'bracelet', label: '手链', category: '通用', tags: ["饰品", "VIP", "最新"], vip: true },
+  { id: 'bracelet', label: '手链', category: '通用', tags: ["饰品", "最新"] },
   { id: 'pendant', label: '吊坠', category: '通用', tags: ["饰品", "祝福"] },
   { id: 'lotus', label: '莲花', category: '通用', tags: ["园艺", "祝福"] },
   { id: 'plum', label: '梅花', category: '通用', tags: ["园艺", "祝福", "最新"] },
   { id: 'bamboo', label: '竹子', category: '通用', tags: ["园艺"] },
-  { id: 'orchid', label: '兰花', category: '通用', tags: ["园艺", "VIP"], vip: true },
+  { id: 'orchid', label: '兰花', category: '通用', tags: ["园艺"] },
   { id: 'chrysanthemum', label: '菊花', category: '通用', tags: ["园艺", "祝福"] },
-  { id: 'diamond_ring', label: '钻戒', category: '通用', tags: ["饰品", "VIP", "祝福"], vip: true },
+  { id: 'diamond_ring', label: '钻戒', category: '通用', tags: ["饰品", "祝福"] },
   { id: 'tulip', label: '郁金香', category: '通用', tags: ["园艺", "最新", "可爱"] },
   { id: 'rings', label: '对戒', category: '通用', tags: ["饰品", "祝福", "热门"] },
   { id: 'wave', label: '波浪', category: '形状', tags: ["形状", "最新"] },
@@ -64,7 +85,7 @@ const MATERIAL_CATALOG = [
   { id: 'butterfly', label: '蝴蝶', category: '表情', tags: ['可爱','园艺','最新'] },
   { id: 'bear', label: '小熊', category: '表情', tags: ['可爱','热门'] },
   { id: 'chick', label: '小鸡', category: '表情', tags: ['可爱','最新'] },
-  { id: 'fox', label: '狐狸', category: '表情', tags: ['可爱','VIP'], vip: true },
+  { id: 'fox', label: '狐狸', category: '表情', tags: ['可爱'] },
   { id: 'apple', label: '苹果', category: '餐饮', tags: ['餐饮','最新'] },
   { id: 'bread', label: '面包', category: '餐饮', tags: ['餐饮'] },
   { id: 'coffee', label: '咖啡', category: '餐饮', tags: ['餐饮','热门'] },
@@ -76,12 +97,12 @@ const MATERIAL_CATALOG = [
   { id: 'strawberry', label: '草莓', category: '餐饮', tags: ['餐饮','可爱','最新'] },
   { id: 'balloon', label: '气球', category: '通用', tags: ['祝福','可爱','热门'] },
   { id: 'bells', label: '铃铛', category: '通用', tags: ['祝福','最新'] },
-  { id: 'champagne', label: '香槟', category: '通用', tags: ['祝福','VIP'], vip: true },
+  { id: 'champagne', label: '香槟', category: '通用', tags: ['祝福'] },
   { id: 'bow_tie', label: '领结', category: '通用', tags: ['饰品','祝福'] },
-  { id: 'earring', label: '耳环', category: '通用', tags: ['饰品','VIP'], vip: true },
+  { id: 'earring', label: '耳环', category: '通用', tags: ['饰品'] },
   { id: 'necklace', label: '项链', category: '通用', tags: ['饰品','最新'] },
-  { id: 'gem', label: '宝石', category: '通用', tags: ['饰品','VIP','热门'], vip: true },
-  { id: 'crown', label: '皇冠', category: '通用', tags: ['VIP','饰品','热门'], vip: true },
+  { id: 'gem', label: '宝石', category: '通用', tags: ['饰品','热门'] },
+  { id: 'crown', label: '皇冠', category: '通用', tags: ['饰品','热门'] },
   { id: 'sun', label: '太阳', category: '通用', tags: ['最新','园艺'] },
   { id: 'cloud', label: '云朵', category: '通用', tags: ['可爱','最新'] },
   { id: 'rain', label: '下雨', category: '通用', tags: ['警示'] },
@@ -97,7 +118,7 @@ const MATERIAL_CATALOG = [
   { id: 'calendar', label: '日历', category: '通用', tags: ['最新','热门'] },
   { id: 'clipboard', label: '剪贴板', category: '通用', tags: ['标记'] },
   { id: 'printer', label: '打印机', category: '通用', tags: ['最新','热门'] },
-  { id: 'trophy', label: '奖杯', category: '通用', tags: ['祝福','VIP','热门'], vip: true },
+  { id: 'trophy', label: '奖杯', category: '通用', tags: ['祝福','热门'] },
   { id: 'flag', label: '旗帜', category: '标记', tags: ['标记','热门'] },
   { id: 'target', label: '靶心', category: '标记', tags: ['标记'] },
   { id: 'wink', label: '眨眼', category: '表情', tags: ['可爱','最新'] },
@@ -118,7 +139,7 @@ const MATERIAL_CATALOG = [
   { id: 'triangle', label: '三角', category: '形状', tags: ['形状'] },
   { id: 'plus', label: '加号', category: '形状', tags: ['形状','标记'] },
   { id: 'minus', label: '减号', category: '形状', tags: ['形状','标记'] },
-  { id: 'star_fill', label: '实心星', category: '形状', tags: ['形状','可爱','VIP'], vip: true },
+  { id: 'star_fill', label: '实心星', category: '形状', tags: ['形状','可爱'] },
   { id: 'heart_fill', label: '实心爱心', category: '形状', tags: ['形状','可爱','祝福'] },
   { id: 'lantern', label: '灯笼', category: '通用', tags: ['祝福','最新','热门'] },
   { id: 'red_packet', label: '红包', category: '通用', tags: ['祝福','热门'] },
@@ -128,34 +149,44 @@ const MATERIAL_CATALOG = [
   { id: 'sunflower', label: '向日葵', category: '通用', tags: ['园艺','最新'] },
   { id: 'electricity', label: '带电', category: '警示', tags: ['警示','热门'] },
   { id: 'high_temp', label: '高温', category: '警示', tags: ['警示'] },
-  { id: 'medal', label: '奖牌', category: '通用', tags: ['VIP','祝福'], vip: true },
-  { id: 'ribbon', label: '丝带', category: '通用', tags: ['祝福','饰品','VIP'], vip: true },
+  { id: 'medal', label: '奖牌', category: '通用', tags: ['祝福'] },
+  { id: 'ribbon', label: '丝带', category: '通用', tags: ['祝福','饰品'] },
   { id: 'arrow_double', label: '双向', category: '箭头', tags: ['箭头'] },
   { id: 'refresh', label: '刷新', category: '箭头', tags: ['箭头','最新'] },
   { id: 'download', label: '下载', category: '箭头', tags: ['箭头'] },
   { id: 'upload', label: '上传', category: '箭头', tags: ['箭头'] }
-];
+]);
 
 function materialById(id) {
   return MATERIAL_CATALOG.find((item) => item.id === id) || MATERIAL_CATALOG[0];
 }
 
+function materialChipAfterSearchToggle(currentChip, searchOpen) {
+  if (searchOpen) return '搜索';
+  return !currentChip || currentChip === '搜索' ? DEFAULT_MATERIAL_CHIP : currentChip;
+}
+
+function applyMaterialToElement(element, material, images) {
+  if (!element || element.type !== 'material' || !material) return false;
+  element.symbol = material.id;
+  if (material.asset) element.path = material.asset;
+  else delete element.path;
+  if (images && element.id) delete images[element.id];
+  return true;
+}
+
 
 /**
- * Filter catalog by chip (tag / category / VIP) and optional text query.
+ * Filter catalog by chip/category and optional text query.
  * chip "搜索" or empty returns full catalog (query still applies).
  */
 function materialsForChip(chip, query) {
   let list = MATERIAL_CATALOG.slice();
   const c = chip || '';
   if (c && c !== '搜索' && c !== '全部') {
-    if (c === 'VIP') {
-      list = list.filter((item) => item.vip);
-    } else {
-      list = list.filter((item) =>
-        (item.tags && item.tags.includes(c)) || item.category === c
-      );
-    }
+    list = list.filter((item) =>
+      (item.tags && item.tags.includes(c)) || item.category === c
+    );
   }
   const q = String(query || '').trim().toLowerCase();
   if (q) {
@@ -1022,9 +1053,14 @@ function drawMaterialSymbol(context, symbol, x, y, w, h, lineWidthPx) {
 }
 
 module.exports = {
+  DEFAULT_MATERIAL_CHIP,
   MATERIAL_CATALOG,
   MATERIAL_CHIPS,
+  ORIGINAL_MATERIAL_CATALOG,
+  ORIGINAL_MATERIAL_MANIFEST,
+  applyMaterialToElement,
   drawMaterialSymbol,
+  materialChipAfterSearchToggle,
   materialById,
   materialCategories,
   materialsForChip

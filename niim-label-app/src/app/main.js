@@ -16,14 +16,25 @@ const {
 } = require('../core/profiles');
 const {
   changeTextDirection,
+  changeTextMode,
+  fitElementToSelectionBounds,
   normalizeAngleDelta,
   pointerAngle,
   resizeRotatedElement,
   snapElementPosition
 } = require('../core/geometry');
+const { longPressSelection } = require('../core/editor-gesture');
+const { createImageCacheRegistry } = require('../core/image-cache');
+const { clampTextArcAngle } = require('../core/text-direction');
 const { resetTextStyle } = require('../core/text-style');
 const { renderDocument, renderSelection, validateDocument, contentHandleLocalMm } = require('../core/renderer');
-const { drawMaterialSymbol } = require('../core/materials');
+const {
+  DEFAULT_MATERIAL_CHIP,
+  applyMaterialToElement,
+  drawMaterialSymbol,
+  materialById,
+  materialChipAfterSearchToggle
+} = require('../core/materials');
 const { drawBorderStyle, borderById, BORDER_CATALOG } = require('../core/borders');
 const { Capacitor } = require('@capacitor/core');
 const { App: CapacitorApp } = require('@capacitor/app');
@@ -66,6 +77,7 @@ let canvasState = null;
 let scanTimer = null;
 let longPressTimer = null;
 let floatLayoutObserver = null;
+const imageCache = createImageCacheRegistry();
 
 function clearLongPressTimer() {
   if (longPressTimer) {
@@ -104,6 +116,7 @@ function paintMaterialThumbs() {
   const nodes = document.querySelectorAll('[data-material-thumb]');
   if (!nodes.length) return;
   nodes.forEach((wrap) => {
+    if (wrap.querySelector('img')) return;
     const symbol = wrap.getAttribute('data-material-thumb') || 'check';
     let canvas = wrap.querySelector('canvas');
     if (!canvas) {
@@ -180,28 +193,51 @@ function afterRender() {
 }
 
 let kbInsetBound = false;
-function onVisualViewportChange() {
+let nativeKbInset = 0;
+
+function applyKeyboardInset() {
   const vv = window.visualViewport;
-  if (!vv) return;
-  const inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+  const viewportInset = vv
+    ? Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop))
+    : 0;
+  // Capacitor's edge-to-edge Android WebView may report viewportInset=0 even
+  // while the IME overlays the page. MainActivity forwards that native inset.
+  const inset = Math.max(viewportInset, nativeKbInset);
   document.documentElement.style.setProperty('--kb-inset', `${inset}px`);
   const shell = document.querySelector('.niim-editor');
   if (shell) shell.classList.toggle('kb-open', inset > 40);
 }
 
+function onVisualViewportChange() {
+  applyKeyboardInset();
+}
+
+window.__niimSetKeyboardInset = (value) => {
+  nativeKbInset = Math.max(0, Math.round(Number(value) || 0));
+  applyKeyboardInset();
+};
+
 function bindKeyboardInset() {
-  if (kbInsetBound || !window.visualViewport) return;
-  window.visualViewport.addEventListener('resize', onVisualViewportChange);
-  window.visualViewport.addEventListener('scroll', onVisualViewportChange);
+  if (kbInsetBound) {
+    applyKeyboardInset();
+    return;
+  }
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', onVisualViewportChange);
+    window.visualViewport.addEventListener('scroll', onVisualViewportChange);
+  }
   kbInsetBound = true;
-  onVisualViewportChange();
+  applyKeyboardInset();
 }
 
 function unbindKeyboardInset() {
-  if (!kbInsetBound || !window.visualViewport) return;
-  window.visualViewport.removeEventListener('resize', onVisualViewportChange);
-  window.visualViewport.removeEventListener('scroll', onVisualViewportChange);
+  if (!kbInsetBound) return;
+  if (window.visualViewport) {
+    window.visualViewport.removeEventListener('resize', onVisualViewportChange);
+    window.visualViewport.removeEventListener('scroll', onVisualViewportChange);
+  }
   kbInsetBound = false;
+  nativeKbInset = 0;
   document.documentElement.style.setProperty('--kb-inset', '0px');
 }
 
@@ -442,13 +478,14 @@ function currentProfile() {
 }
 
 function imageForElement(element) {
-  if (!element || element.type !== 'image' || !element.path) return Promise.resolve(null);
-  if (state.images[element.id]) return Promise.resolve(state.images[element.id]);
+  if (!element || !['image', 'material'].includes(element.type) || !element.path) return Promise.resolve(null);
+  const cached = imageCache.cachedFor(state.images, element);
+  if (cached) return Promise.resolve(cached);
+  const token = imageCache.begin(element);
   return new Promise((resolve) => {
     const image = new Image();
     image.onload = () => {
-      state.images[element.id] = image;
-      resolve(image);
+      resolve(imageCache.accept(state.images, element, token, image) ? image : null);
     };
     image.onerror = () => resolve(null);
     image.src = element.path;
@@ -459,6 +496,20 @@ async function loadDocumentImages(documentValue) {
   const source = documentValue || state.document;
   if (!source) return;
   await Promise.all(source.elements.map(imageForElement));
+}
+
+function reconcileDocumentImageCache(documentValue) {
+  const source = documentValue || state.document;
+  if (!source) return;
+  const validIds = new Set();
+  source.elements.forEach((element) => {
+    if (!['image', 'material'].includes(element.type) || !element.path) return;
+    validIds.add(element.id);
+    imageCache.cachedFor(state.images, element);
+  });
+  Object.keys(state.images).forEach((id) => {
+    if (!validIds.has(id)) imageCache.invalidate(state.images, id);
+  });
 }
 
 function drawEditorCanvas() {
@@ -528,6 +579,7 @@ function enterAddMode(options) {
   state.selectedIds = [];
   state.selectedId = '';
   state.multiSelect = false;
+  state.textDirectionOpen = false;
   state.editorPanelTab = 'elements';
   state.editorMode = 'add';
   if (opts.collapsed != null) state.panelCollapsed = !!opts.collapsed;
@@ -554,12 +606,14 @@ function handleBlankCanvasTap() {
 /** Update selection state without remounting panel/float (safe mid-gesture). */
 function applySelectionState(ids, options) {
   const opts = options || {};
+  const previousSelectedId = state.selectedId;
   const valid = Array.from(new Set((ids || []).filter((id) => state.document && state.document.elements.some((item) => item.id === id))));
   if (!valid.length) {
     if (state.editorMode === 'content') finalizeContentUndo();
     state.selectedIds = [];
     state.selectedId = '';
     state.multiSelect = false;
+    state.textDirectionOpen = false;
     state.editorPanelTab = 'elements';
     state.editorMode = 'add';
     if (opts.collapsed != null) state.panelCollapsed = !!opts.collapsed;
@@ -570,6 +624,7 @@ function applySelectionState(ids, options) {
   if (state.editorMode === 'content' && opts.reason !== 'content') finalizeContentUndo();
   state.selectedIds = valid;
   state.selectedId = valid[valid.length - 1] || '';
+  if (previousSelectedId !== state.selectedId || valid.length > 1) state.textDirectionOpen = false;
   state.editorMode = 'selected';
   state.panelCollapsed = false;
   state.editorMenu = false;
@@ -784,6 +839,7 @@ function initializeEditorCanvas() {
       pointers: new Map(),
       pinch: null
     };
+    reconcileDocumentImageCache(state.document);
     drawEditorCanvas();
     loadDocumentImages().then(drawEditorCanvas);
     bindCanvasGestures(selection);
@@ -940,6 +996,7 @@ function bindCanvasGestures(selection) {
       && ["text", "barcode", "qrcode", "date", "serial"].includes(element.type);
 
     const mode = element.locked ? "locked" : (handleNow || "move");
+    const fitSnapshot = handleNow && element._fit ? { ...element._fit } : null;
     const originals = selectedElements(state).map((item) => ({
       id: item.id, x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation
     }));
@@ -958,6 +1015,9 @@ function bindCanvasGestures(selection) {
       moved: false,
       passedDeadzone: mode !== "move",
       tapToContent,
+      longPressBaseIds: currentIds.slice(),
+      fitSnapshot,
+      fitNormalized: false,
       guides: []
     };
     try { selection.setPointerCapture(event.pointerId); } catch (_) { /* ignore */ }
@@ -968,12 +1028,18 @@ function bindCanvasGestures(selection) {
         longPressTimer = null;
         const drag = canvasState && canvasState.drag;
         if (!drag || drag.moved || drag.pointerId !== event.pointerId) return;
-        state.multiSelect = true;
-        const ids = Array.isArray(state.selectedIds) ? state.selectedIds.slice() : [];
-        if (!ids.includes(pressId)) ids.push(pressId);
-        enterSelectedMode(ids, { tab: "arrange", reason: "select", soft: true });
-        if (canvasState) canvasState.pendingChrome = true;
-        toast("多选已开启");
+        drag.tapToContent = false;
+        drag.longPressed = true;
+        const decision = longPressSelection(drag.longPressBaseIds, pressId);
+        if (decision.enterMulti) {
+          state.multiSelect = true;
+          enterSelectedMode(decision.ids, { tab: "arrange", reason: "select", soft: true });
+          drag.originals = selectedElements(state).map((item) => ({
+            id: item.id, x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation
+          }));
+          if (canvasState) canvasState.pendingChrome = true;
+          toast("多选已开启");
+        }
         drawEditorCanvas();
       }, 450);
     }
@@ -1008,6 +1074,26 @@ function bindCanvasGestures(selection) {
     const point = pointerToMm(event);
     const deltaX = point.x - drag.startX;
     const deltaY = point.y - drag.startY;
+
+    if (drag.fitSnapshot && !drag.fitNormalized && drag.mode !== 'move' && drag.mode !== 'locked') {
+      if (fitElementToSelectionBounds(element, drag.fitSnapshot)) {
+        clampElement(element, state.document);
+        const normalized = drag.originals.find((item) => item.id === element.id);
+        if (normalized) Object.assign(normalized, {
+          x: element.x,
+          y: element.y,
+          width: element.width,
+          height: element.height,
+          rotation: element.rotation
+        });
+        drag.rotateCenter = { x: element.x + element.width / 2, y: element.y + element.height / 2 };
+        drag.startPointerAngle = pointerAngle(
+          { x: drag.startX, y: drag.startY },
+          drag.rotateCenter
+        );
+      }
+      drag.fitNormalized = true;
+    }
 
     // Dead zone: tiny finger jitter does not start a move (prevents "tap but shifted")
     if (drag.mode === 'move' && !drag.passedDeadzone) {
@@ -1548,7 +1634,7 @@ async function addImage(replace, capture) {
       }
       element.path = dataUrl;
       state.editorPanelTab = 'content';
-      delete state.images[element.id];
+      imageCache.invalidate(state.images, element.id);
     });
   } catch (error) {
     toast(error.message, 'error');
@@ -2325,13 +2411,14 @@ async function handleAction(action, target) {
       softCommit(() => {
         const target = selectedElement(state);
         if (!target) return;
-        resetTextStyle(target);
+        resetTextStyle(target, state.document);
       }, { refreshChrome: true });
       break;
     }
     case 'set-editor-panel-tab': {
       state.editorMenu = false;
       const nextTab = target.dataset.tab || 'elements';
+      if (nextTab !== 'style') state.textDirectionOpen = false;
       state.panelCollapsed = false;
       if (['elements', 'templates', 'data-source', 'label'].includes(nextTab)) {
         enterAddMode({ render: document.querySelector('.niim-panel') ? undefined : 'full' });
@@ -2785,11 +2872,10 @@ case 'open-material-sheet':
       renderModalOnly();
       break;
     case 'material-chip': {
-      const chip = target.dataset.chip || '热门';
+      const chip = target.dataset.chip || DEFAULT_MATERIAL_CHIP;
       if (chip === '搜索') {
         state.materialSearchOpen = !state.materialSearchOpen;
-        if (state.materialSearchOpen) state.materialChip = '搜索';
-        else if (state.materialChip === '搜索') state.materialChip = '热门';
+        state.materialChip = materialChipAfterSearchToggle(state.materialChip, state.materialSearchOpen);
       } else {
         state.materialChip = chip;
         state.materialSearchOpen = false;
@@ -2809,11 +2895,15 @@ case 'open-material-sheet':
       break;
     case 'pick-material': {
       const symbol = target.dataset.symbol || 'check';
+      const material = materialById(symbol);
       const selected = selectedElement(state);
       if (selected && selected.type === 'material' && !state.pendingMaterialAdd) {
         commit(() => {
           const el = selectedElement(state);
-          if (el && el.type === 'material' && !el.locked) el.symbol = symbol;
+          if (el && el.type === 'material' && !el.locked) {
+            applyMaterialToElement(el, material, state.images);
+            imageCache.invalidate(state.images, el.id);
+          }
         });
         state.modal = '';
         state.pendingMaterialAdd = false;
@@ -2824,7 +2914,8 @@ case 'open-material-sheet':
       } else {
         commit((documentValue) => {
           const element = createElement('material', documentValue);
-          element.symbol = symbol;
+          applyMaterialToElement(element, material, state.images);
+          imageCache.invalidate(state.images, element.id);
           placeNewElement(element, documentValue);
           documentValue.elements.push(element);
           state.selectedIds = state.multiSelect ? [...state.selectedIds, element.id] : [element.id];
@@ -3030,6 +3121,29 @@ case 'open-material-sheet':
         }, { refreshChrome: true });
       }
       break;
+    case 'toggle-text-direction-menu': {
+      const element = selectedElement(state);
+      if (!element || element.locked || !['text', 'date', 'serial'].includes(element.type)) break;
+      state.textDirectionOpen = !state.textDirectionOpen;
+      refreshEditorChrome({ animateBody: false });
+      break;
+    }
+    case 'set-text-mode': {
+      const element = selectedElement(state);
+      if (!element || element.locked) break;
+      state.textDirectionOpen = true;
+      softCommit((documentValue) => {
+        const selected = selectedElement(state);
+        if (selected && !selected.locked) changeTextMode(selected, target.dataset.mode, documentValue);
+      }, { refreshChrome: true });
+      break;
+    }
+    case 'reset-text-arc-angle': {
+      const element = selectedElement(state);
+      if (!element || element.locked) break;
+      softCommit(() => { selectedElement(state).textArcAngle = 180; }, { refreshChrome: true });
+      break;
+    }
     case 'toggle-element': {
       const field = target.dataset.field;
       if (!field) break;
@@ -3208,22 +3322,22 @@ function handleField(action, target) {
     const field = target.dataset.field;
     const numeric = [
       'x', 'y', 'width', 'height', 'rotation', 'fontSize', 'lineWidth', 'threshold',
-      'start', 'step', 'digits', 'rows', 'columns', 'rowH', 'colW', 'lineSpacing', 'letterSpacing', 'document-width', 'document-height'
+      'start', 'step', 'digits', 'rows', 'columns', 'rowH', 'colW', 'lineSpacing', 'letterSpacing', 'textArcAngle', 'document-width', 'document-height'
     ];
     const value = numeric.includes(field) ? Number(target.value) : target.value;
     if (numeric.includes(field) && !Number.isFinite(value)) return;
     // Live fields: paint canvas only, keep input focused (video: no flash while typing / sliding)
-    const softFields = new Set(['text', 'value', 'fixedValue', 'prefix', 'suffix', 'fontSize', 'rotation']);
+    const softFields = new Set(['text', 'value', 'fixedValue', 'prefix', 'suffix', 'fontSize', 'rotation', 'textArcAngle']);
     if (softFields.has(field) && state.route === 'editor') {
       const element = selectedElement(state);
       if (!element || element.locked) return;
-      if (!contentUndoBefore && ['text', 'value', 'fixedValue', 'prefix', 'suffix'].includes(field)) {
+      if (!contentUndoBefore && ['text', 'value', 'fixedValue', 'prefix', 'suffix', 'fontSize', 'rotation', 'textArcAngle'].includes(field)) {
         contentUndoBefore = cloneDocument(state.document);
       }
       softUpdate(() => {
-        element[field] = value;
+        element[field] = field === 'textArcAngle' ? clampTextArcAngle(value) : value;
       }, {
-        autosave: field === 'fontSize',
+        autosave: field === 'fontSize' || field === 'textArcAngle',
         syncClear: field === 'text' || field === 'value',
         patchReadout: field === 'fontSize'
           ? () => {
@@ -3232,7 +3346,15 @@ function handleField(action, target) {
             const slider = document.querySelector('.niim-size-slider');
             if (slider) slider.value = String(value);
           }
-          : null
+          : field === 'textArcAngle'
+            ? () => {
+              const angle = clampTextArcAngle(value);
+              const readout = document.querySelector('.niim-text-arc-readout');
+              if (readout) readout.textContent = `${Math.round(angle)}°`;
+              const slider = document.querySelector('.niim-text-arc-slider');
+              if (slider) slider.value = String(angle);
+            }
+            : null
       });
       return;
     }
@@ -3414,7 +3536,7 @@ appRoot.addEventListener('change', (event) => {
   // text/value already handled live on input — finalize undo on change
   if (target.dataset.action === 'update-element' && contentUndoBefore) {
     const field = target.dataset.field;
-    if (['text', 'value', 'fixedValue', 'prefix', 'suffix', 'fontSize'].includes(field)) {
+    if (['text', 'value', 'fixedValue', 'prefix', 'suffix', 'fontSize', 'rotation', 'textArcAngle'].includes(field)) {
       state.undo.push(contentUndoBefore);
       if (state.undo.length > 30) state.undo.shift();
       state.redo = [];

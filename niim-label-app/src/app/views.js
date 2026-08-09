@@ -4,8 +4,9 @@ const { categories, homeQuickActions, industries, templates } = require('./catal
 const { icon, sprite } = require('./icons');
 const { STOCK_PRESETS } = require('./stock-presets');
 const { buildTemplateDocument } = require('./template-layouts');
-const { MATERIAL_CATALOG, MATERIAL_CHIPS, materialCategories, materialsForChip } = require('../core/materials');
+const { DEFAULT_MATERIAL_CHIP, MATERIAL_CATALOG, MATERIAL_CHIPS, materialCategories, materialsForChip } = require('../core/materials');
 const { BORDER_CATALOG, BORDER_CHIPS, bordersForChip, borderById } = require('../core/borders');
+const { TEXT_MODE_OPTIONS, clampTextArcAngle, normalizeTextMode } = require('../core/text-direction');
 
 const DATE_EXPIRE_PRESETS = [
   { label: '2小时', hours: 2 },
@@ -375,7 +376,7 @@ function homeView(state) {
 
 function templatesView(state) {
   const query = state.templateQuery.trim().toLowerCase();
-  const available = [...templates, ...state.userTemplates.map(userTemplateCard)];
+  const available = templateLibraryPool(state);
   const filtered = available.filter((item) => {
     const categoryMatch = state.templateCategory === '全部' || item.category === state.templateCategory;
     const industryMatch = !state.templateIndustry || state.templateIndustry === '全部' || item.industry === state.templateIndustry || item.userTemplate;
@@ -411,6 +412,13 @@ function templatesView(state) {
           : '没有匹配的模板'}</div><button class="button-secondary" data-action="reset-template-filters">清除全部筛选</button></div>`}
     </main>
     ${bottomNav('templates')}`;
+}
+
+function templateLibraryPool(state) {
+  const userCards = state.userTemplates.map(userTemplateCard);
+  if (state.templateCategory === '我的') return userCards;
+  const catalogIds = new Set(templates.map((item) => item.id));
+  return [...templates, ...userCards.filter((item) => !catalogIds.has(item.id))];
 }
 
 function dataView(state) {
@@ -678,7 +686,7 @@ function round(value) {
 
 function materialBrowserHtml(state, activeSymbol, options) {
   const opts = options || {};
-  const chip = state.materialChip || '热门';
+  const chip = state.materialChip || DEFAULT_MATERIAL_CHIP;
   const query = state.materialQuery || '';
   const searchOpen = !!state.materialSearchOpen || chip === '搜索';
   const items = materialsForChip(searchOpen ? '搜索' : chip, query);
@@ -689,7 +697,10 @@ function materialBrowserHtml(state, activeSymbol, options) {
   }).join('');
   const tiles = items.map(function(item) {
     const active = (activeSymbol || 'check') === item.id ? ' active' : '';
-    return '<button type="button" class="niim-mat-tile' + active + '" data-action="pick-material" data-symbol="' + item.id + '" title="' + escapeHtml(item.label) + '">' + '<span class="niim-material-thumb" data-material-thumb="' + item.id + '"><canvas width="56" height="56"></canvas></span></button>';
+    const thumbnail = item.asset
+      ? '<span class="niim-material-thumb" data-material-thumb="' + item.id + '" data-material-asset="' + escapeHtml(item.asset) + '"><img src="' + escapeHtml(item.asset) + '" alt="" loading="lazy" decoding="async"></span>'
+      : '<span class="niim-material-thumb" data-material-thumb="' + item.id + '"><canvas width="56" height="56"></canvas></span>';
+    return '<button type="button" class="niim-mat-tile' + active + '" data-action="pick-material" data-symbol="' + item.id + '" title="' + escapeHtml(item.label) + '">' + thumbnail + '</button>';
   }).join('');
   const searchInput = searchOpen ? ('<input class="niim-mat-search" data-action="material-search" placeholder="搜索素材" value="' + escapeHtml(query) + '">') : '';
   return '<section class="niim-mat-browser' + (opts.embedded ? ' embedded' : '') + '">' +
@@ -703,7 +714,7 @@ function materialBrowserHtml(state, activeSymbol, options) {
 }
 
 function materialGridHtml(activeSymbol, compact) {
-  return materialBrowserHtml({ materialChip: '热门', materialQuery: '', materialSearchOpen: false }, activeSymbol, { embedded: !!compact });
+  return materialBrowserHtml({ materialChip: DEFAULT_MATERIAL_CHIP, materialQuery: '', materialSearchOpen: false }, activeSymbol, { embedded: !!compact });
 }
 
 function materialSheet(state) {
@@ -1234,7 +1245,7 @@ function tableTextPanel(element) {
 }
 
 /** Style tab from domestic screenshot: B/U/S/I · colors · size slider · align · spacing */
-function elementStylePanel(element) {
+function elementStylePanel(element, state) {
   if (!element) return '';
   if (element.type === 'barcode') return barcodeStylePanel(element);
   if (element.type === 'qrcode') return qrStylePanel(element);
@@ -1276,14 +1287,33 @@ function elementStylePanel(element) {
   const align = element.align || 'left';
   const vAlign = element.verticalAlign || 'middle';
   const fontFamily = element.fontFamily || 'sans-serif';
+  const textMode = normalizeTextMode(element);
+  const directionOpen = !!(state && state.textDirectionOpen);
+  const arcAngle = clampTextArcAngle(element.textArcAngle);
+  const activeDirection = TEXT_MODE_OPTIONS.find((option) => option.id === textMode) || TEXT_MODE_OPTIONS[0];
+  const directionPopover = directionOpen ? `<div class="niim-text-direction-popover" role="dialog" aria-label="文字方向">
+    <div class="niim-text-dir-title">文本方向</div>
+    <div class="niim-text-dir-grid" role="radiogroup" aria-label="排版模式">
+      ${TEXT_MODE_OPTIONS.map((option) => `<button type="button" class="niim-dir-opt${textMode === option.id ? ' active' : ''}" data-action="set-text-mode" data-mode="${option.id}" role="radio" aria-checked="${textMode === option.id ? 'true' : 'false'}" title="${escapeHtml(option.label)}">
+        ${editorAsset(`element/attribute/${option.asset}`)}<span>${escapeHtml(option.label)}</span>
+      </button>`).join('')}
+    </div>
+    <div class="niim-text-arc-row${textMode === 'arc' ? '' : ' disabled'}">
+      <span>0°</span>
+      <input class="niim-text-arc-slider" type="range" min="0" max="180" step="1" value="${arcAngle}" data-action="update-element" data-field="textArcAngle" aria-label="弧形角度" ${textMode === 'arc' ? '' : 'disabled'}>
+      <output class="niim-text-arc-readout">${Math.round(arcAngle)}°</output>
+      <button type="button" class="niim-text-arc-reset" data-action="reset-text-arc-angle" title="重置为180度">↺</button>
+    </div>
+  </div>` : '';
   return `<section class="niim-style-panel">
+    ${directionPopover}
     <div class="niim-style-toolbar">
       <button type="button" class="niim-tbtn${element.bold ? ' active' : ''}" data-action="toggle-element" data-field="bold" title="粗体"><b>B</b></button>
       <button type="button" class="niim-tbtn${element.underline ? ' active' : ''}" data-action="toggle-element" data-field="underline" title="下划线"><span class="u">U</span></button>
       <button type="button" class="niim-tbtn${element.strike ? ' active' : ''}" data-action="toggle-element" data-field="strike" title="删除线"><span class="s">S</span></button>
       <button type="button" class="niim-tbtn${element.italic ? ' active' : ''}" data-action="toggle-element" data-field="italic" title="斜体"><i>I</i></button>
-      <button type="button" class="niim-tbtn niim-tdir${element.direction === 'vertical' ? ' active' : ''}" data-action="set-text-direction" data-value="${element.direction === 'vertical' ? 'horizontal' : 'vertical'}" title="文字方向">
-        <span class="niim-tdir-label">文本<span class="niim-tdir-a">A</span></span>
+      <button type="button" class="niim-tbtn niim-tdir${directionOpen ? ' active' : ''}" data-action="toggle-text-direction-menu" title="文字方向" aria-expanded="${directionOpen ? 'true' : 'false'}">
+        ${editorAsset(`element/attribute/${activeDirection.asset}`)}<span class="niim-tdir-label">方向</span>
       </button>
       <span class="niim-color-dots">
         ${colors.map(({ c, star, reverse, name }) => {
@@ -1438,7 +1468,7 @@ function propertyPanel(state) {
   else if (active === 'layers') body = `<section class="property-section">${layerList(state)}</section>`;
   else if (active === 'content') body = elementContentPanel(element, state);
   else if (active === 'font') body = elementFontPanel(element);
-  else if (active === 'style') body = elementStylePanel(element);
+  else if (active === 'style') body = elementStylePanel(element, state);
   else body = arrangementPanel(state, element);
 
   // Text/barcode content: system keyboard bar, hide footer. Date「时间」keeps 保存/打印.
@@ -1874,6 +1904,7 @@ module.exports = {
   renderModal,
   selectedElement,
   selectedElements,
-  templateCard
+  templateCard,
+  templateLibraryPool
 };
 

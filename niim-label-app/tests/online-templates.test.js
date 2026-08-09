@@ -4,6 +4,9 @@ const { ONLINE_TEMPLATES, getOnlineTemplate, buildOnlineDocument } = require("..
 const { templates, getTemplate } = require("../src/app/catalog");
 const { buildTemplateDocument, LAYOUT_BUILDERS } = require("../src/app/template-layouts");
 const { seedUserTemplates } = require("../src/app/state");
+const { templateLibraryPool } = require("../src/app/views");
+const fs = require("node:fs");
+const path = require("node:path");
 
 if (typeof global.localStorage === "undefined") {
   const mem = new Map();
@@ -46,4 +49,35 @@ test("seedUserTemplates includes online templates", () => {
   const online = ut.filter((t) => String(t.id).startsWith("online-"));
   assert.ok(online.length >= 80, "seed online " + online.length);
   assert.ok(online[0].document.elements.length >= 1);
+});
+
+test("all online image paths resolve to bundled assets", () => {
+  const imageElements = ONLINE_TEMPLATES.flatMap((item) => item.document.elements || [])
+    .filter((element) => element.type === "image");
+  assert.ok(imageElements.length > 0);
+  for (const element of imageElements) {
+    assert.doesNotMatch(String(element.path || ""), /文件不存在|null|undefined|not[ _-]?found/i);
+    if (String(element.path).startsWith("assets/")) {
+      assert.ok(fs.existsSync(path.join(__dirname, "..", "public", element.path)), element.path);
+    }
+  }
+  const repaired = getOnlineTemplate("online-482306420");
+  assert.ok(repaired);
+  const repairedImages = repaired.document.elements.filter((element) => element.type === "image");
+  assert.equal(repairedImages.length, 1);
+  assert.equal(repairedImages[0].id, "image-mskgxb8p-352");
+  assert.equal(repairedImages[0].path, "assets/online-images/4726bf3eee2d3124.png");
+});
+
+test("template library removes seeded catalog duplicates but preserves My and custom templates", () => {
+  const seeded = seedUserTemplates();
+  const all = templateLibraryPool({ templateCategory: "全部", userTemplates: seeded });
+  assert.equal(all.length, templates.length);
+  assert.equal(new Set(all.map((item) => item.id)).size, templates.length);
+  assert.equal(templateLibraryPool({ templateCategory: "我的", userTemplates: seeded }).length, seeded.length);
+
+  const custom = { id: "custom-r01", name: "自定义", document: { widthMm: 40, heightMm: 12, elements: [] } };
+  const withCustom = templateLibraryPool({ templateCategory: "全部", userTemplates: [...seeded, custom] });
+  assert.equal(withCustom.length, templates.length + 1);
+  assert.ok(withCustom.some((item) => item.id === custom.id));
 });

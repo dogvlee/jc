@@ -7686,19 +7686,6 @@ textarea:focus-visible,
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.niim-mat-vip {
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  font-size: 9px;
-  background: #f0d78c;
-  color: #7a5a10;
-  border-radius: 3px;
-  padding: 1px 4px;
-  font-weight: 700;
-  line-height: 1.2;
-  z-index: 1;
-}
 .niim-mat-tile .niim-material-thumb {
   width: 100%;
   height: 100%;
@@ -7711,6 +7698,12 @@ textarea:focus-visible,
   width: 100%;
   height: 100%;
   display: block;
+}
+.niim-mat-tile .niim-material-thumb img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
 }
 .niim-material-content .niim-mat-browser {
   max-height: min(42vh, 360px);
@@ -7898,22 +7891,33 @@ textarea:focus-visible,
 .niim-multi-count{color:#fff;font-weight:600;padding:0 8px;font-size:13px;}
 .niim-float-multi.niim-float-fixed{width:auto!important;min-width:min(calc(100% - 16px),340px);max-width:calc(100% - 16px);}
 .niim-color-name{display:none!important;}
-.niim-text-dir-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0;}
-.niim-text-dir-label{font-size:13px;color:#666;}
-.niim-dir-opt{width:36px;height:36px;border:0;border-radius:8px;background:transparent;display:grid;place-items:center;}
-.niim-dir-opt.active{background:#fff5f4;}
-.niim-rot-slider{flex:1 1 80px;min-width:72px;max-width:140px;accent-color:#3478F6;}
-.niim-rot-readout{font-size:12px;color:#666;font-style:normal;min-width:32px;}
+.niim-tdir{display:inline-flex;align-items:center;justify-content:center;gap:2px;min-width:36px;}
+.niim-tdir .editor-native-icon{width:22px;height:22px;filter:grayscale(1) brightness(.3);}
+.niim-tdir-label{display:none;}
+.niim-text-direction-popover{position:relative;padding:12px 12px 10px;border:1px solid #ececec;border-radius:14px;background:#fff;box-shadow:0 8px 24px rgba(0,0,0,.12);animation:niim-panel-body-in .16s ease-out;}
+.niim-text-direction-popover::after{content:"";position:absolute;left:154px;bottom:-6px;width:11px;height:11px;border-right:1px solid #ececec;border-bottom:1px solid #ececec;background:#fff;transform:rotate(45deg);}
+.niim-text-dir-title{margin:0 0 5px 2px;color:#9a9a9a;font-size:10px;line-height:1.2;}
+.niim-text-dir-grid{display:grid;grid-template-columns:repeat(6,minmax(40px,1fr));gap:4px;}
+.niim-dir-opt{min-width:0;height:38px;padding:3px 2px;border:0;border-radius:9px;background:transparent;color:#555;display:flex;align-items:center;justify-content:center;font-size:9px;line-height:1;}
+.niim-dir-opt .editor-native-icon{width:27px;height:27px;filter:grayscale(1) brightness(.25);}
+.niim-dir-opt span{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
+.niim-dir-opt.active{background:#fff1f0;color:#e64740;font-weight:700;}
+.niim-dir-opt.active .editor-native-icon{filter:none;}
+.niim-text-arc-row{display:flex;align-items:center;gap:8px;margin-top:9px;padding-top:9px;border-top:1px solid #f1f1f1;color:#888;font-size:11px;}
+.niim-text-arc-row.disabled{opacity:.4;}
+.niim-text-arc-slider{flex:1 1 auto;min-width:80px;height:22px;accent-color:#fb4b42;}
+.niim-text-arc-readout{min-width:36px;color:#555;font-size:12px;font-style:normal;text-align:right;}
+.niim-text-arc-reset{width:28px;height:28px;border:0;border-radius:7px;background:#f3f3f3;color:#666;font-size:18px;line-height:1;}
+@media (max-width:360px){.niim-text-direction-popover{padding-left:7px;padding-right:7px}.niim-text-dir-grid{gap:1px}.niim-dir-opt{font-size:8px}.niim-dir-opt .editor-native-icon{width:24px;height:24px}.niim-text-direction-popover::after{left:132px;}}
 
 .niim-style-panel .niim-font-list{display:none!important;}
 
 .niim-float-bar.niim-float-fixed,.niim-float-multi.niim-float-fixed{top:auto;left:auto;transform:none;z-index:20;}
 .niim-float-bar::after{display:block!important;content:"";position:absolute;left:50%;bottom:-6px;width:10px;height:10px;margin-left:-5px;background:#1c1c1c;transform:rotate(45deg);}
 
-/* Time VIP + linked */
+/* Realtime + linked dates */
 .niim-realtime-row{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;margin:0 0 12px;border-radius:12px;background:#fff6eb;}
 .niim-realtime-label{font-size:14px;font-weight:600;color:#333;display:flex;align-items:center;gap:6px;}
-.niim-vip-pill{font-style:normal;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:linear-gradient(90deg,#f0d48a,#e8b84a);color:#6b4a10;}
 .niim-add-linked{display:block;width:100%;min-height:44px;margin:8px 0 12px;border:0;border-radius:12px;background:#f3f3f3;color:#666;font-size:14px;font-weight:500;}
 .niim-add-linked:active{background:#e8e8e8;}
 .niim-clear-style{font-size:12px;font-weight:600;color:#666;}

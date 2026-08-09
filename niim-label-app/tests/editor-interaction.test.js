@@ -1,7 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const { contextActions, propertyPanel } = require('../src/app/views');
+const mainSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'app', 'main.js'), 'utf8');
 
 function stateFor(element) {
   return {
@@ -58,6 +61,38 @@ test('locked selection keeps only the three safe float actions', () => {
   assert.equal((lockedMarkup.match(/class="niim-float-btn"/g) || []).length, 3);
   assert.doesNotMatch(lockedMarkup, /data-action="toggle-lock"/);
   assert.equal((unlockedMarkup.match(/class="niim-float-btn(?:\s|\")/g) || []).length, 6);
+});
+
+test('text direction control exposes six native modes and an arc angle slider', () => {
+  const state = stateFor({ ...textElement(false), textMode: 'arc', textArcAngle: 81 });
+  state.textDirectionOpen = true;
+  const markup = propertyPanel(state);
+  const modes = [...markup.matchAll(/data-action="set-text-mode" data-mode="([^"]+)"/g)].map((match) => match[1]);
+  assert.deepEqual(modes, [
+    'horizontal',
+    'horizontal-90',
+    'horizontal-90-words-rotate',
+    'vertical',
+    'vertical-words-rotate',
+    'arc'
+  ]);
+  assert.match(markup, /text_mode_horizontal_cn\.svg/);
+  assert.match(markup, /text_mode_arc_cn\.svg/);
+  assert.match(markup, /class="niim-dir-opt active" data-action="set-text-mode" data-mode="arc"/);
+  assert.match(markup, /class="niim-text-arc-slider" type="range" min="0" max="180" step="1" value="81"/);
+  assert.match(markup, /class="niim-text-arc-readout">81°<\/output>/);
+});
+
+test('arc angle live edits create one undo entry when the slider change finishes', () => {
+  assert.equal((mainSource.match(/'fontSize', 'rotation', 'textArcAngle'\]\.includes\(field\)/g) || []).length, 2);
+  assert.match(mainSource, /autosave:\s*field === 'fontSize' \|\| field === 'textArcAngle'/);
+});
+
+test('legacy vertical documents select the vertical mode without a textMode field', () => {
+  const state = stateFor({ ...textElement(false), direction: 'vertical' });
+  state.textDirectionOpen = true;
+  const markup = propertyPanel(state);
+  assert.match(markup, /class="niim-dir-opt active" data-action="set-text-mode" data-mode="vertical"/);
 });
 
 test('locked selection exposes unlock in the property panel', () => {

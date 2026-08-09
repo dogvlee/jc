@@ -67,6 +67,11 @@ test('chips and filter helper', () => {
   assert.ok(cute.length > 0);
 });
 
+test('material catalog has no VIP gate or searchable VIP tag', () => {
+  assert.ok(MATERIAL_CATALOG.every((item) => item.vip == null));
+  assert.ok(MATERIAL_CATALOG.every((item) => !(item.tags || []).includes('VIP')));
+});
+
 test('new decorative symbols draw', () => {
   const ctx = mockContext();
   for (const id of ['panda', 'cake', 'bracelet', 'lotus', 'gift', 'sparkle', 'diamond_ring']) {

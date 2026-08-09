@@ -11,7 +11,7 @@ const extras = [
   ["butterfly","蝴蝶","表情",["可爱","园艺","最新"]],
   ["bear","小熊","表情",["可爱","热门"]],
   ["chick","小鸡","表情",["可爱","最新"]],
-  ["fox","狐狸","表情",["可爱","VIP"], true],
+  ["fox","狐狸","表情",["可爱"], true],
   ["apple","苹果","餐饮",["餐饮","最新"]],
   ["bread","面包","餐饮",["餐饮"]],
   ["coffee","咖啡","餐饮",["餐饮","热门"]],
@@ -23,12 +23,12 @@ const extras = [
   ["strawberry","草莓","餐饮",["餐饮","可爱","最新"]],
   ["balloon","气球","通用",["祝福","可爱","热门"]],
   ["bells","铃铛","通用",["祝福","最新"]],
-  ["champagne","香槟","通用",["祝福","VIP"], true],
+  ["champagne","香槟","通用",["祝福"], true],
   ["bow_tie","领结","通用",["饰品","祝福"]],
-  ["earring","耳环","通用",["饰品","VIP"], true],
+  ["earring","耳环","通用",["饰品"], true],
   ["necklace","项链","通用",["饰品","最新"]],
-  ["gem","宝石","通用",["饰品","VIP","热门"], true],
-  ["crown","皇冠","通用",["VIP","饰品","热门"], true],
+  ["gem","宝石","通用",["饰品","热门"], true],
+  ["crown","皇冠","通用",["饰品","热门"], true],
   ["sun","太阳","通用",["最新","园艺"]],
   ["cloud","云朵","通用",["可爱","最新"]],
   ["rain","下雨","通用",["警示"]],
@@ -44,7 +44,7 @@ const extras = [
   ["calendar","日历","通用",["最新","热门"]],
   ["clipboard","剪贴板","通用",["标记"]],
   ["printer","打印机","通用",["最新","热门"]],
-  ["trophy","奖杯","通用",["祝福","VIP","热门"], true],
+  ["trophy","奖杯","通用",["祝福","热门"], true],
   ["flag","旗帜","标记",["标记","热门"]],
   ["target","靶心","标记",["标记"]],
   ["wink","眨眼","表情",["可爱","最新"]],
@@ -65,7 +65,7 @@ const extras = [
   ["triangle","三角","形状",["形状"]],
   ["plus","加号","形状",["形状","标记"]],
   ["minus","减号","形状",["形状","标记"]],
-  ["star_fill","实心星","形状",["形状","可爱","VIP"], true],
+  ["star_fill","实心星","形状",["形状","可爱"], true],
   ["heart_fill","实心爱心","形状",["形状","可爱","祝福"]],
   ["lantern","灯笼","通用",["祝福","最新","热门"]],
   ["red_packet","红包","通用",["祝福","热门"]],
@@ -75,8 +75,8 @@ const extras = [
   ["sunflower","向日葵","通用",["园艺","最新"]],
   ["electricity","带电","警示",["警示","热门"]],
   ["high_temp","高温","警示",["警示"]],
-  ["medal","奖牌","通用",["VIP","祝福"], true],
-  ["ribbon","丝带","通用",["祝福","饰品","VIP"], true],
+  ["medal","奖牌","通用",["祝福"], true],
+  ["ribbon","丝带","通用",["祝福","饰品"], true],
   ["arrow_double","双向","箭头",["箭头"]],
   ["refresh","刷新","箭头",["箭头","最新"]],
   ["download","下载","箭头",["箭头"]],
@@ -85,9 +85,9 @@ const extras = [
 
 const existingIds = new Set([...src.matchAll(/id:\s*'([^']+)'/g)].map(m => m[1]));
 const newEntries = extras.filter(e => !existingIds.has(e[0]));
-const entryLines = newEntries.map(([id, label, category, tags, vip]) => {
+const entryLines = newEntries.map(([id, label, category, tags]) => {
   const tagStr = JSON.stringify(tags).replace(/"/g, "'");
-  return "  { id: '" + id + "', label: '" + label + "', category: '" + category + "', tags: " + tagStr + (vip ? ", vip: true" : "") + " }";
+  return "  { id: '" + id + "', label: '" + label + "', category: '" + category + "', tags: " + tagStr + " }";
 }).join(",\n");
 const catClose = src.indexOf("];\r\n\r\nfunction materialById");
 if (catClose < 0) throw new Error("catalog close not found");

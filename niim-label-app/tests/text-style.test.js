@@ -51,7 +51,9 @@ test('resetTextStyle restores all text-facing defaults and preserves content', (
     color: '#000000',
     align: 'left',
     verticalAlign: 'middle',
-    direction: 'horizontal'
+    direction: 'horizontal',
+    textMode: 'horizontal',
+    textArcAngle: 180
   });
 });
 
@@ -72,4 +74,27 @@ test('resetTextStyle restores the date default font size without changing date d
   assert.equal(date.autoFit, true);
   assert.equal(date.label, '保质期至');
   assert.equal(date.baseTime, '2026-08-09T00:00:00.000Z');
+});
+
+test('resetTextStyle restores horizontal geometry after a vertical mode', () => {
+  const documentValue = { widthMm: 50, heightMm: 30 };
+  const element = {
+    type: 'text',
+    text: '方向',
+    x: 19,
+    y: 7,
+    width: 6,
+    height: 22,
+    direction: 'vertical',
+    textMode: 'vertical',
+    directionLayout: { horizontalWidth: 22, horizontalHeight: 6 }
+  };
+
+  resetTextStyle(element, documentValue);
+
+  assert.equal(element.direction, 'horizontal');
+  assert.equal(element.textMode, 'horizontal');
+  assert.equal(element.width, 22);
+  assert.equal(element.height, 6);
+  assert.equal(element.directionLayout, undefined);
 });
