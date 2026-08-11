@@ -1,0 +1,138 @@
+const assert = require('node:assert/strict');
+const test = require('node:test');
+
+const {
+  changeTextDirection,
+  changeTextMode,
+  fitElementToSelectionBounds,
+  normalizeAngleDelta,
+  pointerAngle,
+  resizeRotatedElement,
+  selectionHandleMode
+} = require('../miniprogram/core/geometry');
+
+function rotateLocalPoint(element, localX, localY) {
+  const angle = element.rotation * Math.PI / 180;
+  const centerX = element.x + element.width / 2;
+  const centerY = element.y + element.height / 2;
+  return {
+    x: centerX + localX * Math.cos(angle) - localY * Math.sin(angle),
+    y: centerY + localX * Math.sin(angle) + localY * Math.cos(angle)
+  };
+}
+
+test('rotation gestures use a relative angle without a bottom-handle jump', () => {
+  const center = { x: 10, y: 10 };
+  const start = pointerAngle({ x: 10, y: 14 }, center);
+  const current = pointerAngle({ x: 9, y: 14 }, center);
+  assert.ok(Math.abs(normalizeAngleDelta(current - start)) < 20);
+  assert.equal(normalizeAngleDelta(181), -179);
+});
+
+test('rotated resize follows local axes and preserves the opposite corner', () => {
+  for (const rotation of [0, 90, 270]) {
+    const original = { x: 8, y: 7, width: 8, height: 4, rotation };
+    const anchor = rotateLocalPoint(original, -original.width / 2, -original.height / 2);
+    const next = { ...original, ...resizeRotatedElement(original, 'se', { x: 2, y: 1 }, 1) };
+    const nextAnchor = rotateLocalPoint(next, -next.width / 2, -next.height / 2);
+    assert.ok(Math.abs(nextAnchor.x - anchor.x) < 1e-9, `x anchor changed at ${rotation}`);
+    assert.ok(Math.abs(nextAnchor.y - anchor.y) < 1e-9, `y anchor changed at ${rotation}`);
+  }
+});
+
+test('content-fitted handle becomes the real resize box and follows the pointer', () => {
+  const element = {
+    id: 'tight-text',
+    type: 'text',
+    x: 2,
+    y: 3,
+    width: 30,
+    height: 6,
+    rotation: 0,
+    _fit: { left: 0, top: 0, w: 1 / 6, h: 1 }
+  };
+  const visibleRightBefore = element.x + element.width * element._fit.w;
+  assert.equal(fitElementToSelectionBounds(element), true);
+  assert.equal(element.selectionFit, false);
+  assert.equal(element.width, 5);
+  assert.equal(element.x + element.width, visibleRightBefore);
+  assert.doesNotMatch(JSON.stringify(element), /_fit/);
+
+  const next = resizeRotatedElement({ ...element }, 'e', { x: 3, y: 0 }, 1);
+  assert.equal(next.x + next.width - visibleRightBefore, 3);
+});
+
+test('promoting a rotated fit box preserves its visible handle coordinates', () => {
+  for (const rotation of [37, 90, 143]) {
+    const element = {
+      id: `rotated-${rotation}`,
+      type: 'text',
+      x: 8,
+      y: 6,
+      width: 24,
+      height: 10,
+      rotation,
+      _fit: { left: 0.2, top: 0.15, w: 0.35, h: 0.55 }
+    };
+    const localX = -element.width / 2 + (element._fit.left + element._fit.w) * element.width;
+    const localY = -element.height / 2 + (element._fit.top + element._fit.h) * element.height;
+    const visibleSe = rotateLocalPoint(element, localX, localY);
+    fitElementToSelectionBounds(element);
+    const promotedSe = rotateLocalPoint(element, element.width / 2, element.height / 2);
+    assert.ok(Math.abs(promotedSe.x - visibleSe.x) < 1e-9, `${rotation}° x`);
+    assert.ok(Math.abs(promotedSe.y - visibleSe.y) < 1e-9, `${rotation}° y`);
+  }
+});
+
+test('selection hit testing follows the visible content-fitted handles', () => {
+  const element = {
+    x: 2, y: 3, width: 30, height: 6, rotation: 0,
+    _fit: { left: 0, top: 0, w: 1 / 6, h: 1 }
+  };
+  assert.equal(selectionHandleMode(element, { x: 7, y: 6 }, 0.4), 'resize-e');
+  assert.equal(selectionHandleMode(element, { x: 4.5, y: 9 }, 0.4), 'resize-s');
+  assert.equal(selectionHandleMode(element, { x: 7, y: 9 }, 0.4), 'rotate');
+  assert.equal(selectionHandleMode(element, { x: 32, y: 6 }, 0.4), 'move');
+});
+
+test('vertical text direction reshapes a wide text box and restores its horizontal size', () => {
+  const document = { widthMm: 40, heightMm: 12 };
+  const element = { x: 2, y: 1.5, width: 36, height: 4.32, direction: 'horizontal' };
+
+  changeTextDirection(element, 'vertical', document);
+  assert.equal(element.direction, 'vertical');
+  assert.equal(element.width, 4.32);
+  assert.equal(element.height, 12);
+  assert.ok(element.x >= 0 && element.x + element.width <= document.widthMm);
+  assert.ok(element.y >= 0 && element.y + element.height <= document.heightMm);
+
+  changeTextDirection(element, 'horizontal', document);
+  assert.equal(element.direction, 'horizontal');
+  assert.equal(element.width, 36);
+  assert.equal(element.height, 4.32);
+  assert.equal(element.directionLayout, undefined);
+});
+
+test('text modes keep legacy direction compatible and only vertical modes reshape geometry', () => {
+  const document = { widthMm: 40, heightMm: 20 };
+  const element = { x: 2, y: 4, width: 30, height: 5, direction: 'horizontal', textMode: 'horizontal' };
+
+  changeTextMode(element, 'horizontal-90', document);
+  assert.equal(element.direction, 'horizontal');
+  assert.deepEqual([element.width, element.height], [30, 5]);
+
+  changeTextMode(element, 'arc', document);
+  assert.equal(element.direction, 'horizontal');
+  assert.deepEqual([element.width, element.height], [30, 5]);
+
+  changeTextMode(element, 'vertical-words-rotate', document);
+  assert.equal(element.direction, 'vertical');
+  assert.deepEqual([element.width, element.height], [5, 20]);
+
+  changeTextMode(element, 'vertical', document);
+  assert.deepEqual([element.width, element.height], [5, 20]);
+
+  changeTextMode(element, 'horizontal', document);
+  assert.equal(element.direction, 'horizontal');
+  assert.deepEqual([element.width, element.height], [30, 5]);
+});

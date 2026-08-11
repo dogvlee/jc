@@ -79,6 +79,15 @@ const PROFILES = [
   }
 ];
 
+// Mappings recovered from upstream metadata but not yet closed by the physical
+// Android/iOS print matrix. They may preselect a likely profile, but the page
+// must still require an explicit user confirmation before sending print data.
+const CANDIDATE_MODEL_IDS = new Set([2320, 4098]);
+
+function isCandidateModelId(modelId) {
+  return CANDIDATE_MODEL_IDS.has(Number(modelId));
+}
+
 function getProfile(id) {
   return PROFILES.find((item) => item.id === id) || PROFILES[0];
 }
@@ -107,16 +116,20 @@ function guessProfile(deviceName) {
 }
 
 function profileForModelId(modelId, deviceName, protocolVersion) {
+  // Model IDs from NIIMBOT printerList.json codes[] for 203dpi families
+  // whose print task matches verified protocol profiles. 300dpi codes stay unmapped.
   const mapping = {
-    2304: 'd110',
-    2305: 'd110',
-    4096: 'b1',
-    768: 'b21',
-    769: 'b21',
-    771: 'b21-c2b',
-    775: 'b21-c2b',
-    776: 'b21s',
-    777: 'b21s'
+    2304: 'd110',   // D110
+    2305: 'd110',   // D110 / Hi-D110
+    2320: 'd110',   // D110_M (same series, 203dpi)
+    4096: 'b1',     // B1
+    4098: 'b1',     // B1 SE (203dpi; printhead still treated as 384 until hardware log)
+    768: 'b21',     // B21
+    769: 'b21',     // B21-L2B
+    771: 'b21-c2b', // B21-C2B
+    775: 'b21-c2b', // B21-C2B alt code
+    776: 'b21s',    // B21S-C2B
+    777: 'b21s'     // B21S
   };
   if (modelId !== null && modelId !== undefined) {
     if (modelId === 512) {
@@ -140,9 +153,9 @@ function profileForModelId(modelId, deviceName, protocolVersion) {
 }
 
 function alignedCanvasSize(document, profile) {
+  const size = previewCanvasSize(document, profile.dpi);
   const dotsPerMillimeter = profile.dpi / 25.4;
-  let width = Math.max(8, Math.round(document.widthMm * dotsPerMillimeter));
-  let height = Math.max(8, Math.round(document.heightMm * dotsPerMillimeter));
+  let { width, height } = size;
   if (profile.printDirection === 'left') {
     height = Math.ceil(height / 8) * 8;
     if (height > profile.printheadPixels) {
@@ -157,4 +170,56 @@ function alignedCanvasSize(document, profile) {
   return { width, height };
 }
 
-module.exports = { PROFILES, alignedCanvasSize, getProfile, guessProfile, profileForModelId };
+/**
+ * Non-throwing printability check used before opening the print sheet.
+ * Returns the blocking reason plus the first profile that could print the
+ * label as-is, so the UI can offer a way out instead of a dead end.
+ */
+function evaluatePrintability(document, profile) {
+  try {
+    alignedCanvasSize(document, profile);
+    return { ok: true, message: '', suggestProfileId: '' };
+  } catch (error) {
+    const fallback = PROFILES.find((item) => {
+      if (item.id === profile.id) return false;
+      try {
+        alignedCanvasSize(document, item);
+        return true;
+      } catch (retryError) {
+        return false;
+      }
+    });
+    return {
+      ok: false,
+      message: error.message,
+      suggestProfileId: fallback ? fallback.id : ''
+    };
+  }
+}
+
+function previewCanvasSize(document, dpi) {
+  const widthMm = Number(document && document.widthMm);
+  const heightMm = Number(document && document.heightMm);
+  const dotsPerMillimeter = Number(dpi) / 25.4;
+  if (!Number.isFinite(widthMm) || !Number.isFinite(heightMm) || widthMm <= 0 || heightMm <= 0) {
+    throw new Error('标签宽高必须大于 0 mm');
+  }
+  if (!Number.isFinite(dotsPerMillimeter) || dotsPerMillimeter <= 0) {
+    throw new Error('打印分辨率无效');
+  }
+  return {
+    width: Math.max(1, Math.round(widthMm * dotsPerMillimeter)),
+    height: Math.max(1, Math.round(heightMm * dotsPerMillimeter))
+  };
+}
+
+module.exports = {
+  PROFILES,
+  alignedCanvasSize,
+  evaluatePrintability,
+  getProfile,
+  guessProfile,
+  isCandidateModelId,
+  previewCanvasSize,
+  profileForModelId
+};

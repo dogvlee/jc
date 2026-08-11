@@ -1,0 +1,237 @@
+<view class="app-shell route-{{route}}">
+  <block wx:if="{{route == 'home'}}">
+    <view class="home-hero" style="padding-top: {{safeTop + 12}}px;">
+      <view class="brand-row">
+        <view class="brand-lockup">
+          <view class="brand-mark">N</view>
+          <view><text class="brand-title">精臣标签</text><text class="brand-subtitle">模板 · 编辑 · 蓝牙打印</text></view>
+        </view>
+        <view class="hero-actions">
+          <button class="circle-button" bindtap="openHelp" aria-label="帮助">?</button>
+          <button class="device-pill {{connected ? 'connected' : ''}}" bindtap="openDevices"><text class="device-bluetooth">⌁</text>{{connectionLabel}}</button>
+        </view>
+      </view>
+      <view class="quick-panel">
+        <button class="quick-item" bindtap="openIndustry"><text class="quick-icon red">▦</text><text>行业模板</text></button>
+        <button class="quick-item" data-id="business-card" bindtap="previewTemplate"><text class="quick-icon blue">♙</text><text>名片</text></button>
+        <button class="quick-item" data-id="clothing-tag" bindtap="previewTemplate"><text class="quick-icon orange">♜</text><text>服装款式</text></button>
+        <button class="quick-item" data-id="home-date" bindtap="previewTemplate"><text class="quick-icon yellow">□</text><text>效期标签</text></button>
+      </view>
+    </view>
+
+    <view class="home-content">
+      <button class="wifi-banner" bindtap="createWifiLabel">
+        <text class="wifi-symbol">⌁</text>
+        <view class="wifi-copy"><text class="wifi-title">创建 Wi-Fi 码</text><text class="wifi-note">打开可编辑样例，请同步修改名称、密码和二维码内容</text></view>
+        <text class="wifi-cta">立即创建</text>
+      </button>
+
+      <view class="stock-card">
+        <view class="stock-preview"><view class="stock-paper"></view></view>
+        <view class="stock-copy"><text class="eyebrow">已安装标签</text><text class="stock-name">T{{settings.stockWidthMm}}×{{settings.stockHeightMm}} 203 空白标签</text><text class="muted">新建标签将默认使用此尺寸</text></view>
+        <view class="stock-actions"><button class="outline-button" bindtap="openStockSheet">换纸</button><button class="primary-small" bindtap="createBlank">新建</button></view>
+      </view>
+
+      <view class="section-block">
+        <view class="section-heading">
+          <view class="heading-with-icon"><text class="heading-icon">▧</text><text class="section-title">最近编辑</text></view>
+          <view class="inline-actions"><button bindtap="openHistorySheet">↻ 打印历史</button><button data-route="projects" bindtap="navigate">全部 ›</button></view>
+        </view>
+        <view wx:if="{{recentProjects.length}}" class="project-grid compact-grid">
+          <view wx:for="{{recentProjects}}" wx:key="id" class="project-card">
+            <button class="project-open" data-id="{{item.id}}" bindtap="openProject">
+              <view class="abstract-preview kind-{{item.kind}}"><view class="preview-line wide"></view><view class="preview-line"></view><view class="preview-code"></view></view>
+              <view class="project-card-copy"><text class="card-title">{{item.name}}</text><text class="card-meta">{{item.sizeText}}</text><text class="card-meta">{{item.updatedText}}</text></view>
+            </button>
+          </view>
+        </view>
+        <view wx:else class="friendly-empty"><text class="empty-icon">＋</text><text class="empty-title">还没有编辑过标签</text><text class="muted">从模板开始，或新建一个空白标签</text><button class="primary-button" bindtap="createBlank">新建标签</button></view>
+      </view>
+
+      <view class="section-block">
+        <view class="section-heading"><text class="section-title">推荐模板</text><button data-route="templates" bindtap="navigate">更多 ›</button></view>
+        <view class="template-grid home-template-grid">
+          <button wx:for="{{recommendedTemplates}}" wx:key="id" class="template-card" data-id="{{item.id}}" bindtap="previewTemplate">
+            <view class="template-thumb"><view class="abstract-preview kind-{{item.kind}}"><view class="preview-line wide"></view><view class="preview-line"></view><view class="preview-code"></view></view></view>
+            <text class="card-title">{{item.name}}</text><text class="card-meta">{{item.sizeText}} · {{item.category}}</text>
+          </button>
+        </view>
+      </view>
+
+      <view class="section-block quick-create-block">
+        <text class="section-title">快捷创建</text>
+        <view class="shortcut-grid">
+          <button bindtap="createBlank"><text>＋</text>空白标签</button>
+          <button bindtap="scanToLabel" loading="{{codeScanning}}" disabled="{{codeScanning}}"><text>⌗</text>扫码建标</button>
+          <button data-route="data" bindtap="navigate"><text>▦</text>批量制标</button>
+          <button bindtap="openDevices"><text>⌁</text>连接设备</button>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <block wx:if="{{route == 'templates'}}">
+    <view class="plain-header" style="padding-top: {{safeTop + 12}}px;">
+      <view><text class="plain-title">行业模板</text><text class="plain-subtitle">{{templateTotal}} 个可用 · 当前显示 {{visibleTemplates.length}}</text></view>
+      <button class="outline-button" bindtap="importTemplateFile">导入模板</button>
+    </view>
+    <view class="route-content template-content">
+      <view class="search-box"><text>⌕</text><input value="{{templateQuery}}" bindinput="onTemplateSearch" placeholder="搜索模板名称、行业、用途" confirm-type="search" /></view>
+      <scroll-view class="filter-scroll" scroll-x="true" show-scrollbar="false">
+        <view class="filter-row">
+          <button wx:for="{{categories}}" wx:key="*this" class="filter-chip {{templateCategory == item ? 'active' : ''}}" data-value="{{item}}" bindtap="setTemplateCategory">{{item}}</button>
+        </view>
+      </scroll-view>
+      <scroll-view class="filter-scroll second" scroll-x="true" show-scrollbar="false">
+        <view class="filter-row">
+          <button wx:for="{{industries}}" wx:key="*this" class="filter-chip {{templateIndustry == item ? 'active' : ''}}" data-value="{{item}}" bindtap="setTemplateIndustry">{{item}}</button>
+          <button class="filter-chip {{templateIndustry == '我的' ? 'active' : ''}}" data-value="我的" bindtap="setTemplateIndustry">我的 {{userTemplateCount}}</button>
+        </view>
+      </scroll-view>
+      <view wx:if="{{visibleTemplates.length}}" class="template-grid library-grid">
+        <button wx:for="{{visibleTemplates}}" wx:key="id" class="template-card library-card" data-id="{{item.id}}" bindtap="previewTemplate">
+          <view class="template-thumb library-thumb">
+            <image wx:if="{{item.thumbSrc}}" src="{{item.thumbSrc}}" mode="aspectFit" lazy-load="true" />
+            <view wx:else class="abstract-preview kind-{{item.kind}}"><view class="preview-line wide"></view><view class="preview-line"></view><view class="preview-code"></view></view>
+            <text wx:if="{{item.badge}}" class="template-badge">{{item.badge}}</text>
+          </view>
+          <text class="card-title">{{item.name}}</text><text class="card-meta">{{item.sizeText}} · {{item.category}}</text><text class="card-blurb">{{item.blurb}}</text>
+        </button>
+      </view>
+      <view wx:else class="friendly-empty"><text class="empty-icon">⌕</text><text class="empty-title">没有找到匹配模板</text><text class="muted">换个关键词，或恢复全部筛选</text><button class="primary-button" bindtap="resetTemplateFilters">恢复全部</button></view>
+      <button wx:if="{{visibleTemplates.length < templateTotal}}" class="load-more" bindtap="loadMoreTemplates">显示更多（剩余 {{templateTotal - visibleTemplates.length}}）</button>
+    </view>
+  </block>
+
+  <block wx:if="{{route == 'projects'}}">
+    <view class="plain-header" style="padding-top: {{safeTop + 12}}px;"><view><text class="plain-title">我的标签</text><text class="plain-subtitle">{{allProjects.length}} 个本地项目</text></view><button class="primary-small" bindtap="createBlank">新建</button></view>
+    <view class="route-content">
+      <view class="search-box"><text>⌕</text><input value="{{projectQuery}}" bindinput="onProjectSearch" placeholder="搜索标签名称" /></view>
+      <view wx:if="{{allProjects.length}}" class="project-grid projects-page-grid">
+        <view wx:for="{{allProjects}}" wx:key="id" class="project-card project-manage-card">
+          <button class="project-open" data-id="{{item.id}}" bindtap="openProject">
+            <view class="abstract-preview kind-{{item.kind}}"><view class="preview-line wide"></view><view class="preview-line"></view><view class="preview-code"></view></view>
+            <text class="card-title">{{item.name}}</text><text class="card-meta">{{item.sizeText}} · {{item.updatedText}}</text>
+          </button>
+          <button class="delete-card" data-id="{{item.id}}" bindtap="deleteProject" aria-label="删除 {{item.name}}">删除</button>
+        </view>
+      </view>
+      <view wx:else class="friendly-empty tall-empty"><text class="empty-icon">▧</text><text class="empty-title">还没有保存的标签</text><text class="muted">编辑器中的“保存”会把标签放到这里</text><button class="primary-button" bindtap="createBlank">创建第一个标签</button></view>
+    </view>
+  </block>
+
+  <block wx:if="{{route == 'data'}}">
+    <view class="plain-header" style="padding-top: {{safeTop + 12}}px;"><view><text class="plain-title">批量数据</text><text class="plain-subtitle">编辑表格后，按行生成标签</text></view><button class="outline-button" bindtap="addDataRow">添加行</button></view>
+    <view class="route-content data-content">
+      <view class="data-toolbar"><button class="outline-button" bindtap="importCsv">导入 CSV</button><button class="outline-button" bindtap="exportCsv">导出 CSV</button></view>
+      <scroll-view class="data-table-scroll" scroll-x="true">
+        <view class="data-table">
+          <view class="data-row data-header"><text>名称</text><text>编码/条码</text><text>价格</text><text>日期</text><text></text></view>
+          <view wx:for="{{dataRows}}" wx:key="id" class="data-row">
+            <input value="{{item.name}}" data-index="{{index}}" data-field="name" bindblur="updateDataCell" placeholder="商品名称" />
+            <input value="{{item.code}}" data-index="{{index}}" data-field="code" bindblur="updateDataCell" placeholder="690..." />
+            <input value="{{item.price}}" data-index="{{index}}" data-field="price" bindblur="updateDataCell" placeholder="19.90" />
+            <input value="{{item.date}}" data-index="{{index}}" data-field="date" bindblur="updateDataCell" placeholder="YYYY-MM-DD" />
+            <button data-index="{{index}}" bindtap="removeDataRow">×</button>
+          </view>
+        </view>
+      </scroll-view>
+      <view class="batch-card">
+        <view><text class="section-title">批量生成</text><text class="muted">会为每一行创建一个可继续编辑的本地标签</text></view>
+        <picker mode="selector" range="{{batchTemplateNames}}" value="{{batchTemplateIndex}}" bindchange="onBatchTemplateChange"><view class="picker-field">模板：{{batchTemplateNames[batchTemplateIndex]}} <text>›</text></view></picker>
+        <button class="primary-button full-button" bindtap="runBatch">生成 {{dataRows.length}} 个标签</button>
+      </view>
+    </view>
+  </block>
+
+  <block wx:if="{{route == 'profile'}}">
+    <view class="profile-hero" style="padding-top: {{safeTop + 12}}px;"><view class="avatar">N</view><view><text class="plain-title">本地模式</text><text class="plain-subtitle">无需登录，数据只保存在当前设备</text></view></view>
+    <view class="route-content profile-content">
+      <view class="stats-row"><view><text>{{allProjects.length}}</text><text>我的标签</text></view><view><text>{{userTemplateCount}}</text><text>我的模板</text></view><view><text>{{printHistory.length}}</text><text>打印记录</text></view></view>
+      <view class="menu-section">
+        <button bindtap="openDevices"><text class="menu-icon">⌁</text><view><text>我的打印机</text><text class="menu-note">{{connectionLabel}}</text></view><text>›</text></button>
+        <button bindtap="openSettingsSheet"><text class="menu-icon">⚙</text><view><text>默认打印设置</text><text class="menu-note">浓度 {{settings.density}} · 阈值 {{settings.threshold}}</text></view><text>›</text></button>
+        <button bindtap="openHistorySheet"><text class="menu-icon">↻</text><view><text>打印历史</text><text class="menu-note">最近 {{printHistory.length}} 条</text></view><text>›</text></button>
+      </view>
+      <view class="menu-section">
+        <button bindtap="exportBackup"><text class="menu-icon">⇧</text><view><text>导出备份</text><text class="menu-note">项目、模板、批量数据和设置</text></view><text>›</text></button>
+        <button bindtap="importBackup"><text class="menu-icon">⇩</text><view><text>恢复备份</text><text class="menu-note">从 JSON 文件恢复本机数据</text></view><text>›</text></button>
+      </view>
+      <view class="menu-section">
+        <button bindtap="openHelp"><text class="menu-icon">?</text><view><text>使用帮助与关于</text><text class="menu-note">精臣标签小程序 v1.0</text></view><text>›</text></button>
+      </view>
+      <text class="privacy-note">标签正文、模板和打印记录默认不上传网络。蓝牙、相机和相册仅在你主动使用对应功能时请求。</text>
+    </view>
+  </block>
+
+  <view class="bottom-nav" aria-label="主导航">
+    <button class="{{route == 'home' ? 'active' : ''}}" data-route="home" bindtap="navigate"><text class="nav-icon">⌂</text><text>首页</text></button>
+    <button class="{{route == 'templates' ? 'active' : ''}}" data-route="templates" bindtap="navigate"><text class="nav-icon">▦</text><text>模板</text></button>
+    <button class="create-nav" bindtap="createBlank" aria-label="新建标签"><text>＋</text></button>
+    <button class="{{route == 'data' ? 'active' : ''}}" data-route="data" bindtap="navigate"><text class="nav-icon">▤</text><text>批量</text></button>
+    <button class="{{route == 'profile' ? 'active' : ''}}" data-route="profile" bindtap="navigate"><text class="nav-icon">♙</text><text>我的</text></button>
+  </view>
+</view>
+
+<view wx:if="{{showTemplatePreview}}" class="modal-layer">
+  <view class="modal-backdrop" bindtap="closeTemplatePreview"></view>
+  <view class="bottom-sheet preview-sheet">
+    <view class="sheet-handle"></view>
+    <view class="sheet-heading"><view><text class="sheet-title">{{previewTemplate.name}}</text><text class="plain-subtitle">{{previewTemplate.sizeText}} · {{previewTemplate.category}} · {{previewTemplate.industry}}</text></view><button class="close-button" bindtap="closeTemplatePreview">×</button></view>
+    <view class="large-template-preview">
+      <image wx:if="{{previewTemplate.thumbSrc}}" src="{{previewTemplate.thumbSrc}}" mode="aspectFit" />
+      <view wx:else class="abstract-preview kind-{{previewTemplate.kind}}"><view class="preview-line wide"></view><view class="preview-line"></view><view class="preview-code"></view></view>
+    </view>
+    <text class="preview-blurb">{{previewTemplate.blurb}}</text>
+    <view class="preview-meta"><text>{{previewTemplate.elementSummary}}</text><text>{{previewTemplate.elementCount}} 个元素</text><text>纸张 {{previewTemplate.sizeText}}</text></view>
+    <view class="sheet-actions"><button wx:if="{{previewTemplate.source == 'user'}}" class="danger-button" bindtap="deletePreviewTemplate">删除</button><button class="outline-button" bindtap="closeTemplatePreview">取消</button><button class="primary-button" bindtap="usePreviewTemplate">使用此模板</button></view>
+  </view>
+</view>
+
+<view wx:if="{{showStockSheet}}" class="modal-layer">
+  <view class="modal-backdrop" bindtap="closeStockSheet"></view>
+  <view class="bottom-sheet">
+    <view class="sheet-handle"></view><view class="sheet-heading"><text class="sheet-title">选择标签纸</text><button class="close-button" bindtap="closeStockSheet">×</button></view>
+    <view class="preset-grid">
+      <button wx:for="{{stockPresets}}" wx:key="id" data-value="{{item.id}}" bindtap="chooseStockPreset">{{item.widthMm}}×{{item.heightMm}}<text>{{item.name}}</text></button>
+    </view>
+    <view class="custom-size"><label><text>宽 / mm</text><input type="digit" value="{{settings.stockWidthMm}}" data-field="stockWidthMm" bindblur="updateStockField" /></label><label><text>高 / mm</text><input type="digit" value="{{settings.stockHeightMm}}" data-field="stockHeightMm" bindblur="updateStockField" /></label></view>
+  </view>
+</view>
+
+<view wx:if="{{showHistorySheet}}" class="modal-layer">
+  <view class="modal-backdrop" bindtap="closeHistorySheet"></view>
+  <view class="bottom-sheet history-sheet">
+    <view class="sheet-handle"></view><view class="sheet-heading"><text class="sheet-title">打印历史</text><button class="close-button" bindtap="closeHistorySheet">×</button></view>
+    <scroll-view class="history-list" scroll-y="true">
+      <view wx:for="{{printHistory}}" wx:key="id" class="history-item"><view class="history-status {{item.result}}">{{item.result == 'success' ? '✓' : '!'}}</view><view><text>{{item.name}}</text><text class="menu-note">{{item.atText}} {{item.message}}</text></view><button data-id="{{item.id}}" bindtap="openHistoryItem">{{item.canOpen ? '打开' : '仅记录'}}</button></view>
+      <view wx:if="{{!printHistory.length}}" class="friendly-empty"><text class="empty-title">暂无打印记录</text><text class="muted">成功或失败的打印会记录在本机</text></view>
+    </scroll-view>
+  </view>
+</view>
+
+<view wx:if="{{showSettingsSheet}}" class="modal-layer">
+  <view class="modal-backdrop" bindtap="closeSettingsSheet"></view>
+  <view class="bottom-sheet">
+    <view class="sheet-handle"></view><view class="sheet-heading"><text class="sheet-title">默认打印设置</text><button class="close-button" bindtap="closeSettingsSheet">×</button></view>
+    <view class="setting-row"><text>打印浓度 {{settings.density}}</text><slider min="{{densityMin}}" max="{{densityMax}}" step="1" value="{{settings.density}}" data-field="density" bindchange="updateSetting" activeColor="#f44336" /></view>
+    <view class="setting-row"><text>黑白阈值 {{settings.threshold}}</text><slider min="80" max="240" step="5" value="{{settings.threshold}}" data-field="threshold" bindchange="updateSetting" activeColor="#f44336" /></view>
+    <view class="setting-row"><text>纸张类型</text><picker mode="selector" range="{{labelTypeNames}}" value="{{settings.labelType - 1}}" data-field="labelType" bindchange="updateSetting"><view class="picker-field">{{settings.labelType == 1 ? '间隙纸' : settings.labelType == 2 ? '黑标纸' : settings.labelType == 3 ? '连续纸' : '定孔纸'}} ›</view></picker></view>
+  </view>
+</view>
+
+<view wx:if="{{showHelpSheet}}" class="modal-layer">
+  <view class="modal-backdrop" bindtap="closeHelp"></view>
+  <view class="bottom-sheet help-sheet"><view class="sheet-handle"></view><view class="sheet-heading"><text class="sheet-title">使用帮助</text><button class="close-button" bindtap="closeHelp">×</button></view><view class="help-copy"><text>1. 从首页选择模板或新建空白标签。</text><text>2. 在编辑器点选元素，修改内容、样式和位置。</text><text>3. 打印前连接蓝牙打印机，确认机型、纸张和浓度。</text><text>4. 项目、模板、批量数据和历史默认只保存在本机，请定期导出备份。</text><text class="help-warning">实体打印受手机、打印机型号与固件影响；首次使用请执行连接诊断和样张验收。</text></view></view>
+</view>
+
+<view wx:if="{{showOnboarding}}" class="modal-layer onboarding-layer">
+  <view class="modal-backdrop"></view>
+  <view class="onboarding-card">
+    <view class="onboarding-dots"><text class="{{onboardingStep == 0 ? 'active' : ''}}"></text><text class="{{onboardingStep == 1 ? 'active' : ''}}"></text><text class="{{onboardingStep == 2 ? 'active' : ''}}"></text></view>
+    <text class="onboarding-icon">{{onboardingStep == 0 ? '⌁' : onboardingStep == 1 ? '▦' : '▧'}}</text>
+    <text class="onboarding-title">{{onboardingStep == 0 ? '连接打印机' : onboardingStep == 1 ? '选择模板' : '编辑并打印'}}</text>
+    <text class="onboarding-copy">{{onboardingStep == 0 ? '开机后在蓝牙列表里找到你的标签机，点击即可连接' : onboardingStep == 1 ? '189 个行业模板已离线安装，也可以从空白标签开始' : '所有内容先保存在本机，打印前会检查纸张和机型是否匹配'}}</text>
+    <view class="onboarding-actions"><button class="outline-button" bindtap="skipOnboarding">跳过</button><button class="primary-button" bindtap="nextOnboarding">{{onboardingStep == 2 ? '开始使用' : '下一步'}}</button></view>
+  </view>
+</view>

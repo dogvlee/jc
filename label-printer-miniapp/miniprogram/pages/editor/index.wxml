@@ -1,204 +1,320 @@
-<view class="page-shell">
-  <view class="device-strip">
-    <view class="device-summary">
-      <view class="status-dot status-{{connectionState}}"></view>
-      <view class="device-copy">
-        <text class="device-name">{{connectedDevice || connectionLabel}}</text>
-        <text wx:if="{{connectedDetails}}" class="device-meta">{{connectedDetails}}</text>
-      </view>
-    </view>
-    <button wx:if="{{connectionState != 'connected'}}" class="small-button primary-outline" bindtap="openDevices" disabled="{{connectionState == 'connecting'}}">
-      {{connectionState == 'connecting' ? '连接中' : '连接设备'}}
-    </button>
-    <button wx:else class="icon-command" aria-label="断开打印机" bindtap="disconnectDevice">断开</button>
-  </view>
-
-  <view class="workspace-band">
-    <view class="workspace-header">
-      <view>
-        <input class="document-title" value="{{document.name}}" bindblur="updateDocumentName" maxlength="40" />
-        <text class="section-meta">{{document.widthMm}} x {{document.heightMm}} mm · {{profileOptions[profileIndex]}}</text>
-      </view>
+<view class="editor-page">
+  <view class="editor-header" style="padding-top: {{safeTop}}px;">
+    <view class="header-main">
+      <button class="icon-button close" bindtap="closeEditor" aria-label="关闭编辑器">×</button>
       <view class="history-actions">
-        <button class="icon-command" disabled="{{!canUndo}}" bindtap="undo" aria-label="撤销">撤销</button>
-        <button class="icon-command" disabled="{{!canRedo}}" bindtap="redo" aria-label="重做">重做</button>
+        <button class="icon-button" disabled="{{!canUndo}}" bindtap="undo" aria-label="撤销">↶</button>
+        <button class="icon-button" disabled="{{!canRedo}}" bindtap="redo" aria-label="重做">↷</button>
       </view>
+      <view class="header-spacer"></view>
+      <button class="icon-button" bindtap="openLayers" aria-label="图层">▱</button>
+      <button class="icon-button" bindtap="openDevices" aria-label="打印机">▰</button>
+      <button class="icon-button" bindtap="openSettings" aria-label="打印设置">⚙</button>
     </view>
-
-    <view class="canvas-stage">
-      <view class="canvas-ruler horizontal-ruler"></view>
-      <view class="canvas-ruler vertical-ruler"></view>
-      <view class="canvas-frame" style="height: {{previewHeightPx}}px;">
-        <canvas type="2d" id="labelCanvas" class="label-canvas"></canvas>
-        <canvas
-          type="2d"
-          id="selectionCanvas"
-          class="selection-canvas"
-          catchtouchstart="onCanvasTouchStart"
-          catchtouchmove="onCanvasTouchMove"
-          catchtouchend="onCanvasTouchEnd"
-          catchtouchcancel="onCanvasTouchEnd"
-        ></canvas>
-      </view>
+    <view class="document-row">
+      <input class="document-title" value="{{document.name}}" bindblur="updateDocumentName" maxlength="40" />
+      <text class="size-label">{{currentSizeLabel}}</text>
+      <text class="connection-dot {{connectionState}}"></text>
     </view>
-
-    <scroll-view class="element-toolbar" scroll-x="true" enhanced="true" show-scrollbar="false">
-      <view class="toolbar-row">
-        <button class="tool-button" data-type="text" bindtap="addElement"><text class="tool-mark">T</text><text>文字</text></button>
-        <button class="tool-button" data-type="barcode" bindtap="addElement"><text class="tool-mark barcode-mark">|||</text><text>条码</text></button>
-        <button class="tool-button" data-type="qrcode" bindtap="addElement"><text class="tool-mark qr-mark">▦</text><text>二维码</text></button>
-        <button class="tool-button" data-type="image" bindtap="addElement"><text class="tool-mark">▧</text><text>图片</text></button>
-        <button class="tool-button" data-type="rect" bindtap="addElement"><text class="tool-mark">□</text><text>矩形</text></button>
-        <button class="tool-button" data-type="line" bindtap="addElement"><text class="tool-mark">―</text><text>线条</text></button>
-      </view>
-    </scroll-view>
   </view>
 
-  <view class="inspector-band">
-    <view class="band-heading">
-      <text class="section-title">元素属性</text>
-      <text wx:if="{{selected}}" class="element-type">{{selected.type}}</text>
+  <view class="canvas-stage">
+    <view class="paper-shell" style="height: {{previewHeightPx}}px;">
+      <canvas id="labelCanvas" type="2d" class="label-canvas"></canvas>
+      <canvas
+        id="selectionCanvas"
+        type="2d"
+        class="selection-canvas"
+        bindtouchstart="onCanvasTouchStart"
+        bindlongpress="onCanvasLongPress"
+        catchtouchmove="onCanvasTouchMove"
+        bindtouchend="onCanvasTouchEnd"
+        bindtouchcancel="onCanvasTouchEnd"
+      ></canvas>
+    </view>
+    <view wx:if="{{!canvasReady}}" class="canvas-loading">正在准备标签画布…</view>
+    <view wx:if="{{selected}}" class="selection-tip">
+      {{selectionCount > 1 ? ('已选择 ' + selectionCount + ' 个元素 · 拖动整体移动') : selected.locked ? '元素已锁定' : '拖动移动 · 右侧缩放 · 右下旋转'}}
+    </view>
+  </view>
+
+  <view class="editor-panel">
+    <view class="panel-tabs">
+      <button class="{{editorPanelTab == 'elements' ? 'active' : ''}}" data-value="elements" bindtap="setEditorPanelTab">添加元素</button>
+      <button class="{{editorPanelTab == 'templates' ? 'active' : ''}}" data-value="templates" bindtap="setEditorPanelTab">模板</button>
+      <button class="{{editorPanelTab == 'data' ? 'active' : ''}}" data-value="data" bindtap="setEditorPanelTab">数据源</button>
     </view>
 
-    <view wx:if="{{!selected}}" class="empty-state">未选择元素</view>
+    <scroll-view wx:if="{{editorPanelTab == 'elements'}}" class="panel-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+      <view class="tool-grid">
+        <button wx:for="{{elementTools}}" wx:key="type" class="tool-button" data-type="{{item.type}}" bindtap="addElement">
+          <text class="tool-icon">{{item.mark}}</text><text>{{item.label}}</text>
+        </button>
+      </view>
 
-    <block wx:if="{{selected}}">
-      <view wx:if="{{selected.type == 'text'}}" class="field-block">
-        <text class="field-label">文字内容</text>
-        <textarea class="text-area" value="{{selected.text}}" data-field="text" bindblur="updateField" maxlength="200"></textarea>
-        <view class="inline-control">
-          <text class="field-label">字号 {{selected.fontSize}} mm</text>
-          <slider class="control-slider" min="1" max="12" step="0.2" value="{{selected.fontSize}}" data-field="fontSize" bindchange="updateSlider" activeColor="#087f73" block-size="18" />
-        </view>
-        <view class="toggle-row">
-          <view class="switch-field"><text>粗体</text><switch checked="{{selected.bold}}" data-field="bold" bindchange="updateSwitch" color="#087f73" /></view>
-          <view class="segmented-control">
-            <button class="segment {{selected.align == 'left' ? 'active' : ''}}" data-value="left" bindtap="setAlignment">左</button>
-            <button class="segment {{selected.align == 'center' ? 'active' : ''}}" data-value="center" bindtap="setAlignment">中</button>
-            <button class="segment {{selected.align == 'right' ? 'active' : ''}}" data-value="right" bindtap="setAlignment">右</button>
+      <view wx:if="{{selected}}" class="inspector">
+        <view class="inspector-heading">
+          <view><text class="eyebrow">{{selectionCount > 1 ? '多选编排' : '当前元素'}}</text><text class="inspector-title">{{selectionCount > 1 ? ('已选 ' + selectionCount + ' 个') : selected.type}}</text></view>
+          <view class="compact-actions">
+            <button bindtap="toggleMultiSelect">{{multiSelect ? '完成' : '多选'}}</button>
+            <button bindtap="duplicateSelected">复制</button>
+            <button data-field="locked" bindtap="toggleSelectedFlag">{{selected.locked ? '解锁' : '锁定'}}</button>
+            <button class="danger-text" bindtap="deleteSelected">删除</button>
           </view>
         </view>
-      </view>
 
-      <view wx:if="{{selected.type == 'barcode' || selected.type == 'qrcode'}}" class="field-block">
-        <text class="field-label">{{selected.type == 'barcode' ? '条码内容' : '二维码内容'}}</text>
-        <input class="text-input" value="{{selected.value}}" data-field="value" bindblur="updateField" maxlength="200" />
-        <picker wx:if="{{selected.type == 'barcode'}}" class="barcode-format" mode="selector" range="{{barcodeFormatOptions}}" value="{{selected.format == 'ean13' ? 0 : 1}}" bindchange="updateBarcodeFormat">
-          <text class="field-label">条码格式</text>
-          <view class="picker-value">{{selected.format == 'ean13' ? 'EAN-13' : 'Code 128'}}</view>
-        </picker>
-        <view wx:if="{{selected.type == 'barcode'}}" class="switch-field standalone-switch">
-          <text>显示内容</text><switch checked="{{selected.showText}}" data-field="showText" bindchange="updateSwitch" color="#087f73" />
+        <view wx:if="{{selectionCount > 1}}" class="property-section multi-arrange">
+          <text class="section-label">对齐</text>
+          <view class="style-actions wide"><button data-value="left" bindtap="alignSelection">左</button><button data-value="hcenter" bindtap="alignSelection">水平居中</button><button data-value="right" bindtap="alignSelection">右</button><button data-value="top" bindtap="alignSelection">上</button><button data-value="vcenter" bindtap="alignSelection">垂直居中</button><button data-value="bottom" bindtap="alignSelection">下</button></view>
+          <text class="section-label">均匀分布</text>
+          <view class="style-actions wide"><button data-axis="horizontal" bindtap="distributeSelection">水平分布</button><button data-axis="vertical" bindtap="distributeSelection">垂直分布</button><button bindtap="selectAllElements">全选</button></view>
+          <text class="helper-text">长按另一个元素可进入多选；多选时点击未选元素会继续加入。</text>
         </view>
-      </view>
 
-      <view wx:if="{{selected.type == 'rect'}}" class="switch-field standalone-switch">
-        <text>实心填充</text><switch checked="{{selected.filled}}" data-field="filled" bindchange="updateSwitch" color="#087f73" />
-      </view>
-
-      <view wx:if="{{selected.type == 'rect' || selected.type == 'line'}}" class="inline-control">
-        <text class="field-label">线宽 {{selected.lineWidth}} mm</text>
-        <slider class="control-slider" min="0.1" max="2" step="0.05" value="{{selected.lineWidth}}" data-field="lineWidth" bindchange="updateSlider" activeColor="#087f73" block-size="18" />
-      </view>
-
-      <view class="coordinate-grid">
-        <label class="number-field"><text>X / mm</text><input type="digit" value="{{selected.x}}" data-field="x" bindblur="updateField" /></label>
-        <label class="number-field"><text>Y / mm</text><input type="digit" value="{{selected.y}}" data-field="y" bindblur="updateField" /></label>
-        <label class="number-field"><text>宽 / mm</text><input type="digit" value="{{selected.width}}" data-field="width" bindblur="updateField" /></label>
-        <label class="number-field"><text>高 / mm</text><input type="digit" value="{{selected.height}}" data-field="height" bindblur="updateField" /></label>
-      </view>
-
-      <view class="inline-control rotation-control">
-        <text class="field-label">旋转 {{selected.rotation}}°</text>
-        <slider class="control-slider" min="0" max="359" step="1" value="{{selected.rotation}}" data-field="rotation" bindchange="updateSlider" activeColor="#087f73" block-size="18" />
-      </view>
-
-      <view class="element-actions">
-        <button class="secondary-button" bindtap="duplicateSelected">复制</button>
-        <button class="secondary-button" data-direction="-1" bindtap="moveLayer">下移一层</button>
-        <button class="secondary-button" data-direction="1" bindtap="moveLayer">上移一层</button>
-        <button class="danger-button" bindtap="deleteSelected">删除</button>
-      </view>
-    </block>
-  </view>
-
-  <view class="settings-band">
-    <view class="band-heading"><text class="section-title">打印设置</text></view>
-    <view class="setting-grid">
-      <picker class="picker-field" mode="selector" range="{{profileOptions}}" value="{{profileIndex}}" bindchange="onProfileChange">
-        <text class="field-label">打印机</text><view class="picker-value">{{profileOptions[profileIndex]}}</view>
-      </picker>
-      <picker class="picker-field" mode="selector" range="{{sizeOptions}}" value="{{sizeIndex}}" bindchange="onSizeChange">
-        <text class="field-label">标签尺寸</text><view class="picker-value">{{currentSizeLabel}}</view>
-      </picker>
-      <label class="number-field"><text>标签宽 / mm</text><input type="digit" value="{{document.widthMm}}" data-field="widthMm" bindblur="onCustomSizeChange" /></label>
-      <label class="number-field"><text>标签高 / mm</text><input type="digit" value="{{document.heightMm}}" data-field="heightMm" bindblur="onCustomSizeChange" /></label>
-      <picker class="picker-field" mode="selector" range="{{labelTypeOptions}}" value="{{labelTypeIndex}}" bindchange="onLabelTypeChange">
-        <text class="field-label">纸张类型</text><view class="picker-value">{{labelTypeOptions[labelTypeIndex]}}</view>
-      </picker>
-      <view class="copies-field">
-        <text class="field-label">打印份数</text>
-        <view class="stepper">
-          <button data-delta="-1" bindtap="changeCopies" aria-label="减少份数">−</button>
-          <text>{{copies}}</text>
-          <button data-delta="1" bindtap="changeCopies" aria-label="增加份数">＋</button>
+        <block wx:if="{{selectionCount == 1}}">
+        <view wx:if="{{selected.type == 'text'}}" class="property-section">
+          <text class="section-label">文字内容</text>
+          <textarea class="text-area" value="{{selected.text}}" data-field="text" bindblur="updateField" maxlength="500" auto-height></textarea>
         </view>
+
+        <view wx:if="{{selected.type == 'barcode' || selected.type == 'qrcode'}}" class="property-section">
+          <text class="section-label">编码内容</text>
+          <textarea class="text-area small" value="{{selected.value}}" data-field="value" bindblur="updateField" maxlength="500" auto-height></textarea>
+          <button class="outline-wide" bindtap="scanSelectedCode" loading="{{codeScanning}}" disabled="{{codeScanning}}">⌗ 扫描填入</button>
+          <view wx:if="{{selected.type == 'barcode'}}" class="segment-row">
+            <button class="{{selected.format == 'ean13' ? 'active' : ''}}" data-field="format" data-value="ean13" bindtap="setChoiceField">EAN-13</button>
+            <button class="{{selected.format == 'code128' ? 'active' : ''}}" data-field="format" data-value="code128" bindtap="setChoiceField">Code 128</button>
+          </view>
+          <view wx:if="{{selected.type == 'barcode'}}" class="switch-row"><text>显示条码内容</text><switch checked="{{selected.showText}}" data-field="showText" bindchange="updateSwitch" color="#f44336" /></view>
+          <view wx:if="{{selected.type == 'qrcode'}}" class="segment-row">
+            <button wx:for="{{qrCorrectionOptions}}" wx:key="*this" class="{{selected.errorCorrection == item ? 'active' : ''}}" data-field="errorCorrection" data-value="{{item}}" bindtap="setChoiceField">{{item}}</button>
+          </view>
+        </view>
+
+        <view wx:if="{{selected.type == 'date'}}" class="property-section">
+          <view class="preview-value"><text>打印预览</text><text>{{selectedDateValue}}</text></view>
+          <view class="segment-row three">
+            <button class="{{selected.dateRole == 'made' ? 'active' : ''}}" data-field="dateRole" data-value="made" bindtap="setChoiceField">制作日期</button>
+            <button class="{{selected.dateRole == 'expire' ? 'active' : ''}}" data-field="dateRole" data-value="expire" bindtap="setChoiceField">保质期至</button>
+            <button class="{{selected.dateRole == 'generic' ? 'active' : ''}}" data-field="dateRole" data-value="generic" bindtap="setChoiceField">普通日期</button>
+          </view>
+          <view class="switch-row"><text>打印时自动更新</text><switch checked="{{selected.autoUpdate}}" data-field="autoUpdate" bindchange="updateSwitch" color="#f44336" /></view>
+          <view class="switch-row"><text>显示时间</text><switch checked="{{selected.showTime}}" data-field="showTime" bindchange="updateSwitch" color="#f44336" /></view>
+          <view class="field-grid">
+            <label><text>偏移天数</text><input type="number" value="{{selected.offsetDays}}" data-field="offsetDays" bindblur="updateField" /></label>
+            <label><text>偏移小时</text><input type="number" value="{{selected.offsetHours}}" data-field="offsetHours" bindblur="updateField" /></label>
+          </view>
+          <view class="segment-row three">
+            <button class="{{selected.format == 'YYYY-MM-DD' ? 'active' : ''}}" data-field="format" data-value="YYYY-MM-DD" bindtap="setChoiceField">2026-08-11</button>
+            <button class="{{selected.format == 'YYYY/MM/DD' ? 'active' : ''}}" data-field="format" data-value="YYYY/MM/DD" bindtap="setChoiceField">2026/08/11</button>
+            <button class="{{selected.format == 'YYYY年MM月DD日' ? 'active' : ''}}" data-field="format" data-value="YYYY年MM月DD日" bindtap="setChoiceField">中文日期</button>
+          </view>
+        </view>
+
+        <view wx:if="{{selected.type == 'serial'}}" class="property-section">
+          <view class="preview-value"><text>当前示例</text><text>{{selectedSerialValue}}</text></view>
+          <view class="field-grid">
+            <label><text>前缀</text><input value="{{selected.prefix}}" data-field="prefix" bindblur="updateField" /></label>
+            <label><text>后缀</text><input value="{{selected.suffix}}" data-field="suffix" bindblur="updateField" /></label>
+            <label><text>起始值</text><input type="number" value="{{selected.start}}" data-field="start" bindblur="updateField" /></label>
+            <label><text>步长</text><input type="number" value="{{selected.step}}" data-field="step" bindblur="updateField" /></label>
+            <label><text>位数</text><input type="number" value="{{selected.digits}}" data-field="digits" bindblur="updateField" /></label>
+          </view>
+          <text class="helper-text">多份打印会按步长逐张生成序列号，不会重复整单回放。</text>
+        </view>
+
+        <view wx:if="{{selected.type == 'image'}}" class="property-section">
+          <button class="outline-wide" data-replace="1" bindtap="chooseImage">替换图片</button>
+          <text class="section-label">黑白阈值 {{selected.threshold}}</text>
+          <slider min="80" max="240" step="5" value="{{selected.threshold}}" data-field="threshold" bindchange="updateSlider" activeColor="#f44336" />
+        </view>
+
+        <view wx:if="{{selected.type == 'material'}}" class="property-section">
+          <view class="preview-value"><text>当前素材</text><text>{{selected.label || selected.materialId || '矢量素材'}}</text></view>
+          <button class="outline-wide" bindtap="openMaterialSheet">更换素材</button>
+        </view>
+
+        <view wx:if="{{selected.type == 'rect' || selected.type == 'line'}}" class="property-section">
+          <view wx:if="{{selected.type == 'rect'}}" class="segment-row">
+            <button wx:for="{{shapeKindOptions}}" wx:key="*this" class="{{selected.shapeKind == item ? 'active' : ''}}" data-value="{{item}}" bindtap="setShapeKind">{{item}}</button>
+          </view>
+          <view class="switch-row"><text>虚线</text><switch checked="{{selected.dashed}}" data-field="dashed" bindchange="updateSwitch" color="#f44336" /></view>
+          <view wx:if="{{selected.type == 'rect'}}" class="switch-row"><text>实心填充</text><switch checked="{{selected.filled}}" data-field="filled" bindchange="updateSwitch" color="#f44336" /></view>
+          <text class="section-label">线宽 {{selected.lineWidth}} mm</text>
+          <slider min="0.1" max="2" step="0.1" value="{{selected.lineWidth}}" data-field="lineWidth" bindchange="updateSlider" activeColor="#f44336" />
+          <button wx:if="{{selected.type == 'rect'}}" class="outline-wide" bindtap="openBorderSheet">选择装饰边框</button>
+        </view>
+
+        <view wx:if="{{selected.type == 'table'}}" class="property-section">
+          <view class="stepper-row"><text>行数 {{selected.rows}}</text><button data-field="rows" data-delta="-1" bindtap="changeTableSize">−</button><button data-field="rows" data-delta="1" bindtap="changeTableSize">＋</button></view>
+          <view class="stepper-row"><text>列数 {{selected.columns}}</text><button data-field="columns" data-delta="-1" bindtap="changeTableSize">−</button><button data-field="columns" data-delta="1" bindtap="changeTableSize">＋</button></view>
+          <view class="table-cell-grid">
+            <input wx:for="{{tableCellIndexes}}" wx:key="*this" value="{{selected.cells[item]}}" data-index="{{item}}" bindblur="updateTableCell" placeholder="单元格 {{item + 1}}" />
+          </view>
+        </view>
+
+        <view wx:if="{{selected.type == 'text' || selected.type == 'date' || selected.type == 'serial' || selected.type == 'table'}}" class="property-section">
+          <text class="section-label">文字样式</text>
+          <view class="style-actions">
+            <button class="{{selected.bold ? 'active' : ''}}" data-field="bold" bindtap="toggleSelectedFlag">B</button>
+            <button class="{{selected.italic ? 'active' : ''}} italic" data-field="italic" bindtap="toggleSelectedFlag">I</button>
+            <button class="{{selected.underline ? 'active' : ''}} underline" data-field="underline" bindtap="toggleSelectedFlag">U</button>
+            <button class="{{selected.strike ? 'active' : ''}} strike" data-field="strike" bindtap="toggleSelectedFlag">S</button>
+            <button class="{{selected.reverse ? 'active' : ''}}" data-field="reverse" bindtap="toggleSelectedFlag">反白</button>
+          </view>
+          <view class="field-grid">
+            <label><text>字号 / mm</text><input type="digit" value="{{selected.fontSize}}" data-field="fontSize" bindblur="updateField" /></label>
+            <label><text>字间距 / mm</text><input type="digit" value="{{selected.letterSpacing}}" data-field="letterSpacing" bindblur="updateField" /></label>
+          </view>
+          <view class="segment-row three">
+            <button class="{{selected.align == 'left' ? 'active' : ''}}" data-value="left" bindtap="setAlignment">左对齐</button>
+            <button class="{{selected.align == 'center' ? 'active' : ''}}" data-value="center" bindtap="setAlignment">居中</button>
+            <button class="{{selected.align == 'right' ? 'active' : ''}}" data-value="right" bindtap="setAlignment">右对齐</button>
+          </view>
+          <view class="segment-row three">
+            <button class="{{selected.verticalAlign == 'top' ? 'active' : ''}}" data-value="top" bindtap="setVerticalAlignment">顶部</button>
+            <button class="{{selected.verticalAlign == 'middle' ? 'active' : ''}}" data-value="middle" bindtap="setVerticalAlignment">垂直居中</button>
+            <button class="{{selected.verticalAlign == 'bottom' ? 'active' : ''}}" data-value="bottom" bindtap="setVerticalAlignment">底部</button>
+          </view>
+          <scroll-view class="mode-scroll" scroll-x show-scrollbar="{{false}}">
+            <view class="mode-row"><button wx:for="{{textModeOptions}}" wx:key="id" class="{{selected.textMode == item.id ? 'active' : ''}}" data-value="{{item.id}}" bindtap="setTextMode">{{item.label}}</button></view>
+          </scroll-view>
+          <view wx:if="{{selected.textMode == 'arc'}}"><text class="section-label">弧度 {{selected.textArcAngle}}°</text><slider min="0" max="180" step="5" value="{{selected.textArcAngle}}" data-field="textArcAngle" bindchange="updateSlider" activeColor="#f44336" /></view>
+        </view>
+
+        <view class="property-section">
+          <text class="section-label">位置与尺寸 / mm</text>
+          <view class="field-grid four">
+            <label><text>X</text><input type="digit" value="{{selected.x}}" data-field="x" bindblur="updateField" /></label>
+            <label><text>Y</text><input type="digit" value="{{selected.y}}" data-field="y" bindblur="updateField" /></label>
+            <label><text>宽</text><input type="digit" value="{{selected.width}}" data-field="width" bindblur="updateField" /></label>
+            <label><text>高</text><input type="digit" value="{{selected.height}}" data-field="height" bindblur="updateField" /></label>
+          </view>
+          <text class="section-label">旋转 {{selected.rotation}}°</text>
+          <slider min="0" max="359" step="1" value="{{selected.rotation}}" data-field="rotation" bindchange="updateSlider" activeColor="#f44336" />
+          <view class="style-actions wide">
+            <button data-field="mirrorX" class="{{selected.mirrorX ? 'active' : ''}}" bindtap="toggleSelectedFlag">水平镜像</button>
+            <button data-field="mirrorY" class="{{selected.mirrorY ? 'active' : ''}}" bindtap="toggleSelectedFlag">垂直镜像</button>
+            <button data-direction="-1" bindtap="moveLayer">下移</button>
+            <button data-direction="1" bindtap="moveLayer">上移</button>
+          </view>
+        </view>
+        </block>
       </view>
+
+      <view wx:else class="panel-hint"><text>点击上方元素添加到标签</text><text>添加后点选画布元素，可编辑内容、样式和位置</text></view>
+    </scroll-view>
+
+    <view wx:elif="{{editorPanelTab == 'templates'}}" class="simple-panel">
+      <text class="simple-title">我的模板</text>
+      <picker mode="selector" range="{{templateNames}}" bindchange="loadTemplate"><view class="picker-field">{{templateNames.length ? '选择已保存模板' : '暂无模板'}} <text>›</text></view></picker>
+      <button class="outline-wide" bindtap="saveTemplate">将当前标签保存为模板</button>
+      <text class="helper-text">系统 189 套模板请从首页“模板”进入；这里管理你的本地模板。</text>
     </view>
 
-    <view class="setting-slider-row">
-      <text class="field-label">浓度 {{density}}</text>
-      <slider min="{{densityMin}}" max="{{densityMax}}" step="1" value="{{density}}" bindchange="onDensityChange" activeColor="#087f73" block-size="18" />
+    <view wx:else class="simple-panel">
+      <text class="simple-title">批量数据源</text>
+      <text class="helper-text">回到首页“批量”可导入 CSV、编辑数据并按行生成项目。当前标签中的文本、条码、二维码和日期可自动绑定。</text>
+      <button class="outline-wide" bindtap="closeEditor">返回首页管理数据</button>
     </view>
-    <view class="setting-slider-row">
-      <text class="field-label">黑白阈值 {{threshold}}</text>
-      <slider min="80" max="240" step="5" value="{{threshold}}" bindchange="onThresholdChange" activeColor="#e07a35" block-size="18" />
-    </view>
-  </view>
 
-  <view class="templates-band">
-    <view class="band-heading"><text class="section-title">本地模板</text><text class="section-meta">{{templates.length}} / 20</text></view>
-    <view class="template-actions">
-      <picker class="template-picker" mode="selector" range="{{templateNames}}" bindchange="loadTemplate">
-        <view class="secondary-button picker-button">选择模板</view>
-      </picker>
-      <button class="secondary-button" bindtap="saveTemplate">保存当前模板</button>
+    <view class="editor-actions">
+      <button class="save-button" bindtap="saveProject"><text>▣</text>保存</button>
+      <button class="print-button" bindtap="openPrintSheet"><text>▰</text>打印</button>
     </view>
-  </view>
-
-  <view class="bottom-action">
-    <button class="print-button" bindtap="startPrint" disabled="{{printing || connectionState == 'connecting'}}">
-      {{connectionState == 'connected' ? '打印 ' + copies + ' 份' : '连接打印机'}}
-    </button>
   </view>
 </view>
 
-<view wx:if="{{showDevices}}" class="modal-layer">
+<block wx:if="{{showDevices}}">
   <view class="modal-backdrop" bindtap="closeDevices"></view>
-  <view class="device-sheet">
-    <view class="sheet-header">
-      <view><text class="sheet-title">选择打印机</text><text class="section-meta">{{scanning ? '正在扫描' : '扫描结束'}}</text></view>
-      <button class="icon-command" bindtap="closeDevices">关闭</button>
+  <view class="bottom-sheet device-sheet">
+    <view class="sheet-handle"></view>
+    <view class="sheet-heading"><view><text class="sheet-title">连接打印机</text><text class="sheet-subtitle">{{scanning ? '正在搜索附近蓝牙设备…' : '选择你的精臣打印机'}}</text></view><button class="sheet-close" bindtap="closeDevices">×</button></view>
+    <view wx:if="{{connectionState == 'connected'}}" class="connected-card">
+      <view><text class="connected-name">{{connectedDevice}}</text><text>{{connectedDetails || ('MTU ' + connectedMtu)}}</text></view>
+      <button bindtap="disconnectDevice">断开</button>
     </view>
-    <scroll-view class="device-list" scroll-y="true">
+    <scroll-view class="device-list" scroll-y>
       <button wx:for="{{devices}}" wx:key="deviceId" class="device-item" data-id="{{item.deviceId}}" bindtap="connectDevice" disabled="{{connectionState == 'connecting'}}">
-        <view><text class="device-item-name">{{item.displayName}}</text><text class="device-id">{{item.deviceId}}</text></view>
-        <text class="signal">{{item.RSSI}} dBm</text>
+        <view><text class="device-name">{{item.displayName || item.name || item.localName}}</text><text class="device-id">{{item.deviceId}}</text></view><text class="signal">{{item.RSSI || ''}} ›</text>
       </button>
-      <view wx:if="{{!devices.length}}" class="empty-devices">
-        <icon wx:if="{{scanning}}" type="waiting" size="22" color="#087f73" />
-        <text>{{scanning ? '扫描中' : '未发现设备'}}</text>
-      </view>
+      <view wx:if="{{!devices.length}}" class="sheet-empty"><text class="empty-icon">⌁</text><text>{{scanning ? '请打开打印机并靠近手机' : '没有发现设备，关闭后可重新扫描'}}</text></view>
+    </scroll-view>
+    <view class="sheet-actions"><button class="outline-button" bindtap="diagnoseConnection">连接诊断</button><button wx:if="{{connectedDevice}}" class="danger-outline" bindtap="forgetDevice">忘记设备</button></view>
+  </view>
+</block>
+
+<block wx:if="{{showPrintSheet}}">
+  <view class="modal-backdrop" bindtap="closePrintSheet"></view>
+  <view class="bottom-sheet print-sheet">
+    <view class="sheet-handle"></view>
+    <view class="sheet-heading"><view><text class="sheet-title">打印预览</text><text class="sheet-subtitle">{{document.name}} · {{currentSizeLabel}}</text></view><button class="sheet-close" bindtap="closePrintSheet">×</button></view>
+    <view wx:if="{{printBlock}}" class="warning-card">
+      <text class="warning-title">打印前需要处理</text><text>{{printBlock.message}}</text>
+      <button wx:if="{{printBlock.suggestProfileId}}" bindtap="applySuggestedProfile">切换为 {{suggestedProfileName}}</button>
+    </view>
+    <view wx:if="{{printError}}" class="error-card"><text class="warning-title">打印未完成</text><text>{{printError}}</text><text>为避免重复或半张标签，系统不会自动重放整单，请检查实物后手动重打。</text></view>
+    <view class="print-summary">
+      <view><text>打印机</text><text>{{connectedDevice || '打印时连接'}}</text></view>
+      <view><text>机型参数</text><text>{{profileOptions[profileIndex]}}</text></view>
+      <view><text>纸张类型</text><text>{{labelTypeOptions[labelTypeIndex]}}</text></view>
+      <view><text>浓度 / 阈值</text><text>{{density}} / {{threshold}}</text></view>
+    </view>
+    <view class="copies-row"><text>打印份数</text><view class="stepper"><button data-delta="-1" bindtap="changeCopies">−</button><text>{{copies}}</text><button data-delta="1" bindtap="changeCopies">＋</button></view></view>
+    <view wx:if="{{printing || printProgress > 0}}" class="progress-card"><view class="progress-track"><view class="progress-fill" style="width: {{printProgress}}%;"></view></view><text>{{printMessage}}</text></view>
+    <view class="sheet-actions print-actions">
+      <button wx:if="{{printing}}" class="danger-outline" bindtap="cancelPrint">取消打印</button>
+      <button wx:else class="primary-button" bindtap="startPrint" disabled="{{printBlock}}">{{connectedDevice ? '开始打印' : '连接并打印'}}</button>
+    </view>
+  </view>
+</block>
+
+<block wx:if="{{showSettingsSheet}}">
+  <view class="modal-backdrop" bindtap="closeSettings"></view>
+  <view class="bottom-sheet settings-sheet">
+    <view class="sheet-handle"></view><view class="sheet-heading"><view><text class="sheet-title">标签与打印设置</text><text class="sheet-subtitle">编辑尺寸不会因连接机型被自动修改</text></view><button class="sheet-close" bindtap="closeSettings">×</button></view>
+    <scroll-view class="settings-scroll" scroll-y>
+      <text class="section-label">打印机型号</text>
+      <picker mode="selector" range="{{profileOptions}}" value="{{profileIndex}}" bindchange="onProfileChange"><view class="picker-field">{{profileOptions[profileIndex]}} <text>›</text></view></picker>
+      <text class="section-label">常用标签尺寸</text>
+      <picker mode="selector" range="{{sizeOptions}}" value="{{sizeIndex}}" bindchange="onSizeChange"><view class="picker-field">{{currentSizeLabel}} <text>›</text></view></picker>
+      <view class="field-grid"><label><text>宽 / mm</text><input type="digit" value="{{document.widthMm}}" data-field="widthMm" bindblur="onCustomSizeChange" /></label><label><text>高 / mm</text><input type="digit" value="{{document.heightMm}}" data-field="heightMm" bindblur="onCustomSizeChange" /></label></view>
+      <text class="section-label">纸张类型</text>
+      <picker mode="selector" range="{{labelTypeOptions}}" value="{{labelTypeIndex}}" bindchange="onLabelTypeChange"><view class="picker-field">{{labelTypeOptions[labelTypeIndex]}} <text>›</text></view></picker>
+      <text class="section-label">打印浓度 {{density}}</text><slider min="{{densityMin}}" max="{{densityMax}}" step="1" value="{{density}}" bindchange="onDensityChange" activeColor="#f44336" />
+      <text class="section-label">图片黑白阈值 {{threshold}}</text><slider min="80" max="240" step="5" value="{{threshold}}" bindchange="onThresholdChange" activeColor="#f44336" />
+      <button class="outline-wide" bindtap="diagnoseConnection">运行连接诊断</button>
+      <button class="danger-outline full" bindtap="clearElements">清空画布元素</button>
     </scroll-view>
   </view>
-</view>
+</block>
 
-<view wx:if="{{printing}}" class="modal-layer">
-  <view class="modal-backdrop"></view>
-  <view class="progress-dialog">
-    <text class="sheet-title">{{printMessage}}</text>
-    <progress percent="{{printProgress}}" stroke-width="6" activeColor="#087f73" backgroundColor="#dfe4e0" />
-    <text class="progress-value">{{printProgress}}%</text>
-    <button class="danger-button cancel-print" bindtap="cancelPrint">取消打印</button>
+<block wx:if="{{showLayersSheet}}">
+  <view class="modal-backdrop" bindtap="closeLayers"></view>
+  <view class="bottom-sheet layers-sheet">
+    <view class="sheet-handle"></view><view class="sheet-heading"><view><text class="sheet-title">图层</text><text class="sheet-subtitle">{{document.elements.length}} 个元素</text></view><button class="sheet-close" bindtap="closeLayers">×</button></view>
+    <scroll-view class="layer-list" scroll-y>
+      <button wx:for="{{document.elements}}" wx:key="id" class="layer-item {{item._selected ? 'active' : ''}}" data-id="{{item.id}}" bindtap="selectLayer"><text class="layer-type">{{item.type}}</text><text class="layer-name">{{item.text || item.value || item.label || item.id}}</text><text>{{item.locked ? '锁定' : item._selected ? '✓' : '›'}}</text></button>
+      <view wx:if="{{!document.elements.length}}" class="sheet-empty">暂无图层</view>
+    </scroll-view>
+    <view class="layer-actions"><button bindtap="toggleMultiSelect">{{multiSelect ? '结束多选' : '开启多选'}}</button><button bindtap="selectAllElements">全选</button><button wx:if="{{selectionCount}}" class="danger-text" bindtap="deleteSelected">删除所选</button></view>
   </view>
-</view>
+</block>
+
+<block wx:if="{{showMaterialSheet}}">
+  <view class="modal-backdrop" bindtap="closeMaterialSheet"></view>
+  <view class="bottom-sheet material-sheet">
+    <view class="sheet-handle"></view><view class="sheet-heading"><view><text class="sheet-title">素材库</text><text class="sheet-subtitle">已内置 144 个热敏打印素材</text></view><button class="sheet-close" bindtap="closeMaterialSheet">×</button></view>
+    <scroll-view class="asset-grid" scroll-y>
+      <button wx:for="{{materialOptions}}" wx:key="id" data-id="{{item.id}}" bindtap="pickMaterial"><image wx:if="{{item.asset}}" src="/{{item.asset}}" mode="aspectFit"></image><text wx:else class="asset-symbol">☺</text><text>{{item.label}}</text></button>
+    </scroll-view>
+  </view>
+</block>
+
+<block wx:if="{{showBorderSheet}}">
+  <view class="modal-backdrop" bindtap="closeBorderSheet"></view>
+  <view class="bottom-sheet border-sheet">
+    <view class="sheet-handle"></view><view class="sheet-heading"><view><text class="sheet-title">装饰边框</text><text class="sheet-subtitle">20 种黑白可打印边框</text></view><button class="sheet-close" bindtap="closeBorderSheet">×</button></view>
+    <scroll-view class="border-grid" scroll-y><button wx:for="{{borderOptions}}" wx:key="id" class="{{selected.borderStyle == item.id ? 'active' : ''}}" data-id="{{item.id}}" bindtap="pickBorder"><view class="border-sample {{item.id}}"></view><text>{{item.label}}</text></button></scroll-view>
+  </view>
+</block>

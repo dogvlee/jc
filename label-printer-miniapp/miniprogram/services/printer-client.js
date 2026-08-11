@@ -10,6 +10,7 @@ class PrinterClient {
     this.cancelled = false;
     this.connecting = false;
     this.ready = false;
+    this.deviceId = '';
     this.protocolVersion = 0;
     this.latestPageIndex = 0;
     this.session.onPacket((packet) => {
@@ -18,19 +19,31 @@ class PrinterClient {
       }
     });
     this.session.onConnectionStateChange(() => {
-      this.ready = false;
+      this.invalidateConnection();
     });
+    if (this.session.onTransportReset) {
+      this.session.onTransportReset(() => this.invalidateConnection());
+    }
   }
 
-  async connect(device) {
+  invalidateConnection() {
+    this.ready = false;
+    this.deviceId = '';
+    this.protocolVersion = 0;
+    this.latestPageIndex = 0;
+    this.wait = sleep;
+  }
+
+  async connect(device, options) {
     if (this.connecting) {
       throw new Error('打印机正在连接');
     }
     this.connecting = true;
-    this.ready = false;
+    this.invalidateConnection();
     try {
-      const result = await this.negotiateConnection(device);
+      const result = await this.negotiateConnection(device, options);
       this.ready = true;
+      this.deviceId = result.deviceId || device.deviceId;
       return result;
     } catch (error) {
       await this.session.disconnect();
@@ -40,8 +53,18 @@ class PrinterClient {
     }
   }
 
-  async negotiateConnection(device) {
-    const connection = await this.session.connect(device);
+  async connectExisting(device) {
+    return this.connect(device, { existing: true });
+  }
+
+  async negotiateConnection(device, options) {
+    const useExisting = options && options.existing;
+    if (useExisting && !this.session.connectExisting) {
+      throw new Error('当前蓝牙会话不支持恢复现有连接');
+    }
+    const connection = useExisting
+      ? await this.session.connectExisting(device)
+      : await this.session.connect(device);
     const response = await this.session.request(COMMAND.CONNECT, [1], RESPONSE.CONNECT, 2500);
     if (!response.data.length || [1, 2, 3].indexOf(response.data[0]) < 0) {
       throw new Error(`打印机协议协商失败（状态 ${response.data.length ? response.data[0] : '空'}）`);
@@ -163,10 +186,11 @@ class PrinterClient {
       const deadline = Date.now() + Math.max(20000, copies * 15000);
       let attempt = 0;
       while (Date.now() < deadline) {
+        if (!this.session.connected) throw new Error('打印机连接已断开');
         if (this.cancelled) {
           throw new Error('打印已取消');
         }
-        await sleep(350);
+        await this.wait(350);
         const response = await this.session.request(COMMAND.PRINT_END, [1], RESPONSE.PRINT_END, 1600);
         if (response.data[0] === 1) {
           return;
@@ -182,6 +206,7 @@ class PrinterClient {
       let lastAdvanceAt = Date.now();
       const absoluteDeadline = Date.now() + Math.max(60000, copies * 20000);
       while (Date.now() < absoluteDeadline && Date.now() - lastAdvanceAt < 15000) {
+        if (!this.session.connected) throw new Error('打印机连接已断开');
         if (this.cancelled) {
           throw new Error('打印已取消');
         }
@@ -196,7 +221,7 @@ class PrinterClient {
           lastPage = this.latestPageIndex;
           lastAdvanceAt = Date.now();
         }
-        await sleep(150);
+        await this.wait(150);
         progress(92 + Math.min(6, Math.floor(lastPage / Math.max(1, copies) * 6)), '等待打印机走纸');
       }
       throw new Error('等待旧版 D11 页完成通知超时');
@@ -207,10 +232,11 @@ class PrinterClient {
     let lastAdvanceAt = Date.now();
     const absoluteDeadline = Date.now() + Math.max(60000, copies * 20000);
     while (Date.now() < absoluteDeadline && Date.now() - lastAdvanceAt < 15000) {
+      if (!this.session.connected) throw new Error('打印机连接已断开');
       if (this.cancelled) {
         throw new Error('打印已取消');
       }
-      await sleep(300);
+      await this.wait(300);
       try {
         const status = await this.session.request(COMMAND.PRINT_STATUS, [1], RESPONSE.PRINT_STATUS, 1600);
         const currentPage = status.data.length >= 2 ? readU16be(status.data, 0) : 0;
@@ -224,6 +250,8 @@ class PrinterClient {
         }
         progress(92 + Math.min(6, Math.floor(currentPage / Math.max(1, copies) * 6)), '等待打印机走纸');
       } catch (error) {
+        if (!this.session.connected) throw error;
+        if (!/等待打印机响应超时/.test(String(error && error.message || ''))) throw error;
         progress(92 + Math.min(6, Math.floor(Math.max(0, lastPage) / Math.max(1, copies) * 6)), '正在重试打印状态');
       }
     }

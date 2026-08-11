@@ -1,0 +1,769 @@
+{
+    "id": 414599596,
+    "name": "国家电网新模板",
+    "names": [
+        {
+            "languageCode": "zh-cn",
+            "languageName": "简体中文",
+            "name": "V50*85-155国家电网"
+        }
+    ],
+    "barcode": "021824153",
+    "backgroundImage": "https://oss-print.niimbot.com/public_resources/labels/DN202402180019-72bc7f8d013345762df9b8972f299ef1.png",
+    "commodityTemplate": false,
+    "cableDirection": 0,
+    "cableLength": 0,
+    "isCable": false,
+    "paperType": 1,
+    "consumableType": 10,
+    "consumableTypeTextId": "app01239",
+    "previewImage": "https://oss-print.niimbot.com/user_resources/89d2e5d36bfe4407b4aa8672458aff8d/1009299493/templates/5cd294f0-9cdf-11f0-b8f6-e1288e6b4b58.png",
+    "rotate": 90,
+    "multipleBackIndex": 0,
+    "paccuracyName": 203,
+    "thumbnail": "https://oss-print.niimbot.com/user_resources/89d2e5d36bfe4407b4aa8672458aff8d/1009299493/templates/5cd294f0-9cdf-11f0-b8f6-e1288e6b4b58.png",
+    "machineIdList": [
+        "37",
+        "38",
+        "45",
+        "10006",
+        "10007"
+    ],
+    "platformCode": "CP001Mobile",
+    "printedProcessList": [],
+    "originTemplateId": 246083138,
+    "currentPage": 1,
+    "elements": [
+        {
+            "rotate": 0,
+            "imageData": "",
+            "isDefaultImage": false,
+            "type": "image",
+            "ninePatchLocalUrl": "",
+            "elementColor": [
+                255,
+                0,
+                0,
+                0
+            ],
+            "localUrl": "/var/mobile/Containers/Data/Application/1F19048D-D69C-4A17-A504-D4B03F0ACE2F/Documents/jc/element/element_246083138_a3d83de4d53b44cba0bad81934b6058c.png",
+            "isLock": 0,
+            "localImageUrl": "/var/mobile/Containers/Data/Application/1F19048D-D69C-4A17-A504-D4B03F0ACE2F/Documents/jc/element/element_246083138_a3d83de4d53b44cba0bad81934b6058c.png",
+            "imageUrl": "https://niimbot-bison.oss-cn-hangzhou.aliyuncs.com/user_resources/89d2e5d36bfe4407b4aa8672458aff8d/1009299493/templates/5cf3ffa0-9cdf-11f0-b8f6-e1288e6b4b58.png",
+            "imageProcessingValue": [
+                127
+            ],
+            "id": "a3d83de4d53b44cba0bad81934b6058c",
+            "paperColorIndex": 0,
+            "height": 4.114773,
+            "slashBgMode": 0,
+            "mirrorType": 0,
+            "isOpenMirror": 0,
+            "mirrorId": "",
+            "colorChannel": 0,
+            "colorReverse": 0,
+            "isNinePatch": false,
+            "hasVipRes": false,
+            "x": 76.491908,
+            "width": 6.679788,
+            "ninePatchUrl": "",
+            "y": 44.380681,
+            "imageProcessingType": 1
+        },
+        {
+            "correctLevel": 0,
+            "rotate": 0,
+            "fieldName": "",
+            "codeType": 31,
+            "type": "qrcode",
+            "elementColor": [
+                255,
+                0,
+                0,
+                0
+            ],
+            "isLock": 0,
+            "isLive": false,
+            "id": "ee6ab82ee1824916bc538ebaf62f34b5",
+            "paperColorIndex": 0,
+            "value": "https://95598.cn/a/",
+            "dataBind": [],
+            "height": 15.635739,
+            "slashBgMode": 0,
+            "formId": "",
+            "mirrorType": 0,
+            "isOpenMirror": 0,
+            "mirrorId": "",
+            "isForm": false,
+            "colorChannel": 0,
+            "hasVipRes": false,
+            "x": 3.294336,
+            "width": 15.717492,
+            "y": 23.144909,
+            "liveCodeId": ""
+        },
+        {
+            "rotate": 0,
+            "fieldName": "",
+            "textAlignVertical": 1,
+            "typesettingMode": 1,
+            "wordSpacing": 0,
+            "type": "text",
+            "lineSpacing": 0,
+            "elementColor": [
+                255,
+                0,
+                0,
+                0
+            ],
+            "isLock": 0,
+            "textDirection": 0,
+            "write_mode": 0,
+            "fontFamily": "ZT001",
+            "id": "2c0ecff574ad48cfbecafed042887e35",
+            "paperColorIndex": 0,
+            "value": "扫码关注网上国网APP",
+            "dataBind": [],
+            "lineBreakMode": 0,
+            "height": 9.146629,
+            "textAlignHorizonral": 0,
+            "fontCode": "ZT001",
+            "slashBgMode": 0,
+            "lineMode": 2,
+            "mirrorType": 0,
+            "wordsRotate": 0,
+            "isOpenMirror": 0,
+            "letterSpacing": 0,
+            "mirrorId": "",
+            "contentTitle": "",
+            "fontStyle": [
+                "bold"
+            ],
+            "typesettingParam": [
+                0,
+                180
+            ],
+            "colorChannel": 0,
+            "colorReverse": 0,
+            "boxStyle": "fixed-width-height",
+            "hasVipRes": false,
+            "x": 3.005862,
+            "width": 16.784536,
+            "y": 13.56632,
+            "fontSize": 3.2,
+            "textStyle": [
+                "minimized"
+            ]
+        },
+        {
+            "rotate": 0,
+            "fieldName": "",
+            "textAlignVertical": 1,
+            "typesettingMode": 1,
+            "wordSpacing": 0,
+            "type": "text",
+            "lineSpacing": 0,
+            "elementColor": [
+                255,
+                0,
+                0,
+                0
+            ],
+            "isLock": 0,
+            "textDirection": 0,
+            "write_mode": 0,
+            "fontFamily": "ZT001",
+            "id": "84b863a9e37041a6bc0a0845818225ab",
+            "paperColorIndex": 0,
+            "value": "计量箱信息",
+            "dataBind": [],
+            "lineBreakMode": 0,
+            "height": 3.264605,
+            "textAlignHorizonral": 0,
+            "fontCode": "ZT001",
+            "slashBgMode": 0,
+            "lineMode": 2,
+            "mirrorType": 0,
+            "wordsRotate": 0,
+            "isOpenMirror": 0,
+            "letterSpacing": 0,
+            "mirrorId": "",
+            "contentTitle": "",
+            "fontStyle": [
+                "bold"
+            ],
+            "typesettingParam": [
+                0,
+                180
+            ],
+            "colorChannel": 0,
+            "colorReverse": 0,
+            "boxStyle": "auto-width",
+            "hasVipRes": false,
+            "x": 52.66003,
+            "width": 14.690722,
+            "y": 11.064525,
+            "fontSize": 2.8,
+            "textStyle": [
+                "norm"
+            ]
+        },
+        {
+            "rotate": 0,
+            "fieldName": "",
+            "textAlignVertical": 1,
+            "typesettingMode": 1,
+            "wordSpacing": 0,
+            "type": "text",
+            "lineSpacing": 0,
+            "elementColor": [
+                255,
+                0,
+                0,
+                0
+            ],
+            "isLock": 0,
+            "textDirection": 0,
+            "write_mode": 0,
+            "fontFamily": "ZT001",
+            "id": "918985c2fe5340d681fe6e94530b5763",
+            "paperColorIndex": 0,
+            "value": "尊敬的用户：当您在使用过程中，发生电能表故障不能使用时，请拨打台区经理电话进行维修，我们全天24小时为您服务，给您带来不便敬请理解！",
+            "dataBind": [],
+            "lineBreakMode": 0,
+            "height": 5.186233,
+            "textAlignHorizonral": 0,
+            "fontCode": "ZT001",
+            "slashBgMode": 0,
+            "lineMode": 2,
+            "mirrorType": 0,
+            "wordsRotate": 0,
+            "isOpenMirror": 0,
+            "letterSpacing": 0,
+            "mirrorId": "",
+            "contentTitle": "",
+            "fontStyle": [
+                "bold"
+            ],
+            "typesettingParam": [
+                0,
+                180
+            ],
+            "colorChannel": 0,
+            "colorReverse": 0,
+            "boxStyle": "fixed-width-height",
+            "hasVipRes": false,
+            "x": 3.005862,
+            "width": 70.249886,
+            "y": 43.79012,
+            "fontSize": 1.9,
+            "textStyle": [
+                "minimized"
+            ]
+        },
+        {
+            "rotate": 0,
+            "fieldName": "",
+            "textAlignVertical": 1,
+            "typesettingMode": 1,
+            "wordSpacing": 0,
+            "type": "text",
+            "lineSpacing": 0,
+            "elementColor": [
+                255,
+                0,
+                0,
+                0
+            ],
+            "isLock": 0,
+            "textDirection": 0,
+            "write_mode": 0,
+            "fontFamily": "ZT001",
+            "id": "de90ca6a64f44c8db8ba12127f6ceef4",
+            "paperColorIndex": 0,
+            "value": "国家电网公司",
+            "dataBind": [],
+            "lineBreakMode": 0,
+            "height": 2.66323,
+            "textAlignHorizonral": 1,
+            "fontCode": "ZT001",
+            "slashBgMode": 0,
+            "lineMode": 2,
+            "mirrorType": 0,
+            "wordsRotate": 0,
+            "isOpenMirror": 0,
+            "letterSpacing": 0,
+            "mirrorId": "",
+            "contentTitle": "",
+            "fontStyle": [
+                "bold"
+            ],
+            "typesettingParam": [
+                0,
+                180
+            ],
+            "colorChannel": 0,
+            "colorReverse": 0,
+            "boxStyle": "auto-width",
+            "hasVipRes": false,
+            "x": 33.788132,
+            "width": 14.347079,
+            "y": 28.16291,
+            "fontSize": 2.3,
+            "textStyle": [
+                "norm"
+            ]
+        },
+        {
+            "rotate": 0,
+            "fieldName": "",
+            "textAlignVertical": 1,
+            "typesettingMode": 1,
+            "wordSpacing": 0,
+            "type": "text",
+            "lineSpacing": 0,
+            "elementColor": [
+                255,
+                0,
+                0,
+                0
+            ],
+            "isLock": 0,
+            "textDirection": 0,
+            "write_mode": 0,
+            "fontFamily": "ZT001",
+            "id": "f571356a764c433a9753d3275dbea554",
+            "paperColorIndex": 0,
+            "value": "No.",
+            "dataBind": [],
+            "lineBreakMode": 0,
+            "height": 2.66323,
+            "textAlignHorizonral": 1,
+            "fontCode": "ZT001",
+            "slashBgMode": 0,
+            "lineMode": 2,
+            "mirrorType": 0,
+            "wordsRotate": 0,
+            "isOpenMirror": 0,
+            "letterSpacing": 0,
+            "mirrorId": "",
+            "contentTitle": "",
+            "fontStyle": [
+                "bold"
+            ],
+            "typesettingParam": [
+                0,
+                180
+            ],
+            "colorChannel": 0,
+            "colorReverse": 0,
+            "boxStyle": "auto-width",
+            "hasVipRes": false,
+            "x": 52.214859,
+            "width": 4.381443,
+            "y": 28.044245,
+            "fontSize": 2.3,
+            "textStyle": [
+                "norm"
+            ]
+        },
+        {
+            "rotate": 0,
+            "fieldName": "",
+            "textAlignVertical": 0,
+            "typesettingMode": 1,
+            "wordSpacing": 0,
+            "type": "text",
+            "lineSpacing": 0,
+            "elementColor": [
+                255,
+                0,
+                0,
+                0
+            ],
+            "isLock": 0,
+            "textDirection": 0,
+            "write_mode": 0,
+            "fontFamily": "ZT001",
+            "id": "02c3279bafd84508920f922ec7244015",
+            "paperColorIndex": 0,
+            "value": "B0",
+            "dataBind": [
+                "bff2c6f0a40189474a28ba355d402a00",
+                "Sheet1"
+            ],
+            "lineBreakMode": 1,
+            "height": 3.350515,
+            "textAlignHorizonral": 0,
+            "fontCode": "ZT001",
+            "slashBgMode": 0,
+            "lineMode": 2,
+            "mirrorType": 0,
+            "wordsRotate": 0,
+            "isOpenMirror": 0,
+            "letterSpacing": 0,
+            "mirrorId": "",
+            "contentTitle": "台区名称",
+            "fontStyle": [
+                "bold"
+            ],
+            "typesettingParam": [
+                0,
+                180
+            ],
+            "colorChannel": 0,
+            "colorReverse": 0,
+            "boxStyle": "auto-height",
+            "hasVipRes": false,
+            "x": 31.542059,
+            "width": 50,
+            "y": 14.754678,
+            "fontSize": 2.8,
+            "textStyle": [
+                "norm"
+            ]
+        },
+        {
+            "rotate": 0,
+            "fieldName": "",
+            "textAlignVertical": 0,
+            "typesettingMode": 1,
+            "wordSpacing": 0,
+            "type": "text",
+            "lineSpacing": 0,
+            "elementColor": [
+                255,
+                0,
+                0,
+                0
+            ],
+            "isLock": 0,
+            "textDirection": 0,
+            "write_mode": 0,
+            "fontFamily": "ZT001",
+            "id": "a375c5a9a4e84053be455d5ce2986451",
+            "paperColorIndex": 0,
+            "value": "C0",
+            "dataBind": [
+                "bff2c6f0a40189474a28ba355d402a00",
+                "Sheet1"
+            ],
+            "lineBreakMode": 1,
+            "height": 3.264605,
+            "textAlignHorizonral": 0,
+            "fontCode": "ZT001",
+            "slashBgMode": 0,
+            "lineMode": 2,
+            "mirrorType": 0,
+            "wordsRotate": 0,
+            "isOpenMirror": 0,
+            "letterSpacing": 0,
+            "mirrorId": "",
+            "contentTitle": "台区经理",
+            "fontStyle": [
+                "bold"
+            ],
+            "typesettingParam": [
+                0,
+                180
+            ],
+            "colorChannel": 0,
+            "colorReverse": 0,
+            "boxStyle": "auto-width",
+            "hasVipRes": false,
+            "x": 31.498911,
+            "width": 20.274914,
+            "y": 19.040571,
+            "fontSize": 2.8,
+            "textStyle": [
+                "norm"
+            ]
+        },
+        {
+            "rotate": 0,
+            "fieldName": "",
+            "textAlignVertical": 0,
+            "typesettingMode": 1,
+            "wordSpacing": 0,
+            "type": "text",
+            "lineSpacing": 0,
+            "elementColor": [
+                255,
+                0,
+                0,
+                0
+            ],
+            "isLock": 0,
+            "textDirection": 0,
+            "write_mode": 0,
+            "fontFamily": "ZT001",
+            "id": "72096e057a124926bc0e44a5d4c5e012",
+            "paperColorIndex": 0,
+            "value": "D0",
+            "dataBind": [
+                "bff2c6f0a40189474a28ba355d402a00",
+                "Sheet1"
+            ],
+            "lineBreakMode": 1,
+            "height": 3.264605,
+            "textAlignHorizonral": 0,
+            "fontCode": "ZT001",
+            "slashBgMode": 0,
+            "lineMode": 2,
+            "mirrorType": 0,
+            "wordsRotate": 0,
+            "isOpenMirror": 0,
+            "letterSpacing": 0,
+            "mirrorId": "",
+            "contentTitle": "经理电话",
+            "fontStyle": [
+                "bold"
+            ],
+            "typesettingParam": [
+                0,
+                180
+            ],
+            "colorChannel": 0,
+            "colorReverse": 0,
+            "boxStyle": "auto-width",
+            "hasVipRes": false,
+            "x": 31.562956,
+            "width": 32.216495,
+            "y": 23.360773,
+            "fontSize": 2.8,
+            "textStyle": [
+                "norm"
+            ]
+        },
+        {
+            "slashBgMode": 0,
+            "rotate": 0,
+            "mirrorType": 0,
+            "fieldName": "",
+            "textPosition": 0,
+            "codeType": 20,
+            "isOpenMirror": 0,
+            "mirrorId": "",
+            "type": "barcode",
+            "elementColor": [
+                255,
+                0,
+                0,
+                0
+            ],
+            "colorChannel": 0,
+            "isLock": 0,
+            "textHeight": 2.5,
+            "hasVipRes": false,
+            "x": 31.755064,
+            "width": 46.497487,
+            "y": 31.267105,
+            "fontSize": 2.3,
+            "id": "5f4c3589b9344b34b7bbad2e435eadd3",
+            "paperColorIndex": 0,
+            "value": "E0",
+            "dataBind": [
+                "bff2c6f0a40189474a28ba355d402a00",
+                "Sheet1"
+            ],
+            "height": 12.497501
+        },
+        {
+            "rotate": 0,
+            "fieldName": "",
+            "textAlignVertical": 0,
+            "typesettingMode": 1,
+            "wordSpacing": 0,
+            "type": "text",
+            "lineSpacing": 0,
+            "elementColor": [
+                255,
+                0,
+                0,
+                0
+            ],
+            "isLock": 0,
+            "textDirection": 0,
+            "write_mode": 0,
+            "fontFamily": "ZT001",
+            "id": "cbd792a76a9342e4a7ebe596ef7bce73",
+            "paperColorIndex": 0,
+            "value": "F0",
+            "dataBind": [
+                "bff2c6f0a40189474a28ba355d402a00",
+                "Sheet1"
+            ],
+            "lineBreakMode": 1,
+            "height": 2.66323,
+            "textAlignHorizonral": 0,
+            "fontCode": "ZT001",
+            "slashBgMode": 0,
+            "lineMode": 2,
+            "mirrorType": 0,
+            "wordsRotate": 0,
+            "isOpenMirror": 0,
+            "letterSpacing": 0,
+            "mirrorId": "",
+            "contentTitle": "",
+            "fontStyle": [
+                "bold"
+            ],
+            "typesettingParam": [
+                0,
+                180
+            ],
+            "colorChannel": 0,
+            "colorReverse": 0,
+            "boxStyle": "auto-width",
+            "hasVipRes": false,
+            "x": 56.730056,
+            "width": 20.189003,
+            "y": 27.961942,
+            "fontSize": 2.3,
+            "textStyle": [
+                "norm"
+            ]
+        }
+    ],
+    "height": 50,
+    "margin": [
+        0,
+        0,
+        0,
+        0
+    ],
+    "printed": 0,
+    "totalPage": 8,
+    "usedFonts": {
+        "Fallback": "Fallback",
+        "fontDefault": "ZT001.ttf",
+        "ZT825": "ZT825.ttf",
+        "ZT001": "ZT001.ttf",
+        "Thai": "Thai.ttf",
+        "Korean": "Korean.otf",
+        "ZT165": "ZT165.ttf",
+        "fontConfig": "fontConfig.json",
+        "Arabic": "Arabic.ttf",
+        "ZT063": "ZT063.ttf",
+        "emoji": "emoji.ttf",
+        "Harmony": "Harmony.ttf"
+    },
+    "width": 85,
+    "hasVipRes": false,
+    "modify": {
+        "02c3279bafd84508920f922ec7244015": {
+            "0": {
+                "useTitle": true,
+                "delimiter": "："
+            }
+        },
+        "a375c5a9a4e84053be455d5ce2986451": {
+            "0": {
+                "useTitle": true,
+                "delimiter": "："
+            }
+        },
+        "72096e057a124926bc0e44a5d4c5e012": {
+            "0": {
+                "useTitle": true,
+                "delimiter": "："
+            }
+        },
+        "cbd792a76a9342e4a7ebe596ef7bce73": {
+            "0": {
+                "useTitle": false,
+                "delimiter": "："
+            }
+        }
+    },
+    "dataSourceModifies": {
+        "02c3279bafd84508920f922ec7244015": {
+            "0": {
+                "useTitle": true,
+                "delimiter": "："
+            }
+        },
+        "a375c5a9a4e84053be455d5ce2986451": {
+            "0": {
+                "useTitle": true,
+                "delimiter": "："
+            }
+        },
+        "72096e057a124926bc0e44a5d4c5e012": {
+            "0": {
+                "useTitle": true,
+                "delimiter": "："
+            }
+        },
+        "cbd792a76a9342e4a7ebe596ef7bce73": {
+            "0": {
+                "useTitle": false,
+                "delimiter": "："
+            }
+        }
+    },
+    "dataSourceBindInfo": {
+        "total": 8,
+        "page": 1
+    },
+    "fragments": 0,
+    "values": [],
+    "profile": {
+        "barcode": "021824153",
+        "machineId": "37,38,45,10006,10007",
+        "machineName": "B32,B32R,Z401,T8S,A63",
+        "extrain": {
+            "userId": "1009299493",
+            "folderId": null,
+            "labelId": "80033587",
+            "materialModelSn": "80083",
+            "sourceId": "80033587",
+            "goodsCode": null,
+            "isDelete": false,
+            "createTime": "2025-09-29 10:50:58",
+            "updateTime": "2025-09-29 10:52:39",
+            "lastPrintedAt": null,
+            "barcodeCategoryMap": {
+                "barcode": "021824153",
+                "materialModelSn": "80083"
+            },
+            "adaptPlatformCode": "CP001Mobile,CP001PC,CP001Pad,CP004Mobile,CP004PC,CP004Pad,CP011Mobile,CP011PC,CP011Pad,CP008Mobile,CP008PC,CP008Pad",
+            "adaptPlatformName": "精臣云打印-移动端,精臣云打印-pc端,精臣云打印-平板,烟草价签-移动端,烟草价签-pc端,烟草价签-平板,烟草管家-非烟-移动端,烟草管家-非烟-pc端,烟草管家-非烟-平板,烟草管家-移动端,烟草管家-pc端,烟草管家-平板",
+            "templateType": 0,
+            "templateClass": 1,
+            "isMobileTemplete": true,
+            "isNewPath": false,
+            "resourceVersion": null
+        }
+    },
+    "labelNames": [
+        {
+            "languageCode": "zh-cn",
+            "languageName": "简体中文",
+            "name": "V50*85-155国家电网"
+        }
+    ],
+    "paperColor": [
+        "0.0.0",
+        "230.0.18"
+    ],
+    "isEdited": "0",
+    "templateVersion": "1.7.0.0",
+    "dataSources": [
+        {
+            "headers": {
+                "Sheet1": 1
+            },
+            "name": "唐山打印模板.xlsx",
+            "range": [],
+            "type": "excel",
+            "params": null,
+            "uri": "https://oss-print.niimbot.com/user_resources/89d2e5d36bfe4407b4aa8672458aff8d/1009299493/files/96bd3f13a8c389df44431ff4b03746d1.xlsx",
+            "hash": "bff2c6f0a40189474a28ba355d402a00"
+        }
+    ],
+    "supportedEditors": [
+        "GENERAL"
+    ],
+    "templateAttributes": []
+}

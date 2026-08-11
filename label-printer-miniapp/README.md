@@ -1,64 +1,60 @@
-# 标签快印小程序
+# 精臣标签微信小程序
 
-这是对 NIIMBOT Android 应用核心工作流的微信小程序原生重写。项目不依赖原 APK 的 Flutter/native 二进制，标签数据只保存在本机，小程序直接通过 BLE 与打印机通信。
+`1.0.0-rc.1` 是 `niim-label-app` 核心产品旅程的微信小程序原生迁移候选版：模板浏览、标签编辑、本地项目、批量数据、打印预检和 NIIMBOT BLE 打印已经形成工程闭环。标签内容默认只保存在本机，不依赖账号或远端服务。
 
-## 已实现
+当前是“工程候选版”，不是“已上线版”。正式 AppID、微信开发者工具编译、Android/iOS 真机、目标打印机样张、隐私/类目及品牌与素材授权仍是发布 P0 门禁，详见[发布清单](./docs/RELEASE_CHECKLIST.md)。
 
-- 40/30/50 mm 常用标签尺寸与 203 dpi 点阵画布
-- 文字、EAN-13、Code 128B、二维码、图片、矩形、线条
-- 元素选择、拖动、坐标/尺寸/旋转调整、图层移动、复制、删除
-- 30 步撤销/重做、本地自动保存、本地模板
-- 浓度、纸张类型、黑白阈值、打印份数
-- BLE 扫描、连接、通知流重组、MTU 协商、完整帧串行写入
-- D11/D110 新旧时序、B1、B21/B21_L2B、B21S、B21_C2B profile
-- 连接后读取打印机型号 ID，并优先按 ID 选择时序
+## 已交付能力
 
-## 运行
+- 首页、模板、我的标签、批量数据、我的，以及独立 Canvas 编辑器。
+- 189 套离线模板，分为 32 套基础、4 套导入和 153 套在线目录固化模板。
+- 文字、图片、素材、日期、条码、二维码、序列号、形状、表格和线条 10 类元素。
+- 扫码建标：从首页扫描现有条码/二维码直接生成可编辑标签，也可向编辑器中的编码元素扫描填入。
+- 144 个黑白素材、20 种边框、六种文字方向、吸附、移动、缩放、旋转、多选、对齐/分布、锁定、镜像、图层和 30 步撤销/重做。
+- 项目/用户模板、自动保存、schema v1→v2 迁移、打印历史、CSV 批量生成、JSON 备份与失败回滚。
+- 非破坏式打印预检：标签超过当前打印头时只阻止打印，不会修改或裁切原稿。
+- 应用级 BLE 单例、上次设备记忆、单飞连接、TTL、`already connect`、僵尸连接恢复、蓝牙恢复自动复连、诊断和 kill switch。
+- D11/D110 新旧时序、B1、B21/B21_L2B、B21S、B21_C2B profile；未知型号不会按相似名称冒险打印。
+- 已拒绝非 NIIMBOT 的通用可写 BLE 特征，避免把 NIIMBOT 协议发送到无关设备。
 
-1. 用微信开发者工具导入本目录 `label-printer-miniapp`。
-2. 在 `project.config.json` 中将 `touristappid` 换成你的小程序 AppID。
-3. 基础库选择 2.22.0 或更高版本，项目默认使用 2.32.3。
-4. 在小程序管理后台按实际发布用途完成蓝牙、相机和相册相关的用户隐私保护指引声明。
-5. 预览编辑功能可直接在模拟器运行；蓝牙扫描和打印必须使用 Android/iOS 真机调试。
-
-依赖已经构建到 `miniprogram/vendor/qrcode.js`。需要重新生成时运行：
+## 本地验收
 
 ```powershell
-npm.cmd install
+cd D:\vibecode\jc\label-printer-miniapp
+npm.cmd ci
+npm.cmd run verify
+npm.cmd run test:coverage
+```
+
+`verify` 会检查 JS/JSON、页面组合、WXML 事件处理器、静态资源引用、主包大小，并执行全量 Node 测试。需要重新同步压缩素材或构建二维码依赖时：
+
+```powershell
+npm.cmd run assets:sync
 npm.cmd run build:vendor
 ```
 
-运行纯 JS 测试：
+本地自动化只覆盖纯逻辑、仓储和 BLE mock，不能替代微信编译与真实打印机验收。
 
-```powershell
-npm.cmd test
-```
+## 微信开发者工具运行
 
-## 真机边界
+1. 导入本目录。
+2. 将 [`project.config.json`](./project.config.json) 中的 `touristappid` 替换为有权限的正式或测试 AppID。
+3. 使用项目声明的基础库和计划支持的当前稳定基础库分别编译。
+4. 在管理后台完成蓝牙、相册/相机、文件选择等实际用途的隐私保护指引和类目配置。
+5. 模拟器验证页面；BLE、前后台恢复、杀进程重连和打印必须在 Android/iOS 真机执行。
 
-微信小程序只支持 BLE，不支持经典蓝牙 SPP。连接时会枚举实际 GATT 服务和特征，不只依赖设备名或固定 UUID。
+## 协议与硬件边界
 
-打印行必须作为完整 NIIMBOT 协议帧写入。D11/D110 行帧通常约 25 字节，B1/B21 通常约 61 字节；项目会在 Android 尝试协商 MTU 247，并读取系统实际 MTU。若 `MTU - 3` 小于当前完整帧，打印会明确失败，不会把一帧静默拆成多个 GATT write。
+小程序只使用 BLE，不支持经典蓝牙 SPP。NIIMBOT 打印行必须作为完整协议帧单次写入；代码不会按 MTU 任意切碎一帧，也没有接入与本项目不兼容的 FF00/FF02/FF03 ESC/POS 流控。
 
-当前 profile 来源于公开协议实现，自动匹配只接受已知型号 ID；已识别但未适配的型号会被阻止打印，不会按相似设备名猜参数。尚未在你的具体硬件上验证，首轮真机验收请记录：
+自动匹配只接受已知型号 ID。`2320 → d110`、`4098 → b1` 目前仍属于候选映射，必须拿对应真机确认后才能对外声明支持。B21 Pro 的 `D110M_V4` 路径尚未适配，发布版本必须明确阻止。
 
-- 设备名、型号 ID、硬件/固件版本
-- 手机系统与微信版本、协商后的 MTU
-- 标签实际宽高、方向、浓度和打印偏移
-- D11 老固件是否需要切换到“旧协议”profile
-- B21_C2B 在 B1 与 B21 时序下的实际表现
+## 文档
 
-B21 Pro 使用另一套 `D110M_V4` 时序，当前不会自动误判为普通 B21，需拿目标设备补一次协议适配和实物验收。
+- [完整交付文档总索引](./docs/README.md)
+- [产品规格](./docs/PRODUCT_SPEC.md) · [需求规格](./docs/REQUIREMENTS_SPEC.md) · [体验规格](./docs/UX_SPEC.md)
+- [技术架构](./docs/TECHNICAL_ARCHITECTURE.md) · [模块参考](./docs/MODULE_REFERENCE.md) · [BLE 与打印协议](./docs/BLE_PRINTING_PROTOCOL.md)
+- [测试计划](./docs/TEST_PLAN.md) · [需求追踪](./docs/TRACEABILITY_MATRIX.md) · [发布清单](./docs/RELEASE_CHECKLIST.md)
+- [竞品分析与产品决策](./docs/COMPETITIVE_ANALYSIS.md) · [扫码建标功能规格](./docs/FEATURE_SPEC_SCAN_TO_LABEL.md)
 
-## 目录
-
-```text
-miniprogram/
-  core/       标签文档、Canvas 渲染、位图编码、协议与打印计划
-  services/   微信 BLE 会话和打印任务
-  pages/      标签编辑与设备连接界面
-  vendor/     已打包的二维码生成器
-tests/        Node 单元测试
-```
-
-APK 静态分析记录见 [APK_ANALYSIS.md](./APK_ANALYSIS.md)，第三方许可见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)。
+模板和素材中包含来源于既有 NIIMBOT 数据/资产的内容；进入外部体验版或生产前，必须由权利人确认品牌、模板和素材的再分发范围。代码完成不等于授权完成。

@@ -1,4 +1,6 @@
 {
-  "navigationBarTitleText": "标签快印",
-  "enablePullDownRefresh": false
+  "navigationStyle": "custom",
+  "enablePullDownRefresh": false,
+  "disableScroll": true,
+  "backgroundColor": "#eef0f3"
 }
