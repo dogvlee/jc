@@ -15,5 +15,46 @@
     "checkSiteMap": true,
     "useCompilerPlugins": false
   },
+  "packOptions": {
+    "ignore": [
+      {
+        "value": "app/imported-templates.js",
+        "type": "file"
+      },
+      {
+        "value": "app/online-template-runtime-fixes.js",
+        "type": "file"
+      },
+      {
+        "value": "app/online-templates-pack.js",
+        "type": "file"
+      },
+      {
+        "value": "assets/materials/original",
+        "type": "folder"
+      },
+      {
+        "value": "assets/online-images",
+        "type": "folder"
+      },
+      {
+        "value": "assets/online-thumbs",
+        "type": "folder"
+      },
+      {
+        "value": "data/niim-templates",
+        "type": "folder"
+      },
+      {
+        "value": "data/original-materials.json",
+        "type": "file"
+      },
+      {
+        "value": "services/authorized-template-catalog.js",
+        "type": "file"
+      }
+    ],
+    "include": []
+  },
   "condition": {}
 }

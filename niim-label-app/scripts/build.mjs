@@ -27,7 +27,13 @@ await esbuild.build({
 await Promise.all([
   cp(resolve(root, 'src', 'index.html'), resolve(root, 'dist', 'index.html')),
   cp(resolve(root, 'src', 'styles.css'), resolve(root, 'dist', 'assets', 'styles.css')),
-  cp(resolve(root, 'public'), resolve(root, 'dist'), { recursive: true })
+  cp(resolve(root, 'public'), resolve(root, 'dist'), {
+    recursive: true,
+    filter: (source) => {
+      const normalized = source.replaceAll('\\', '/');
+      return !/\/assets\/(online-images|online-thumbs|materials\/original)(\/|$)/.test(normalized);
+    }
+  })
 ]);
 
 console.log('Built dist/');

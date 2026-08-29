@@ -21,7 +21,7 @@ page.on('console', (message) => {
 });
 
 await page.goto('http://127.0.0.1:4173/', { waitUntil: 'networkidle' });
-await page.locator('h1').filter({ hasText: '标签工坊' }).waitFor();
+await page.locator('h1').filter({ hasText: '商跃标签' }).waitFor();
 await page.screenshot({ path: join(output, 'home-mobile.png'), fullPage: true });
 
 const homeLayout = await page.evaluate(() => ({
@@ -85,7 +85,7 @@ await page.getByText('打印完成', { exact: true }).first().waitFor({ timeout:
 
 await page.locator('.sheet-backdrop').click({ position: { x: 5, y: 5 } });
 await page.locator('[data-action="close-editor"]').click();
-await page.locator('h1').filter({ hasText: '标签工坊' }).waitFor();
+await page.locator('h1').filter({ hasText: '商跃标签' }).waitFor();
 await page.setViewportSize({ width: 1280, height: 900 });
 await page.screenshot({ path: join(output, 'home-desktop.png'), fullPage: true });
 

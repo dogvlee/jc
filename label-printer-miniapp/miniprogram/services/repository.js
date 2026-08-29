@@ -1,8 +1,12 @@
 const { clampElement, cloneDocument, createDocument, createElement } = require('../core/document');
+const { normalizeElementFont } = require('../core/font-family');
 
 const STORAGE_VERSION = 2;
+const MAX_USER_TEMPLATES = 80;
 const MIN_LABEL_MM = 5;
-const MAX_LABEL_MM = 150;
+// The editor may inspect unusually long industrial labels. Hardware support is
+// decided separately by printability profiles; storage must not silently crop.
+const MAX_LABEL_MM = 500;
 const DOCUMENT_LIMITS = Object.freeze({
   maxElements: 128,
   maxTextLength: 512,
@@ -16,6 +20,13 @@ const DOCUMENT_LIMITS = Object.freeze({
   maxLineSpacing: 10,
   maxSerialDigits: 20
 });
+const TEMPLATE_META_LIMITS = Object.freeze({
+  maxDepth: 6,
+  maxKeys: 64,
+  maxArrayLength: 64,
+  maxStringLength: 1024,
+  maxNodes: 256
+});
 const KEYS = Object.freeze({
   version: 'niim-label:storage-version',
   projects: 'niim-label:projects',
@@ -25,7 +36,8 @@ const KEYS = Object.freeze({
   printHistory: 'niim-label:print-history',
   lastDevice: 'niim-label:last-device',
   editorDraft: 'niim-label:editor-draft',
-  editorAutosave: 'niim-label:editor-autosave'
+  editorAutosave: 'niim-label:editor-autosave',
+  pendingHomeRoute: 'niim-label:pending-home-route'
 });
 
 const LEGACY_KEYS = Object.freeze({
@@ -78,6 +90,40 @@ function boundedString(value, maximum, fallback) {
   return String(source === undefined || source === null ? '' : source).slice(0, maximum);
 }
 
+function cloneTemplateMetaValue(value, depth, state) {
+  if (value === null || typeof value === 'boolean') return value;
+  if (typeof value === 'string') return value.slice(0, TEMPLATE_META_LIMITS.maxStringLength);
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  if (!value || typeof value !== 'object' || depth >= TEMPLATE_META_LIMITS.maxDepth) return undefined;
+  state.nodes += 1;
+  if (state.nodes > TEMPLATE_META_LIMITS.maxNodes) return undefined;
+  if (Array.isArray(value)) {
+    return value.slice(0, TEMPLATE_META_LIMITS.maxArrayLength)
+      .map((item) => cloneTemplateMetaValue(item, depth + 1, state))
+      .filter((item) => item !== undefined);
+  }
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return undefined;
+  const result = {};
+  Object.keys(value).slice(0, TEMPLATE_META_LIMITS.maxKeys).forEach((rawKey) => {
+    if (rawKey === '__proto__' || rawKey === 'prototype' || rawKey === 'constructor') return;
+    const key = String(rawKey).slice(0, 80);
+    const cloned = cloneTemplateMetaValue(value[rawKey], depth + 1, state);
+    if (cloned !== undefined) result[key] = cloned;
+  });
+  return result;
+}
+
+function normalizeTemplateMeta(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  try {
+    const cloned = cloneTemplateMetaValue(value, 0, { nodes: 0 });
+    return cloned && Object.keys(cloned).length ? cloned : null;
+  } catch (error) {
+    return null;
+  }
+}
+
 function normalizeElementFields(element, defaults) {
   const hasOwn = (field) => Object.prototype.hasOwnProperty.call(element, field)
     || Object.prototype.hasOwnProperty.call(defaults, field);
@@ -122,7 +168,7 @@ function normalizeElementFields(element, defaults) {
       element[field] = boundedString(element[field], DOCUMENT_LIMITS.maxTextLength, defaults[field]);
     }
   });
-  ['prefix', 'suffix', 'label', 'fixedValue', 'format', 'fontFamily', 'fieldName',
+  ['prefix', 'suffix', 'label', 'fixedValue', 'format', 'fontFamily', 'sourceFontFamily', 'fieldName',
     'baseTime', 'linkedFrom', 'symbol', 'materialId', 'borderStyle'].forEach((field) => {
     if (hasOwn(field)) {
       element[field] = boundedString(element[field], DOCUMENT_LIMITS.maxShortTextLength, defaults[field]);
@@ -161,11 +207,14 @@ function normalizeDocument(value) {
   const document = createDocument(widthMm, heightMm);
   document.schemaVersion = 2;
   document.name = String(value.name || '未命名标签').slice(0, 80);
+  const templateMeta = normalizeTemplateMeta(value.templateMeta);
+  if (templateMeta) document.templateMeta = templateMeta;
   document.elements = [];
   (Array.isArray(value.elements) ? value.elements.slice(0, DOCUMENT_LIMITS.maxElements) : []).forEach((source) => {
     if (!source || !SUPPORTED_TYPES.has(source.type)) return;
     const defaults = createElement(source.type, document);
     const element = normalizeElementFields({ ...defaults, ...cloneDocument(source) }, defaults);
+    normalizeElementFont(element);
     element.id = String(source.id || `${source.type}-${Date.now().toString(36)}-${document.elements.length}`);
     if (element.type === 'table') {
       element.rows = Math.max(1, Math.min(20, Number(element.rows) || 1));
@@ -324,8 +373,47 @@ class Repository {
     const templates = this.getUserTemplates();
     const id = templateId || `user-template-${Date.now().toString(36)}`;
     const item = { id, name: document.name, document, updatedAt: Date.now(), source: 'user' };
-    this.write(KEYS.templates, [item, ...templates.filter((entry) => entry.id !== id)].slice(0, 80));
+    this.write(KEYS.templates, [item, ...templates.filter((entry) => entry.id !== id)].slice(0, MAX_USER_TEMPLATES));
     return cloneDocument(item);
+  }
+
+  /**
+   * Bulk import for template packs. Never evicts existing templates: imports
+   * stop at the capacity limit and the overflow is reported to the caller.
+   */
+  importUserTemplates(items) {
+    const source = Array.isArray(items) ? items : [];
+    const existing = this.getUserTemplates();
+    const capacity = Math.max(0, MAX_USER_TEMPLATES - existing.length);
+    let invalid = 0;
+    const valid = [];
+    source.forEach((item) => {
+      const document = normalizeDocument(item && (item.document || item));
+      if (!document) {
+        invalid += 1;
+        return;
+      }
+      document.name = String((item && item.name) || document.name || '我的模板').trim().slice(0, 80) || '我的模板';
+      valid.push(document);
+    });
+    const accepted = valid.slice(0, capacity);
+    const now = Date.now();
+    const created = accepted.map((document, index) => ({
+      id: `user-template-${now.toString(36)}-${index}`,
+      name: document.name,
+      document,
+      updatedAt: now + accepted.length - index,
+      source: 'user'
+    }));
+    if (created.length) {
+      this.write(KEYS.templates, created.concat(existing).slice(0, MAX_USER_TEMPLATES));
+    }
+    return {
+      imported: created.length,
+      invalid,
+      overflow: valid.length - accepted.length,
+      capacity
+    };
   }
 
   deleteUserTemplate(templateId) {

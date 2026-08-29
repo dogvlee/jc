@@ -6,6 +6,9 @@
 
 | 文档 | 用途 | 主要读者 |
 | --- | --- | --- |
+| [商跃标签主路径体验](./SHANGYUE_MAIN_PATH_UX.md) | Lead 已拍板的底栏、首页顺序、货架、编辑器打印与关于页 | 产品、设计、前端、QA |
+| [商跃标签短产品方案](./SHANGYUE_PRODUCT_BRIEF.md) | 交 Lead 的六段简报：定位、首发、品牌、模板、两周优先级、待拍板 | 产品、Lead、发布 |
+| [商跃标签产品定义与内容边界](./SHANGYUE_PRODUCT_DEFINITION.md) | 独立品牌、RC 卖点、自有模板 vs 精臣来源硬边界 | 产品、法务、研发、QA、发布 |
 | [产品规格](./PRODUCT_SPEC.md) | 产品定位、范围、用户旅程、能力与验收基线 | 产品、研发、QA |
 | [完整需求规格](./REQUIREMENTS_SPEC.md) | 带唯一编号的功能与非功能需求 | 产品、研发、QA |
 | [体验规格](./UX_SPEC.md) | 信息架构、页面交互、状态、文案与可用性要求 | 产品、设计、前端、QA |
@@ -33,6 +36,7 @@
 | [需求追踪矩阵](./TRACEABILITY_MATRIX.md) | 需求到实现、测试、证据和责任人的映射 | QA、项目、审计 |
 | [验收记录模板](./ACCEPTANCE_RECORD_TEMPLATE.md) | DevTools、真机、样张和签字证据模板 | QA、产品、发布 |
 | [发布清单](./RELEASE_CHECKLIST.md) | P0 放行、灰度、监控与回滚门禁 | 发布、产品、QA、法务 |
+| [商跃公开包版权门禁](./SHANGYUE_RELEASE_GATE.md) | 对真实上传目录拦截第三方模板、素材和未过审内容 | 发布、法务、研发 |
 | [环境与部署](./ENVIRONMENT_AND_DEPLOYMENT.md) | AppID、构建环境、体验版、上传和回滚流程 | 研发、发布、运维 |
 | [RC1 发布说明](./RELEASE_NOTES_1.0.0-rc.1.md) | 候选版本能力、迁移和已知限制 | 全体交付角色 |
 
@@ -49,6 +53,7 @@
 
 - [APK 静态分析](../APK_ANALYSIS.md)：仅记录可验证的静态观察，不等于厂商协议授权。
 - [第三方许可](../THIRD_PARTY_NOTICES.md)：依赖与已识别第三方代码声明；品牌、模板、图片和素材仍需权利人单独确认再分发范围。
+- [开源字体目录](./OPEN_SOURCE_FONT_CATALOG.md)：23 项字体的简繁覆盖、OFL 来源、按需加载与再分发约束。
 
 ## 文档维护规则
 

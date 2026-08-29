@@ -22,10 +22,44 @@ test('date elements apply a deterministic token format', () => {
   element.label = '制作日期';
   element.format = 'YYYY年MM月DD日 HH:mm';
   element.showSeconds = false;
-  assert.match(formatDateValue(element, new Date(2026, 7, 3, 9, 5, 7)), /^制作日期：2026年08月03日 09:05/);
+  assert.equal(formatDateValue(element, new Date(2026, 7, 3, 9, 5, 7)), '制作日期：2026年08月03日 09:05');
   element.autoUpdate = false;
   element.fixedValue = '固定日期';
   assert.equal(formatDateValue(element, new Date()), '制作日期：固定日期');
+});
+
+test('date format presets and the show-time toggle are literal', () => {
+  const element = createElement('date', createDocument(50, 30));
+  element.label = '';
+  element.autoUpdate = true;
+  const now = new Date(2026, 7, 18, 14, 30, 45);
+  const cases = [
+    ['YYYY年MM月DD日 HH:mm', '2026年08月18日 14:30'],
+    ['YYYY-MM-DD HH:mm', '2026-08-18 14:30'],
+    ['YYYY/MM/DD HH:mm', '2026/08/18 14:30'],
+    ['YYYY-MM-DD', '2026-08-18 14:30'],
+    ['YYYY/MM/DD', '2026/08/18 14:30']
+  ];
+  for (const [format, expected] of cases) {
+    element.format = format;
+    element.showTime = true;
+    element.showSeconds = false;
+    assert.equal(formatDateValue(element, now), expected);
+  }
+  element.format = 'YYYY年MM月DD日 HH:mm';
+  element.showTime = false;
+  assert.equal(formatDateValue(element, now), '2026年08月18日');
+  element.format = 'YYYY-MM-DD';
+  element.showTime = true;
+  element.showSeconds = true;
+  assert.equal(formatDateValue(element, now), '2026-08-18 14:30:45');
+});
+
+test('new date elements do not print unrequested seconds', () => {
+  const element = createElement('date', createDocument(50, 30));
+  element.label = '';
+  assert.equal(element.showSeconds, false);
+  assert.equal(formatDateValue(element, new Date(2026, 7, 18, 14, 30, 45)), '2026年08月18日 14:30');
 });
 
 test('date expire role adds preset hours', () => {
@@ -94,4 +128,3 @@ test('material catalog is available and sizable', () => {
   material.symbol = 'star';
   assert.equal(material.symbol, 'star');
 });
-

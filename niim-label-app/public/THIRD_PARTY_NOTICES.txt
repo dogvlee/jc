@@ -1,0 +1,22 @@
+Remote open-source Chinese fonts
+================================
+
+The editor loads the following font families on demand. Font binaries are not
+bundled in this web application. Each family is supplied under the SIL Open
+Font License 1.1 (OFL-1.1):
+
+Noto Sans SC; Noto Serif SC; Ma Shan Zheng; ZCOOL XiaoWei;
+ZCOOL QingKe HuangYou; ZCOOL KuaiLe; Long Cang; Zhi Mang Xing;
+Liu Jian Mao Cao; WDXL Lubrifont SC; Noto Sans TC; Noto Serif TC;
+LXGW WenKai TC; LXGW WenKai Mono TC; LXGW Marker Gothic; Huninn;
+Iansui; Chiron GoRound TC; Chocolate Classical Sans;
+Cactus Classical Serif.
+
+Authoritative source and license records:
+https://github.com/google/fonts/tree/main/ofl
+
+Exact-version webfont delivery:
+https://fontsource.org/docs/getting-started/cdn
+
+SIL Open Font License 1.1:
+https://openfontlicense.org/open-font-license-official-text/

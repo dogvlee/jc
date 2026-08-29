@@ -3,15 +3,17 @@ const {
   cloneDocument,
   createDocument,
   createElement,
-  hitTest,
+  hitTestAll,
   placeNewElement
 } = require('../core/document');
 const { linkedPrimary, syncLinkedDates, unlinkDate } = require('../core/date-links');
 const {
   alignedCanvasSize,
+  elementsCutByCrop,
   evaluatePrintability,
   getProfile,
   previewCanvasSize,
+  printableWindowMm,
   profileForModelId
 } = require('../core/profiles');
 const {
@@ -23,11 +25,23 @@ const {
   resizeRotatedElement,
   snapElementPosition
 } = require('../core/geometry');
-const { longPressSelection } = require('../core/editor-gesture');
+const {
+  handleHitRegion,
+  longPressSelection,
+  nextSelectionId,
+  selectionHitDecision,
+  selectionTargetSizeMm,
+  shouldCycleSelectionOnTap
+} = require('../core/editor-gesture');
 const { createImageCacheRegistry } = require('../core/image-cache');
 const { clampTextArcAngle } = require('../core/text-direction');
 const { resetTextStyle } = require('../core/text-style');
+const { resizeCodeElementToMinimum } = require('../core/code-quality');
+const { buildAdvancedQrPayload, parseAdvancedQrPayload, validateAdvancedQrData } = require('../core/advanced-qr');
+const { buildBackup, restoreBackup } = require('../core/backup');
 const { renderDocument, renderSelection, validateDocument, contentHandleLocalMm } = require('../core/renderer');
+const { resolveFontId } = require('../core/font-family');
+const { ensureDocumentFonts } = require('../core/font-loader');
 const {
   DEFAULT_MATERIAL_CHIP,
   applyMaterialToElement,
@@ -38,24 +52,40 @@ const {
 const { drawBorderStyle, borderById, BORDER_CATALOG } = require('../core/borders');
 const { Capacitor } = require('@capacitor/core');
 const { App: CapacitorApp } = require('@capacitor/app');
+const { Camera, CameraResultType, CameraSource } = require('@capacitor/camera');
+const { BarcodeFormat, BrowserCodeReader, BrowserMultiFormatReader } = require('@zxing/browser');
 const { BleSession } = require('../services/ble-session');
 const { parseCsv, rowsToRecords, stringifyCsv } = require('../services/csv');
 const { createPlatformBleApi } = require('../services/platform-ble-api');
 const { PrinterClient } = require('../services/printer-client');
 const { KEYS, write } = require('../services/store');
+
 const { templates } = require('./catalog');
 const {
+  buildLibraryDocument,
+  catalogMeta,
+  getLibraryEntry
+} = require('../../../label-printer-miniapp/miniprogram/app/shangyue-library/pack');
+const {
+  buildRecentPrints,
   initialState,
   openDocument,
   persistRows,
   persistSettings,
   readPrintHistory,
+  shouldPersistDraft,
   templateDocument,
   upsertProject
 } = require('./state');
-const { applyRowToDocument, buildDocumentsFromRows } = require('./data-bind');
+const {
+  applyRowToDocument,
+  buildDocumentsFromRows,
+  isBatchCompatibleTemplate,
+  resolveBatchCompatibleTemplate
+} = require('./data-bind');
 const { stockLabel } = require('./stock-presets');
 const { invalidateThumbsByPrefix, resolveThumb } = require('./template-thumbs');
+const { prepareHighDensityCanvas, recommendedRasterSide } = require('./canvas-density');
 const {
   contextActions,
   isPlaceholderElement,
@@ -73,11 +103,47 @@ const state = initialState();
 const bleApi = createPlatformBleApi();
 const session = new BleSession(bleApi);
 const printer = new PrinterClient(session);
+const authorizedCatalog = null;
 let canvasState = null;
 let scanTimer = null;
+let barcodeScannerControls = null;
+let barcodeScannerStarting = false;
 let longPressTimer = null;
 let floatLayoutObserver = null;
 const imageCache = createImageCacheRegistry();
+
+function updateInputConfirmationAfterEdit(element, field) {
+  const isEditableContent = element && (
+    (element.type === 'text' && field === 'text')
+    || ((element.type === 'barcode' || element.type === 'qrcode') && field === 'value')
+  );
+  if (!isEditableContent) return element;
+  const value = element.type === 'text' ? element.text : element.value;
+  element.requiresInput = !String(value == null ? '' : value).trim();
+  element.requiresInputReason = element.requiresInput
+    ? (element.type === 'text' ? 'empty-text' : 'empty-code')
+    : undefined;
+  delete element.invalidCode;
+  delete element.codeValidationMessage;
+  return element;
+}
+
+function confirmBarcodeFormat(element, format) {
+  if (!element || element.type !== 'barcode') return element;
+  element.format = format;
+  element.formatChangedByUser = true;
+  delete element.unsupportedCodeType;
+  delete element.requiresFormatConfirmation;
+  delete element.invalidCode;
+  delete element.codeValidationMessage;
+  const reason = element.requiresInputReason;
+  const keepContentConfirmation = reason === 'data-binding' || reason === 'sample-code';
+  const empty = !String(element.value == null ? '' : element.value).trim();
+  element.requiresInput = empty || keepContentConfirmation;
+  if (empty) element.requiresInputReason = 'empty-code';
+  else if (!keepContentConfirmation) delete element.requiresInputReason;
+  return element;
+}
 
 function clearLongPressTimer() {
   if (longPressTimer) {
@@ -86,29 +152,185 @@ function clearLongPressTimer() {
   }
 }
 let intentionalDisconnect = false;
+let modalRestoreFocus = null;
+let renderedModalName = '';
 
 function toast(message, type) {
   const node = document.createElement('div');
   node.className = `toast${type === 'error' ? ' error' : ''}`;
+  node.setAttribute('role', type === 'error' ? 'alert' : 'status');
+  node.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
+  node.setAttribute('aria-atomic', 'true');
   node.textContent = message;
   toastRoot.appendChild(node);
   setTimeout(() => node.remove(), 2800);
 }
 
+const AUTHORIZED_PAGE_SIZE = 100;
+const IMAGE_LOAD_TIMEOUT_MS = 15000;
+const AUTHORIZED_CATALOG_STATE = Object.freeze({
+  templates: {
+    method: 'fetchIndustryTemplates',
+    list: 'remoteTemplates',
+    page: 'remoteTemplatePage',
+    total: 'remoteTemplateTotal',
+    hasMore: 'remoteTemplateHasMore',
+    loading: 'remoteTemplateLoading',
+    error: 'remoteTemplateError'
+  },
+  materials: {
+    method: 'fetchMaterials',
+    list: 'remoteMaterials',
+    page: 'remoteMaterialPage',
+    total: 'remoteMaterialTotal',
+    hasMore: 'remoteMaterialHasMore',
+    loading: 'remoteMaterialLoading',
+    error: 'remoteMaterialError'
+  },
+  borders: {
+    method: 'fetchBorders',
+    list: 'remoteBorders',
+    page: 'remoteBorderPage',
+    total: 'remoteBorderTotal',
+    hasMore: 'remoteBorderHasMore',
+    loading: 'remoteBorderLoading',
+    error: 'remoteBorderError'
+  }
+});
+
+function catalogErrorMessage(error) {
+  if (!error) return '网络不可用，请稍后重试';
+  if (error.code === 'TIMEOUT') return '读取超时，请稍后重试';
+  if (error.code === 'NETWORK_ERROR') return '无法连接第三方目录';
+  if (error.code === 'HTTP_ERROR') return `第三方目录暂不可用（${error.details && error.details.status || 'HTTP'}）`;
+  return String(error.message || '第三方目录读取失败');
+}
+
+function renderAuthorizedCatalogSurface(kind) {
+  if (kind === 'templates' && state.route === 'templates') render();
+  if (kind === 'materials' && state.modal === 'material') renderModalOnly();
+  if (kind === 'borders' && state.modal === 'border') renderModalOnly();
+}
+
+async function loadAuthorizedCatalogPage() {
+  return false;
+}
+
+function ensureAuthorizedCatalog() {}
+
+/** Android WebView haptics (navigator.vibrate). No-op in node/browsers without it. */
+function haptic(pattern) {
+  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    try {
+      navigator.vibrate(pattern);
+    } catch (_) { /* unsupported hardware */ }
+  }
+}
+
 function render() {
+  const modalFocus = captureModalFocus();
   appRoot.innerHTML = renderMain(state);
   modalRoot.innerHTML = renderModal(state);
-  requestAnimationFrame(afterRender);
+  const modalTransition = syncModalAccessibility();
+  requestAnimationFrame(() => {
+    afterRender();
+    finishModalAccessibility(modalTransition, modalFocus);
+  });
+}
+
+function removeClosedEditorMenu() {
+  if (state.route !== 'editor' || state.editorMenu) return;
+  document.querySelectorAll('.editor-more-menu').forEach((node) => node.remove());
 }
 
 function renderModalOnly() {
+  removeClosedEditorMenu();
+  const modalFocus = captureModalFocus();
   modalRoot.innerHTML = renderModal(state);
+  const modalTransition = syncModalAccessibility();
   requestAnimationFrame(() => {
     if (state.modal === 'print') renderPrintPreview();
     if (state.modal === 'template-preview') renderTemplatePreview();
     paintMaterialThumbs();
     paintBorderThumbs();
+    finishModalAccessibility(modalTransition, modalFocus);
   });
+}
+
+const FOCUSABLE_SELECTOR = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
+
+function captureFocusState(root, active, context) {
+  if (!active || !root.contains(active)) return null;
+  const focusable = Array.from(root.querySelectorAll(FOCUSABLE_SELECTOR));
+  const data = {};
+  Object.entries(active.dataset || {}).forEach(([key, value]) => {
+    if (value !== '') data[key] = value;
+  });
+  return {
+    context,
+    node: active,
+    id: active.id || '',
+    tag: active.tagName,
+    data,
+    index: focusable.indexOf(active),
+    selectionStart: typeof active.selectionStart === 'number' ? active.selectionStart : null,
+    selectionEnd: typeof active.selectionEnd === 'number' ? active.selectionEnd : null
+  };
+}
+
+function restoreFocusState(root, snapshot, context) {
+  if (!snapshot || snapshot.context !== context) return false;
+  const focusable = Array.from(root.querySelectorAll(FOCUSABLE_SELECTOR));
+  let target = snapshot.node && snapshot.node.isConnected && root.contains(snapshot.node) ? snapshot.node : null;
+  if (!target && snapshot.id) {
+    const byId = document.getElementById(snapshot.id);
+    if (byId && root.contains(byId)) target = byId;
+  }
+  if (!target) {
+    const keys = Object.keys(snapshot.data || {});
+    target = focusable.find((candidate) => candidate.tagName === snapshot.tag
+      && keys.every((key) => candidate.dataset && candidate.dataset[key] === snapshot.data[key])) || null;
+  }
+  if (!target && snapshot.index >= 0) target = focusable[snapshot.index] || null;
+  if (!target) return false;
+  try { target.focus({ preventScroll: true }); } catch (_) { target.focus(); }
+  if (snapshot.selectionStart !== null && typeof target.setSelectionRange === 'function') {
+    try { target.setSelectionRange(snapshot.selectionStart, snapshot.selectionEnd); } catch (_) {}
+  }
+  return document.activeElement === target;
+}
+
+function captureModalFocus() {
+  return captureFocusState(modalRoot, document.activeElement, renderedModalName || state.modal || '');
+}
+
+function syncModalAccessibility() {
+  const nextName = state.modal || '';
+  const opening = !!nextName && nextName !== renderedModalName;
+  const closing = !nextName && !!renderedModalName;
+  if (opening && !renderedModalName && document.activeElement && !modalRoot.contains(document.activeElement)) {
+    modalRestoreFocus = captureFocusState(appRoot, document.activeElement, state.route);
+  }
+  appRoot.inert = !!nextName;
+  if (nextName) appRoot.setAttribute('aria-hidden', 'true');
+  else appRoot.removeAttribute('aria-hidden');
+  renderedModalName = nextName;
+  return { opening, closing };
+}
+
+function finishModalAccessibility(transition, modalFocus) {
+  if (transition.opening) {
+    const focusTarget = modalRoot.querySelector('[autofocus], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex="0"]');
+    if (focusTarget) {
+      try { focusTarget.focus({ preventScroll: true }); } catch (_) { focusTarget.focus(); }
+    }
+  } else if (transition.closing) {
+    const restore = modalRestoreFocus;
+    modalRestoreFocus = null;
+    restoreFocusState(appRoot, restore, state.route);
+  } else {
+    restoreFocusState(modalRoot, modalFocus, state.modal || '');
+  }
 }
 
 
@@ -125,11 +347,14 @@ function paintMaterialThumbs() {
       canvas.height = 56;
       wrap.appendChild(canvas);
     }
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const w = canvas.width;
-    const h = canvas.height;
-    ctx.clearRect(0, 0, w, h);
+    const surface = prepareHighDensityCanvas(canvas, {
+      fallbackWidth: 56,
+      fallbackHeight: 56
+    });
+    if (!surface) return;
+    const ctx = surface.context;
+    const w = surface.width;
+    const h = surface.height;
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, w, h);
     try {
@@ -146,11 +371,14 @@ function paintBorderThumbs() {
     const id = node.getAttribute('data-border-thumb') || 'simple';
     const canvas = node.querySelector('canvas');
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const w = canvas.width;
-    const h = canvas.height;
-    ctx.clearRect(0, 0, w, h);
+    const surface = prepareHighDensityCanvas(canvas, {
+      fallbackWidth: 72,
+      fallbackHeight: 48
+    });
+    if (!surface) return;
+    const ctx = surface.context;
+    const w = surface.width;
+    const h = surface.height;
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, w, h);
     ctx.strokeStyle = '#000';
@@ -332,8 +560,26 @@ function resolveDocumentForThumb(id, source) {
     const userTemplate = state.userTemplates.find((item) => item.id === id);
     return userTemplate && userTemplate.document ? userTemplate.document : null;
   }
-  const template = templates.find((item) => item.id === id);
-  return template ? templateDocument(template) : null;
+  const template = findRuntimeTemplate(id);
+  return template ? runtimeTemplateDocument(template) : null;
+}
+
+function findRuntimeTemplate(id) {
+  if (!id) return null;
+  const library = getLibraryEntry(id);
+  if (library) {
+    return Object.assign(catalogMeta(library), { document: buildLibraryDocument(id) });
+  }
+  return templates.find((item) => item.id === id)
+    || (state.remoteTemplates || []).find((item) => item.id === id)
+    || state.userTemplates.find((item) => item.id === id)
+    || null;
+}
+
+function runtimeTemplateDocument(template) {
+  if (!template) return null;
+  if (template.document) return cloneDocument(template.document);
+  return templateDocument(template);
 }
 
 function paintTemplateThumbs() {
@@ -346,9 +592,17 @@ function paintTemplateThumbs() {
     const source = node.getAttribute('data-thumb-source') || 'catalog';
     const documentValue = resolveDocumentForThumb(id, source);
     if (!documentValue) return;
+    const rect = typeof node.getBoundingClientRect === 'function'
+      ? node.getBoundingClientRect()
+      : { width: 0, height: 0 };
+    const maxSide = recommendedRasterSide(
+      rect,
+      typeof window !== 'undefined' ? window.devicePixelRatio : 1,
+      { minimum: 400, maximum: 800 }
+    );
     const result = resolveThumb(id, documentValue, {
       dpi,
-      maxSide: 400,
+      maxSide,
       renderDocument,
       images: {}
     });
@@ -368,13 +622,12 @@ async function renderTemplatePreview() {
   const canvas = document.getElementById('template-preview-canvas');
   const status = document.querySelector('[data-role="template-preview-status"]');
   if (!canvas || !state.templatePreviewId) return;
-  const template = templates.find((item) => item.id === state.templatePreviewId)
-    || state.userTemplates.find((item) => item.id === state.templatePreviewId);
+  const template = findRuntimeTemplate(state.templatePreviewId);
   if (!template) {
     if (status) status.textContent = '模板不存在';
     return;
   }
-  const documentValue = template.document || templateDocument(template);
+  const documentValue = runtimeTemplateDocument(template);
   const profile = currentProfile();
   try {
     if (status) status.textContent = '正在渲染预览…';
@@ -388,7 +641,8 @@ async function renderTemplatePreview() {
     const context = canvas.getContext('2d');
     context.fillStyle = '#ffffff';
     context.fillRect(0, 0, size.width, size.height);
-    renderDocument(context, documentValue, size, profile.dpi, {});
+    await loadDocumentImages(documentValue);
+    renderDocument(context, documentValue, size, profile.dpi, state.images);
     canvas.hidden = false;
     if (status) status.hidden = true;
   } catch (error) {
@@ -403,9 +657,7 @@ async function renderTemplatePreview() {
 
 function previewTemplate(id) {
   if (!id) return;
-  const exists = templates.some((item) => item.id === id)
-    || state.userTemplates.some((item) => item.id === id);
-  if (!exists) {
+  if (!findRuntimeTemplate(id)) {
     toast('找不到该模板', 'error');
     return;
   }
@@ -434,7 +686,7 @@ function openHistoryDocument(item, andPrint) {
     const project = state.projects.find((entry) => entry.id === item.projectId);
     if (project && project.document) {
       documentValue = cloneDocument(project.document);
-      openDocument(state, documentValue, project.id);
+      openEditorDocument(documentValue, project.id);
       state.modal = '';
       render();
       if (andPrint) {
@@ -447,7 +699,7 @@ function openHistoryDocument(item, andPrint) {
     toast('该记录没有可打开的标签快照', 'error');
     return;
   }
-  openDocument(state, documentValue, item.projectId || '');
+  openEditorDocument(documentValue, item.projectId || '');
   state.modal = '';
   render();
   if (andPrint) {
@@ -474,7 +726,7 @@ function bindElementPager() {
 }
 
 function currentProfile() {
-  return getProfile(state.settings.defaultProfileId);
+  return getProfile(state.device && state.device.profileId || state.settings.defaultProfileId);
 }
 
 function imageForElement(element) {
@@ -484,18 +736,38 @@ function imageForElement(element) {
   const token = imageCache.begin(element);
   return new Promise((resolve) => {
     const image = new Image();
-    image.onload = () => {
-      resolve(imageCache.accept(state.images, element, token, image) ? image : null);
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutHandle);
+      resolve(value);
     };
-    image.onerror = () => resolve(null);
+    const timeoutHandle = setTimeout(() => {
+      image.onload = null;
+      image.onerror = null;
+      imageCache.invalidate(state.images, element.id);
+      finish(null);
+    }, IMAGE_LOAD_TIMEOUT_MS);
+    image.onload = () => {
+      finish(imageCache.accept(state.images, element, token, image) ? image : null);
+    };
+    image.onerror = () => finish(null);
+    if (/^https?:\/\//i.test(String(element.path))) image.crossOrigin = 'anonymous';
     image.src = element.path;
   });
 }
 
 async function loadDocumentImages(documentValue) {
   const source = documentValue || state.document;
-  if (!source) return;
-  await Promise.all(source.elements.map(imageForElement));
+  if (!source) return [];
+  const required = (source.elements || []).filter((element) => (
+    ['image', 'material'].includes(element.type) && element.path
+  ));
+  return Promise.all(required.map(async (element) => ({
+    element,
+    image: await imageForElement(element)
+  })));
 }
 
 function reconcileDocumentImageCache(documentValue) {
@@ -512,7 +784,7 @@ function reconcileDocumentImageCache(documentValue) {
   });
 }
 
-function drawEditorCanvas() {
+function paintEditorCanvas() {
   if (!canvasState || !state.document) return;
   renderDocument(canvasState.context, state.document, canvasState.size, canvasState.profile.dpi, state.images);
   const guides = (canvasState.drag && canvasState.drag.guides) || [];
@@ -524,6 +796,22 @@ function drawEditorCanvas() {
     guides
   );
   positionFloatChrome();
+}
+
+function refreshEditorFonts() {
+  if (refreshEditorFonts.inFlight || !state.document) return;
+  refreshEditorFonts.inFlight = true;
+  ensureDocumentFonts(state.document).then((result) => {
+    refreshEditorFonts.inFlight = false;
+    if (result && result.newlyLoaded) paintEditorCanvas();
+  }, () => {
+    refreshEditorFonts.inFlight = false;
+  });
+}
+
+function drawEditorCanvas() {
+  paintEditorCanvas();
+  refreshEditorFonts();
 }
 
 /** reason: 'add' | 'select' | 'content' */
@@ -540,7 +828,7 @@ function preferredPanelTabForElement(element, reason) {
   return 'style';
 }
 
-const MOVE_DEADZONE_MM = 0.4;
+const MOVE_DEADZONE_PX = Object.freeze({ touch: 8, pen: 8, mouse: 3 });
 
 /** Types that use system-keyboard content bar (compact shell). */
 function isKeyboardContentType(type) {
@@ -624,6 +912,7 @@ function applySelectionState(ids, options) {
   if (state.editorMode === 'content' && opts.reason !== 'content') finalizeContentUndo();
   state.selectedIds = valid;
   state.selectedId = valid[valid.length - 1] || '';
+  if (previousSelectedId && state.selectedId && previousSelectedId !== state.selectedId) haptic(8);
   if (previousSelectedId !== state.selectedId || valid.length > 1) state.textDirectionOpen = false;
   state.editorMode = 'selected';
   state.panelCollapsed = false;
@@ -906,18 +1195,33 @@ function localPoint(element, point) {
   };
 }
 
-function selectionHandle(element, point) {
+function selectionHandle(element, point, pointerType) {
   const local = localPoint(element, point);
-  // Tight hit radius so body drag is not stolen by E/S/rotate (esp. short text content box)
-  const radius = 0.85;
   const h = typeof contentHandleLocalMm === 'function'
     ? contentHandleLocalMm(element)
     : { e: { x: element.width / 2, y: 0 }, s: { x: 0, y: element.height / 2 }, se: { x: element.width / 2, y: element.height / 2 } };
-  // Hit-test matches drawn handles on content-fitted box
-  if (Math.abs(local.x - h.se.x) <= radius && Math.abs(local.y - h.se.y) <= radius) return 'rotate';
-  if (Math.abs(local.x - h.e.x) <= radius && Math.abs(local.y - h.e.y) <= radius) return 'e';
-  if (Math.abs(local.x - h.s.x) <= radius && Math.abs(local.y - h.s.y) <= radius) return 's';
-  return '';
+  const rect = canvasState && canvasState.selection && canvasState.selection.getBoundingClientRect();
+  const pxPerMmX = rect && rect.width ? rect.width / Math.max(0.1, state.document.widthMm) : 1;
+  const pxPerMmY = rect && rect.height ? rect.height / Math.max(0.1, state.document.heightMm) : pxPerMmX;
+  // The content itself gets first refusal. On sub-4 mm elements the three
+  // 44 px handle targets overlap; without this guard a centre tap rotates or
+  // resizes instead of selecting/moving the item.
+  const contentLeft = 2 * h.s.x - h.e.x;
+  const contentTop = 2 * h.e.y - h.s.y;
+  if (local.x > contentLeft && local.x < h.e.x
+    && local.y > contentTop && local.y < h.s.y) return '';
+  // Use an outward-shifted 44 px touch target and the nearest visual handle.
+  const candidates = [
+    ['rotate', h.se],
+    ['e', h.e],
+    ['s', h.s]
+  ].map(([name, handle]) => {
+    const deltaX = (local.x - handle.x) * pxPerMmX;
+    const deltaY = (local.y - handle.y) * pxPerMmY;
+    return { name, deltaX, deltaY, distance: Math.hypot(deltaX, deltaY) };
+  }).filter((candidate) => handleHitRegion(candidate.name, candidate.deltaX, candidate.deltaY, pointerType))
+    .sort((a, b) => a.distance - b.distance);
+  return candidates.length ? candidates[0].name : '';
 }
 
 function bindCanvasGestures(selection) {
@@ -937,10 +1241,25 @@ function bindCanvasGestures(selection) {
       return;
     }
     const point = pointerToMm(event);
-    const active = selectedElement(state);
-    const activeHandle = selectedItems().length === 1 && active && !active.locked ? selectionHandle(active, point) : '';
-    const element = activeHandle ? active : hitTest(state.document, point.x, point.y);
     const currentIds = Array.isArray(state.selectedIds) ? state.selectedIds : [];
+    const active = selectedElement(state);
+    const activeHandle = selectedItems().length === 1 && active && !active.locked ? selectionHandle(active, point, event.pointerType) : '';
+    const hitDecision = activeHandle
+      ? { element: active, candidateIds: active ? [active.id] : [], cycleOnTap: false }
+      : selectionHitDecision(
+        hitTestAll(
+          state.document,
+          point.x,
+          point.y,
+          selectionTargetSizeMm(
+            state.document,
+            canvasState.selection.getBoundingClientRect(),
+            event.pointerType || 'mouse'
+          )
+        ),
+        state.multiSelect || event.shiftKey || currentIds.length !== 1 ? '' : currentIds[0]
+      );
+    const element = hitDecision.element;
 
     // Multi / shift: add unselected; re-tap selected removes
     if (element && (state.multiSelect || event.shiftKey) && !activeHandle) {
@@ -974,7 +1293,7 @@ function bindCanvasGestures(selection) {
     // Already-selected BEFORE this gesture? Handles only then; first press = move.
     const singleAlready = currentIds.length === 1 && currentIds[0] === element.id;
     const handleNow = (singleAlready && !element.locked)
-      ? (activeHandle || selectionHandle(element, point) || "")
+      ? (activeHandle || selectionHandle(element, point, event.pointerType) || "")
       : "";
 
     // Soft-select: do not remount float/panel mid-pointerdown (breaks drag on WebView).
@@ -989,11 +1308,18 @@ function bindCanvasGestures(selection) {
       if (canvasState) canvasState.pendingChrome = true;
     }
 
+    const contentTapEligible = ["text", "barcode", "qrcode", "date", "serial"].includes(element.type);
+    const cycleOnTap = shouldCycleSelectionOnTap(hitDecision, {
+      pointerType: event.pointerType || 'mouse',
+      contentTapEligible,
+      alternateKey: event.altKey
+    });
     const tapToContent = singleAlready
       && !element.locked
       && !handleNow
+      && !cycleOnTap
       && state.editorMode === "selected"
-      && ["text", "barcode", "qrcode", "date", "serial"].includes(element.type);
+      && contentTapEligible;
 
     const mode = element.locked ? "locked" : (handleNow || "move");
     const fitSnapshot = handleNow && element._fit ? { ...element._fit } : null;
@@ -1007,6 +1333,7 @@ function bindCanvasGestures(selection) {
       startY: point.y,
       clientStartX: event.clientX,
       clientStartY: event.clientY,
+      pointerType: event.pointerType || 'mouse',
       mode,
       handle: mode,
       originals,
@@ -1015,6 +1342,8 @@ function bindCanvasGestures(selection) {
       moved: false,
       passedDeadzone: mode !== "move",
       tapToContent,
+      cycleCandidateIds: hitDecision.candidateIds,
+      cycleOnTap: !activeHandle && !state.multiSelect && !event.shiftKey && cycleOnTap,
       longPressBaseIds: currentIds.slice(),
       fitSnapshot,
       fitNormalized: false,
@@ -1097,7 +1426,12 @@ function bindCanvasGestures(selection) {
 
     // Dead zone: tiny finger jitter does not start a move (prevents "tap but shifted")
     if (drag.mode === 'move' && !drag.passedDeadzone) {
-      if (Math.hypot(deltaX, deltaY) < MOVE_DEADZONE_MM) return;
+      const clientDistance = Math.hypot(
+        event.clientX - drag.clientStartX,
+        event.clientY - drag.clientStartY
+      );
+      const threshold = MOVE_DEADZONE_PX[drag.pointerType] || MOVE_DEADZONE_PX.mouse;
+      if (clientDistance < threshold) return;
       drag.passedDeadzone = true;
     }
 
@@ -1161,7 +1495,19 @@ function bindCanvasGestures(selection) {
     event.preventDefault();
     if (!state.document) return;
     const point = pointerToMm(event);
-    const element = hitTest(state.document, point.x, point.y);
+    const element = selectionHitDecision(
+      hitTestAll(
+        state.document,
+        point.x,
+        point.y,
+        selectionTargetSizeMm(
+          state.document,
+          canvasState.selection.getBoundingClientRect(),
+          event.pointerType || 'mouse'
+        )
+      ),
+      state.selectedId
+    ).element;
     if (!element) {
       state.zoom = 100;
       if (canvasState.zoomFrame) canvasState.zoomFrame.style.width = '100%';
@@ -1169,7 +1515,22 @@ function bindCanvasGestures(selection) {
       if (label) label.textContent = '100%';
       return;
     }
-    if (['text', 'serial', 'barcode', 'qrcode', 'table', 'date'].includes(element.type)) {
+    if (element.type === 'table') {
+      const local = localPoint(element, point);
+      const columns = Math.max(1, Number(element.columns) || 1);
+      const rows = Math.max(1, Number(element.rows) || 1);
+      const column = Math.max(0, Math.min(columns - 1, Math.floor((local.x + element.width / 2) / Math.max(0.001, element.width) * columns)));
+      const row = Math.max(0, Math.min(rows - 1, Math.floor((local.y + element.height / 2) / Math.max(0.001, element.height) * rows)));
+      const cellIndex = row * columns + column;
+      enterContentMode(element);
+      requestAnimationFrame(() => {
+        const input = document.querySelector(`[data-action="update-table-cell"][data-index="${cellIndex}"]`);
+        if (input) {
+          input.focus();
+          input.select();
+        }
+      });
+    } else if (['text', 'serial', 'barcode', 'qrcode', 'date'].includes(element.type)) {
       enterContentMode(element);
     } else {
       enterSelectedMode([element.id], { reason: 'select', tab: 'style' });
@@ -1195,12 +1556,19 @@ function finishCanvasGesture(event) {
     state.redo = [];
     autosave();
   }
-  const openContent = !drag.moved && drag.tapToContent && !state.multiSelect;
+  const cycleTargetId = !drag.moved && !drag.longPressed && drag.cycleOnTap && !state.multiSelect
+    ? nextSelectionId(drag.cycleCandidateIds, state.selectedId)
+    : '';
+  const openContent = !cycleTargetId && !drag.moved && drag.tapToContent && !state.multiSelect;
   if (drag) drag.guides = [];
   const needChrome = !!(canvasState && canvasState.pendingChrome);
   if (canvasState) {
     canvasState.drag = null;
     canvasState.pendingChrome = false;
+  }
+  if (cycleTargetId) {
+    enterSelectedMode([cycleTargetId], { reason: 'select' });
+    return;
   }
   if (openContent) {
     enterContentMode(selectedElement(state));
@@ -1284,9 +1652,11 @@ function patchActiveStyleControls() {
     btn.classList.toggle('active', !!el[field]);
   });
   document.querySelectorAll('.niim-color-dot[data-value]').forEach((btn) => {
+    const field = btn.dataset.field;
     const reverse = btn.dataset.reverse === '1';
-    const match = (el.color || '#000000').toUpperCase() === String(btn.dataset.value || '').toUpperCase()
-      && !!el.reverse === reverse;
+    const currentColor = field ? el[field] : el.color;
+    const match = (currentColor || '#000000').toUpperCase() === String(btn.dataset.value || '').toUpperCase()
+      && (field ? true : !!el.reverse === reverse);
     btn.classList.toggle('active', match);
   });
   document.querySelectorAll('.niim-align-t[data-action="set-align"]').forEach((btn) => {
@@ -1346,20 +1716,29 @@ function createBlankLabel() {
   const documentValue = createDocument(width, height);
   documentValue.elements = [];
   documentValue.name = '未命名标签';
-  openDocument(state, documentValue);
+  openEditorDocument(documentValue);
+  state.blankDraftBaseline = JSON.stringify(state.document);
   render();
 }
 
 function documentFromTemplateId(id) {
-  const template = templates.find((item) => item.id === id);
-  if (template) return templateDocument(template);
-  const userTemplate = state.userTemplates.find((item) => item.id === id);
-  if (userTemplate && userTemplate.document) return cloneDocument(userTemplate.document);
+  const template = findRuntimeTemplate(id);
+  if (template) return runtimeTemplateDocument(template);
   return templateDocument(templates[0]);
 }
 
+function resolveBatchTemplate(id) {
+  const requested = findRuntimeTemplate(id);
+  const fallback = findRuntimeTemplate('product-simple');
+  return resolveBatchCompatibleTemplate(
+    [requested, fallback, ...templates],
+    id,
+    'product-simple'
+  );
+}
+
 function openTemplate(id) {
-  openDocument(state, documentFromTemplateId(id));
+  openEditorDocument(documentFromTemplateId(id));
   // Keep the editor landing state idle. `openDocument` selects the first
   // element for its state-level contract; the UI template flow starts with
   // the add-elements panel and lets the first tap select the canvas item.
@@ -1403,26 +1782,31 @@ function openStockSheet() {
     state.stockWidthMm = state.document.widthMm;
     state.stockHeightMm = state.document.heightMm;
   } else {
-    state.stockWidthMm = state.settings.defaultWidthMm || 50;
-    state.stockHeightMm = state.settings.defaultHeightMm || 30;
+    state.stockWidthMm = state.settings.defaultWidthMm || 40;
+    state.stockHeightMm = state.settings.defaultHeightMm || 12;
   }
   state.stockApplyCurrent = true;
+  state.stockLabelType = Number(state.settings.labelType) || 1;
+  state.stockRotationTurns = 0;
   state.modal = 'stock';
   renderModalOnly();
 }
 
 function applyStock() {
-  const width = Math.max(5, Math.min(200, Number(state.stockWidthMm) || 50));
-  const height = Math.max(5, Math.min(200, Number(state.stockHeightMm) || 30));
+  const width = Math.max(5, Math.min(200, Number(state.stockWidthMm) || 40));
+  const height = Math.max(5, Math.min(200, Number(state.stockHeightMm) || 12));
   const profile = currentProfile();
   state.settings.defaultWidthMm = width;
   state.settings.defaultHeightMm = height;
+  state.settings.labelType = Math.max(1, Math.min(4, Number(state.stockLabelType) || 1));
   state.settings.installedStock = stockLabel(width, height, profile.dpi);
   persistSettings(state);
 
   state.modal = '';
   if (state.route === 'editor' && state.document && state.stockApplyCurrent !== false) {
     commit((documentValue) => {
+      const turns = Math.max(0, Math.min(3, Number(state.stockRotationTurns) || 0));
+      for (let turn = 0; turn < turns; turn += 1) rotateDocumentValue(documentValue);
       applySizeToDocument(documentValue, width, height);
     });
     toast(`已应用 ${width}×${height} mm`);
@@ -1436,6 +1820,15 @@ function openBatchSheet() {
   if (!state.dataRows.length) {
     toast('请先添加或导入批量数据', 'error');
     return;
+  }
+  const batchTemplate = resolveBatchTemplate(state.settings.batchTemplateId);
+  if (!batchTemplate) {
+    toast('暂无支持批量数据的模板', 'error');
+    return;
+  }
+  if (state.settings.batchTemplateId !== batchTemplate.id) {
+    state.settings.batchTemplateId = batchTemplate.id;
+    persistSettings(state);
   }
   state.batchSelectedRows = state.dataRows.map((_, index) => index);
   state.batchMode = state.batchMode || 'open-first';
@@ -1452,12 +1845,26 @@ function runBatch() {
     toast('请至少选择一行数据', 'error');
     return;
   }
-  const templateId = state.settings.batchTemplateId || templates[0].id;
+  const batchTemplate = resolveBatchTemplate(state.settings.batchTemplateId);
+  if (!batchTemplate) {
+    toast('暂无支持批量数据的模板', 'error');
+    return;
+  }
+  if (state.settings.batchTemplateId !== batchTemplate.id) {
+    state.settings.batchTemplateId = batchTemplate.id;
+    persistSettings(state);
+  }
   const picked = selected.map((index) => rows[index]);
-  const documents = buildDocumentsFromRows(
-    () => documentFromTemplateId(templateId),
-    picked
-  );
+  let documents;
+  try {
+    documents = buildDocumentsFromRows(
+      () => runtimeTemplateDocument(batchTemplate),
+      picked
+    );
+  } catch (error) {
+    toast(`批量生成失败：${error.message}`, 'error');
+    return;
+  }
   if (state.batchMode === 'projects') {
     const now = Date.now();
     const projects = documents.map((documentValue, index) => ({
@@ -1465,7 +1872,7 @@ function runBatch() {
       updatedAt: now - index,
       document: documentValue
     }));
-    state.projects = [...projects, ...state.projects].slice(0, 80);
+    state.projects = [...projects, ...state.projects];
     try {
       write(KEYS.projects, state.projects);
     } catch (error) {
@@ -1478,7 +1885,21 @@ function runBatch() {
     toast(`已生成 ${projects.length} 个标签项目`);
     return;
   }
-  openDocument(state, documents[0]);
+  removeClosedEditorMenu();
+  if (state.batchMode === 'print') {
+    openEditorDocument(documents[0]);
+    state.pendingBatchDocuments = documents.map((documentValue) => cloneDocument(documentValue));
+    state.pendingBatchIndex = 0;
+    state.modal = 'print';
+    state.printBlock = evaluatePrintBlock();
+    state.printError = null;
+    render();
+    toast(`已建立 ${documents.length} 张连续打印任务`);
+    return;
+  }
+  state.pendingBatchDocuments = [];
+  state.pendingBatchIndex = 0;
+  openEditorDocument(documents[0]);
   state.modal = '';
   render();
   toast(documents.length > 1
@@ -1489,33 +1910,171 @@ function runBatch() {
 function openProject(id) {
   const project = state.projects.find((item) => item.id === id);
   if (!project) return;
-  openDocument(state, project.document, project.id);
+  openEditorDocument(project.document, project.id);
   render();
+}
+
+function openEditorDocument(documentValue, projectId) {
+  if (state.route && state.route !== 'editor') {
+    state.editorReturnRoute = state.route;
+    state.editorReturnScrollY = Math.max(0, Number(window.scrollY) || 0);
+  }
+  const sourceProject = projectId ? state.projects.find((item) => item.id === projectId) : null;
+  state.pendingBatchDocuments = [];
+  state.pendingBatchIndex = 0;
+  state.dataReturnToEditor = false;
+  openDocument(state, documentValue, projectId);
+  state.editorBaselineDocument = cloneDocument(state.document);
+  state.editorBaselineProjectId = projectId || '';
+  state.editorBaselineProject = sourceProject
+    ? { ...sourceProject, document: cloneDocument(sourceProject.document) }
+    : null;
 }
 
 function saveProject(showMessage) {
   try {
     const project = upsertProject(state);
+    if (project) {
+      state.editorBaselineDocument = cloneDocument(state.document);
+      state.editorBaselineProjectId = project.id;
+      state.editorBaselineProject = { ...project, document: cloneDocument(project.document) };
+    }
     if (project && showMessage !== false) toast('标签已保存');
     render();
+    return project;
   } catch (error) {
     toast('保存失败：本地存储空间不足', 'error');
+    return null;
   }
 }
 
-function closeEditor() {
-  try {
-    if (state.document) upsertProject(state);
-  } catch (error) {
-    toast('保存失败：请清理本地空间后再退出', 'error');
+function needsDocumentName() {
+  const name = String(state.document && state.document.name || '').trim();
+  return !name || name === '未命名标签';
+}
+
+function openDocumentNameSheet(exitAfterSave) {
+  if (!state.document) return;
+  state.documentNameDraft = needsDocumentName() ? '' : state.document.name;
+  state.documentNameExitAfterSave = !!exitAfterSave;
+  state.editorMenu = false;
+  state.modal = 'rename-document';
+  renderModalOnly();
+  requestAnimationFrame(() => {
+    const input = document.getElementById('document-name-input');
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  });
+}
+
+function requestSaveProject(exitAfterSave) {
+  if (needsDocumentName()) {
+    openDocumentNameSheet(exitAfterSave);
     return;
   }
-  state.route = 'home';
+  const saved = saveProject(exitAfterSave ? false : undefined);
+  if (saved && exitAfterSave) exitEditorNow();
+}
+
+function confirmDocumentName() {
+  const name = String(state.documentNameDraft || '').trim();
+  if (!name) {
+    toast('请输入标签名称', 'error');
+    const input = document.getElementById('document-name-input');
+    if (input) input.focus();
+    return;
+  }
+  const exitAfterSave = state.documentNameExitAfterSave;
+  state.documentNameExitAfterSave = false;
+  state.modal = '';
+  state.document.name = name;
+  const saved = saveProject(false);
+  if (!saved) {
+    state.modal = 'rename-document';
+    renderModalOnly();
+    return;
+  }
+  if (exitAfterSave) exitEditorNow();
+  else {
+    render();
+    toast('名称已保存');
+  }
+}
+
+function editorHasUnsavedChanges() {
+  if (!state.document || !state.editorBaselineDocument) return !!state.document;
+  return JSON.stringify(state.document) !== JSON.stringify(state.editorBaselineDocument);
+}
+
+function discardAutosavedProjectChanges() {
+  const baselineId = state.editorBaselineProjectId || '';
+  const currentId = state.projectId || '';
+  let next = state.projects.slice();
+  if (!baselineId && currentId) {
+    next = next.filter((item) => item.id !== currentId);
+  } else if (baselineId && state.editorBaselineProject) {
+    const restored = {
+      ...state.editorBaselineProject,
+      document: cloneDocument(state.editorBaselineProject.document)
+    };
+    const index = next.findIndex((item) => item.id === baselineId);
+    if (index >= 0) next[index] = restored;
+    else next.unshift(restored);
+    if (currentId && currentId !== baselineId) next = next.filter((item) => item.id !== currentId);
+  }
+  write(KEYS.projects, next);
+  state.projects = next;
+}
+
+function exitEditorNow() {
+  const returnRoute = state.editorReturnRoute && state.editorReturnRoute !== 'editor'
+    ? state.editorReturnRoute
+    : 'home';
+  const returnScrollY = Math.max(0, Number(state.editorReturnScrollY) || 0);
+  state.route = returnRoute;
   state.document = null;
   state.selectedId = '';
   state.selectedIds = [];
+  state.blankDraftBaseline = '';
+  state.editorBaselineDocument = null;
+  state.editorBaselineProject = null;
+  state.editorBaselineProjectId = '';
+  state.modal = '';
   canvasState = null;
   render();
+  requestAnimationFrame(() => {
+    if (state.route === returnRoute) window.scrollTo(0, returnScrollY);
+  });
+}
+
+function closeEditor() {
+  if (!state.document) return;
+  if (!editorHasUnsavedChanges()) {
+    exitEditorNow();
+    return;
+  }
+  state.modal = 'exit-editor';
+  renderModalOnly();
+}
+
+function saveAndCloseEditor() {
+  requestSaveProject(true);
+}
+
+function discardAndCloseEditor() {
+  try {
+    discardAutosavedProjectChanges();
+  } catch (error) {
+    toast('无法恢复到打开前的版本，请先清理本地空间', 'error');
+    return;
+  }
+  exitEditorNow();
+}
+
+function shouldPersistEditorDraft() {
+  return shouldPersistDraft(state.document, state.projectId, state.blankDraftBaseline);
 }
 
 function undo() {
@@ -1555,16 +2114,32 @@ function redo() {
 function chooseFile(accept, capture) {
   return new Promise((resolve) => {
     const input = document.createElement('input');
+    let settled = false;
+    let focusTimer = null;
     input.type = 'file';
     input.accept = accept || '*/*';
     if (capture) input.capture = capture;
     input.style.display = 'none';
-    input.onchange = () => {
-      resolve(input.files && input.files[0] ? input.files[0] : null);
+    const finish = (file) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(focusTimer);
+      window.removeEventListener('focus', onWindowFocus, true);
       input.remove();
+      resolve(file || null);
     };
+    const onWindowFocus = () => {
+      // Some Android WebViews do not emit the input `cancel` event. Give a
+      // pending `change` event one frame to arrive, then settle as cancelled.
+      focusTimer = setTimeout(() => {
+        if (!settled && !(input.files && input.files.length)) finish(null);
+      }, 250);
+    };
+    input.addEventListener('change', () => finish(input.files && input.files[0]), { once: true });
+    input.addEventListener('cancel', () => finish(null), { once: true });
+    window.addEventListener('focus', onWindowFocus, true);
     document.body.appendChild(input);
-    input.click();
+    try { input.click(); } catch (_) { finish(null); }
   });
 }
 
@@ -1641,6 +2216,216 @@ async function addImage(replace, capture) {
   }
 }
 
+function stopBarcodeScanner() {
+  barcodeScannerStarting = false;
+  if (barcodeScannerControls) {
+    try { barcodeScannerControls.stop(); } catch (_) {}
+    barcodeScannerControls = null;
+  }
+  try { BrowserCodeReader.releaseAllStreams(); } catch (_) {}
+  const video = document.getElementById('barcode-scanner-video');
+  if (video) {
+    try { video.pause(); } catch (_) {}
+    video.srcObject = null;
+  }
+}
+
+function scannerFriendlyError(error) {
+  const raw = String(error && (error.message || error.name) || '');
+  if (/permission|denied|notallowed|权限/i.test(raw)) return '未获得相机权限。可在系统设置中允许相机，或改用拍照、相册和手动输入。';
+  if (/notfound|devicesnotfound|no camera|找不到/i.test(raw)) return '没有找到可用相机。可改用相册识别或手动输入。';
+  if (/notreadable|trackstart|could not start/i.test(raw)) return '相机正被其他应用占用，请关闭其他相机应用后重试。';
+  return '无法打开实时相机。可改用拍照、相册或手动输入。';
+}
+
+function scanFormatName(format) {
+  const numeric = Number(format);
+  if (numeric === BarcodeFormat.QR_CODE) return 'qrcode';
+  if (numeric === BarcodeFormat.EAN_13) return 'ean13';
+  if (numeric === BarcodeFormat.UPC_A) return 'upca';
+  if (numeric === BarcodeFormat.UPC_E) return 'upce';
+  if (numeric === BarcodeFormat.CODE_128) return 'code128';
+  return 'code128';
+}
+
+function scanResultText(result) {
+  if (!result) return '';
+  if (typeof result.getText === 'function') return String(result.getText() || '');
+  return String(result.text || '');
+}
+
+function scanResultFormat(result) {
+  if (!result) return '';
+  const format = typeof result.getBarcodeFormat === 'function' ? result.getBarcodeFormat() : result.format;
+  return scanFormatName(format);
+}
+
+function applyScannedValue(value, detectedFormat) {
+  const text = String(value == null ? '' : value).trim();
+  if (!text) {
+    toast('没有识别到有效内容', 'error');
+    return false;
+  }
+  const targetId = state.scanTargetId;
+  const targetType = detectedFormat === 'qrcode' ? 'qrcode' : (state.scanCreateType || 'barcode');
+  stopBarcodeScanner();
+  state.modal = '';
+  state.scanStatus = 'done';
+  state.scanError = '';
+  commit((documentValue) => {
+    let element = targetId
+      ? documentValue.elements.find((item) => item.id === targetId && ['barcode', 'qrcode'].includes(item.type))
+      : null;
+    if (!element) {
+      element = createElement(targetType, documentValue);
+      placeNewElement(element, documentValue);
+      documentValue.elements.push(element);
+    }
+    element.value = text;
+    element.requiresInput = false;
+    delete element.requiresInputReason;
+    delete element.invalidCode;
+    delete element.codeValidationMessage;
+    if (element.type === 'barcode') {
+      element.format = ['ean13', 'upca', 'upce', 'code128'].includes(detectedFormat) ? detectedFormat : 'code128';
+      element.formatChangedByUser = true;
+      delete element.unsupportedCodeType;
+      delete element.requiresFormatConfirmation;
+    }
+    state.selectedIds = [element.id];
+    state.selectedId = element.id;
+    state.editorMode = 'selected';
+    state.editorPanelTab = 'content';
+    state.panelCollapsed = false;
+  });
+  haptic([12, 30, 12]);
+  toast('识别成功，内容已回填');
+  return true;
+}
+
+async function startLiveScanner() {
+  if (state.modal !== 'scan-code' || barcodeScannerControls || barcodeScannerStarting) return;
+  const video = document.getElementById('barcode-scanner-video');
+  if (!video || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    state.scanStatus = 'fallback';
+    state.scanError = '当前环境不支持实时取景。可使用拍照、相册或手动输入。';
+    renderModalOnly();
+    return;
+  }
+  barcodeScannerStarting = true;
+  state.scanStatus = 'starting';
+  state.scanError = '';
+  try {
+    const reader = new BrowserMultiFormatReader(undefined, {
+      delayBetweenScanAttempts: 120,
+      delayBetweenScanSuccess: 500
+    });
+    const controls = await reader.decodeFromVideoDevice(undefined, video, (result) => {
+      if (!result || state.modal !== 'scan-code' || state.scanStatus === 'found') return;
+      const value = scanResultText(result);
+      if (!value) return;
+      state.scanStatus = 'found';
+      applyScannedValue(value, scanResultFormat(result));
+    });
+    if (state.modal !== 'scan-code') {
+      controls.stop();
+      return;
+    }
+    barcodeScannerControls = controls;
+    state.scanStatus = 'scanning';
+    const statusNode = modalRoot.querySelector('.scanner-status');
+    if (statusNode) statusNode.textContent = '请将条码放入取景框';
+  } catch (error) {
+    stopBarcodeScanner();
+    if (state.modal !== 'scan-code') return;
+    state.scanStatus = 'fallback';
+    state.scanError = scannerFriendlyError(error);
+    renderModalOnly();
+  } finally {
+    barcodeScannerStarting = false;
+  }
+}
+
+function openCodeScanner(createType) {
+  stopBarcodeScanner();
+  const selected = selectedElement(state);
+  state.scanTargetId = selected && ['barcode', 'qrcode'].includes(selected.type) ? selected.id : '';
+  state.scanCreateType = state.scanTargetId ? selected.type : (createType || 'barcode');
+  state.scanStatus = 'starting';
+  state.scanError = '';
+  state.scanManualValue = '';
+  state.scanDetectedFormat = '';
+  state.modal = 'scan-code';
+  renderModalOnly();
+  requestAnimationFrame(startLiveScanner);
+}
+
+async function decodeScanImage(dataUrl) {
+  if (!dataUrl) throw new Error('没有读取到图片');
+  const reader = new BrowserMultiFormatReader();
+  const result = await reader.decodeFromImageUrl(dataUrl);
+  return {
+    value: scanResultText(result),
+    format: scanResultFormat(result)
+  };
+}
+
+async function pickScanImage(source) {
+  stopBarcodeScanner();
+  state.scanStatus = 'decoding';
+  state.scanError = '';
+  const stage = modalRoot.querySelector('.scanner-stage');
+  if (stage) stage.setAttribute('aria-busy', 'true');
+  try {
+    let dataUrl = '';
+    if (Capacitor.isNativePlatform()) {
+      const photo = await Camera.getPhoto({
+        quality: 92,
+        allowEditing: false,
+        resultType: CameraResultType.DataUrl,
+        source: source === 'camera' ? CameraSource.Camera : CameraSource.Photos,
+        correctOrientation: true,
+        webUseInput: true,
+        promptLabelHeader: '识别条码',
+        promptLabelCancel: '取消',
+        promptLabelPhoto: '从相册选择',
+        promptLabelPicture: '拍照'
+      });
+      dataUrl = photo.dataUrl || '';
+    } else {
+      const file = await chooseFile('image/png,image/jpeg,image/webp', source === 'camera' ? 'environment' : '');
+      if (!file) {
+        if (state.modal === 'scan-code') {
+          state.scanStatus = 'starting';
+          state.scanError = '';
+          renderModalOnly();
+          requestAnimationFrame(startLiveScanner);
+        }
+        return;
+      }
+      if (file.size > 12 * 1024 * 1024) throw new Error('图片不能超过 12 MB');
+      dataUrl = await readFile(file, 'data-url');
+    }
+    const result = await decodeScanImage(dataUrl);
+    applyScannedValue(result.value, result.format);
+  } catch (error) {
+    if (/cancel|canceled|cancelled|取消/i.test(String(error && error.message || ''))) {
+      if (state.modal === 'scan-code') {
+        state.scanStatus = 'starting';
+        state.scanError = '';
+        renderModalOnly();
+        requestAnimationFrame(startLiveScanner);
+      }
+      return;
+    }
+    state.scanStatus = 'fallback';
+    state.scanError = /notfoundexception|no multiformat readers/i.test(String(error && (error.name || error.message) || ''))
+      ? '图片中没有识别到清晰的条码或二维码，请重新拍摄并避免反光。'
+      : scannerFriendlyError(error);
+    if (state.modal === 'scan-code') renderModalOnly();
+  }
+}
+
 function download(name, contents, type) {
   const blob = contents instanceof Blob ? contents : new Blob([contents], { type: type || 'application/octet-stream' });
   const url = URL.createObjectURL(blob);
@@ -1664,7 +2449,7 @@ async function importProject() {
       || !Array.isArray(documentValue.elements)) {
       throw new Error('项目文件格式无效');
     }
-    openDocument(state, documentValue);
+    openEditorDocument(documentValue);
     render();
   } catch (error) {
     toast(error.message, 'error');
@@ -1708,7 +2493,9 @@ function persistUserTemplates(next) {
 
 function renameUserTemplate(id) {
   const input = document.getElementById('rename-template');
+  const folderInput = document.getElementById('rename-template-folder');
   const name = (input && input.value ? input.value : '').trim();
+  const folder = (folderInput && folderInput.value ? folderInput.value : '未分类').trim() || '未分类';
   if (!name) {
     toast('名称不能为空', 'error');
     return;
@@ -1717,7 +2504,7 @@ function renameUserTemplate(id) {
     if (item.id !== id) return item;
     const documentValue = item.document ? cloneDocument(item.document) : item.document;
     if (documentValue) documentValue.name = name;
-    return Object.assign({}, item, { name, document: documentValue });
+    return Object.assign({}, item, { name, folder, document: documentValue });
   });
   try {
     persistUserTemplates(next);
@@ -1789,6 +2576,8 @@ async function connectDevice(deviceId) {
       throw new Error(`型号 ID ${details.modelId == null ? '未知' : details.modelId} 尚未配置打印参数`);
     }
     state.settings.defaultProfileId = profile.id;
+    state.settings.lastDeviceId = device.deviceId;
+    state.settings.lastDeviceName = details.name;
     persistSettings(state);
     state.device = {
       deviceId: device.deviceId,
@@ -1836,12 +2625,61 @@ async function disconnectDevice() {
 }
 
 /**
+ * Boot-time reconnection to the last-used printer. Silent: never opens the
+ * devices sheet, never scans, and a failure just leaves the chip on 未连接.
+ * The platform BLE API connects by deviceId alone, so a fresh scan is not
+ * needed even when the id is not in state.devices.
+ */
+async function autoReconnectLastDevice() {
+  const deviceId = state.settings.lastDeviceId;
+  if (!deviceId || state.device || state.connecting) return;
+  state.connecting = true;
+  try {
+    const device = {
+      deviceId,
+      displayName: state.settings.lastDeviceName || '上次的打印机',
+      name: state.settings.lastDeviceName || ''
+    };
+    const details = await printer.connect(device);
+    const profile = profileForModelId(details.modelId, device.displayName, details.protocolVersion);
+    if (!profile) throw new Error('上次打印机的型号尚未配置打印参数');
+    state.settings.defaultProfileId = profile.id;
+    state.settings.lastDeviceName = details.name;
+    persistSettings(state);
+    state.device = {
+      deviceId,
+      name: details.name,
+      mtu: details.mtu,
+      maxWriteSize: details.maxWriteSize,
+      modelId: details.modelId,
+      protocolVersion: details.protocolVersion,
+      info: details.info,
+      profileId: profile.id,
+      preview: bleApi.platform === 'preview'
+    };
+    toast('已重新连接上次的打印机');
+  } catch (error) {
+    // Leave the chip on 未连接 without alarming the user at boot.
+  } finally {
+    state.connecting = false;
+    render();
+  }
+}
+
+/**
  * Why the current label cannot print on the current profile, if anything.
  * Never throws: the print sheet is the only place that hosts the model picker,
  * so refusing to open it left the user with no way to fix the problem.
  */
 function evaluatePrintBlock() {
   if (!state.document) return null;
+  if (!(state.document.elements || []).length) {
+    return {
+      kind: 'empty',
+      message: '画布还是空的，请先添加至少一个标签元素。',
+      suggestProfileId: ''
+    };
+  }
   // Placeholder defaults block print until user edits content
   for (const el of state.document.elements || []) {
     if (!isPlaceholderElement(el)) continue;
@@ -1849,7 +2687,13 @@ function evaluatePrintBlock() {
     if (el.type === "text") message = "请先编辑文字内容，当前仍是默认占位";
     else if (el.type === "barcode") message = "请先填写条码内容，当前仍是默认值";
     else if (el.type === "qrcode") message = "请先填写二维码内容，当前仍是默认链接";
-    return { kind: "placeholder", message, elementId: el.id, suggestProfileId: "" };
+    return {
+      kind: "placeholder",
+      message,
+      elementId: el.id,
+      canConfirmOriginal: el.requiresInputReason === 'sample-code',
+      suggestProfileId: ""
+    };
   }
   const profile = currentProfile();
   const fit = evaluatePrintability(state.document, profile);
@@ -1860,10 +2704,33 @@ function evaluatePrintBlock() {
       suggestProfileId: fit.suggestProfileId
     };
   }
+  // Center-crop stock (e.g. 50mm paper on a 48mm head): a code that reaches
+  // into the physical margin would print partially and scan as garbage, so it
+  // fails closed instead of producing a confident-looking broken label.
+  const cut = elementsCutByCrop(state.document, profile, ['barcode', 'qrcode'])[0];
+  if (cut) {
+    const window = printableWindowMm(state.document, profile);
+    const sideLabel = window.axis === 'height' ? '上下' : '左右';
+    return {
+      kind: 'element',
+      message: `${cut.type === 'barcode' ? '条码' : '二维码'}伸进了${sideLabel}各约 ${window.marginMm.toFixed(1)} mm 的不可打边距，打印会缺一部分、无法扫描。请把它移进安全区域或缩小。`,
+      elementId: cut.id,
+      elementType: cut.type,
+      errorCode: 'CODE_IN_UNPRINTABLE_MARGIN',
+      suggestProfileId: ''
+    };
+  }
   try {
     validateDocument(state.document, profile.dpi);
   } catch (error) {
-    return { kind: 'element', message: error.message, suggestProfileId: '' };
+    return {
+      kind: 'element',
+      message: error.message,
+      elementId: error.elementId || '',
+      elementType: error.elementType || '',
+      errorCode: error.code || '',
+      suggestProfileId: ''
+    };
   }
   return null;
 }
@@ -1889,19 +2756,63 @@ async function renderToCanvas(target, documentValue, options) {
     if (!opts.allowUnaligned) throw error;
     size = previewCanvasSize(source, profile.dpi);
   }
-  await loadDocumentImages(source);
-  target.width = size.width;
-  target.height = size.height;
+  await ensureDocumentFonts(source);
+  const loadedImages = await loadDocumentImages(source);
+  if (opts.requireImages) {
+    const missing = loadedImages.find((entry) => !entry.image);
+    if (missing) {
+      const label = String(missing.element.label || missing.element.name || '').trim();
+      throw new Error(`标签中的${label ? `“${label}”` : '图片或素材'}加载失败，已停止打印`);
+    }
+  }
+  // When stock is wider than the head, the document is rendered at its full
+  // raster size and the printable window is extracted at getImageData time.
+  const origin = { x: size.cropOffsetX || 0, y: size.cropOffsetY || 0 };
+  const full = previewCanvasSize(source, profile.dpi);
+  const canvasSize = {
+    width: Math.max(size.width + origin.x, full.width),
+    height: Math.max(size.height + origin.y, full.height)
+  };
+  target.width = canvasSize.width;
+  target.height = canvasSize.height;
   const context = target.getContext('2d', { willReadFrequently: true });
-  renderDocument(context, source, size, profile.dpi, state.images);
-  return { context, profile, size };
+  renderDocument(context, source, canvasSize, profile.dpi, state.images);
+  return {
+    context,
+    profile,
+    size: { width: size.width, height: size.height },
+    origin,
+    cropped: Boolean(size.cropped),
+    canvasSize
+  };
+}
+
+function paintUnprintableMargins(rendered) {
+  const context = rendered.context;
+  const { width, height } = rendered.canvasSize;
+  const left = rendered.origin.x;
+  const top = rendered.origin.y;
+  const right = left + rendered.size.width;
+  const bottom = top + rendered.size.height;
+  context.save();
+  context.fillStyle = 'rgba(23, 26, 31, 0.26)';
+  if (left > 0) context.fillRect(0, 0, left, height);
+  if (right < width) context.fillRect(right, 0, width - right, height);
+  if (top > 0) context.fillRect(0, 0, width, top);
+  if (bottom < height) context.fillRect(0, bottom, width, height - bottom);
+  context.strokeStyle = 'rgba(228, 66, 55, 0.9)';
+  context.setLineDash([6, 4]);
+  context.lineWidth = 1;
+  context.strokeRect(left + 0.5, top + 0.5, rendered.size.width - 1, rendered.size.height - 1);
+  context.restore();
 }
 
 async function renderPrintPreview() {
   const canvas = document.getElementById('print-preview-canvas');
   if (!canvas) return;
   try {
-    await renderToCanvas(canvas, null, { allowUnaligned: true });
+    const rendered = await renderToCanvas(canvas, null, { allowUnaligned: true });
+    if (rendered && rendered.cropped) paintUnprintableMargins(rendered);
   } catch (error) {
     toast(error.message, 'error');
   }
@@ -1937,44 +2848,83 @@ async function startPrint() {
   printCancelRequested = false;
   state.printProgress = 2;
   state.printMessage = '正在生成打印点阵';
+  haptic(20);
   renderModalOnly();
+  let activeJob = null;
   try {
     const copies = Math.max(1, Number(state.settings.copies) || 1);
-    const serialElements = state.document.elements.filter((element) => element.type === 'serial');
-    const printDocuments = serialElements.length
-      ? Array.from({ length: copies }, (_, copyIndex) => {
-        const next = cloneDocument(state.document);
-        next.elements.filter((element) => element.type === 'serial').forEach((element) => {
-          element.currentValue = (Number(element.start) || 0) + copyIndex * (Number(element.step) || 1);
+    const batchDocuments = Array.isArray(state.pendingBatchDocuments) ? state.pendingBatchDocuments : [];
+    const batchStart = batchDocuments.length
+      ? Math.max(0, Math.min(Number(state.pendingBatchIndex) || 0, batchDocuments.length - 1))
+      : 0;
+    const baseDocuments = batchDocuments.length ? batchDocuments.slice(batchStart) : [state.document];
+    const printJobs = [];
+    baseDocuments.forEach((sourceDocument, sourceOffset) => {
+      const serialElements = sourceDocument.elements.filter((element) => element.type === 'serial');
+      if (serialElements.length) {
+        Array.from({ length: copies }, (_, copyIndex) => {
+          const next = cloneDocument(sourceDocument);
+          next.elements.filter((element) => element.type === 'serial').forEach((element) => {
+            element.currentValue = (Number(element.start) || 0) + copyIndex * (Number(element.step) || 1);
+          });
+          printJobs.push({
+            document: next,
+            sourceDocument,
+            copies: 1,
+            batchIndex: batchStart + sourceOffset,
+            lastForDocument: copyIndex === copies - 1
+          });
         });
-        return next;
-      })
-      : [state.document];
-    for (let index = 0; index < printDocuments.length; index += 1) {
+      } else {
+        printJobs.push({
+          document: sourceDocument,
+          sourceDocument,
+          copies,
+          batchIndex: batchStart + sourceOffset,
+          lastForDocument: true
+        });
+      }
+    });
+    for (let index = 0; index < printJobs.length; index += 1) {
+      activeJob = printJobs[index];
       const workCanvas = document.createElement('canvas');
-      const printDocument = printDocuments[index];
-      const rendered = await renderToCanvas(workCanvas, printDocument);
+      const printDocument = activeJob.document;
+      const rendered = await renderToCanvas(workCanvas, printDocument, { requireImages: true });
       validateDocument(printDocument, rendered.profile.dpi);
-      const imageData = rendered.context.getImageData(0, 0, rendered.size.width, rendered.size.height);
+      const imageData = rendered.context.getImageData(
+        rendered.origin.x,
+        rendered.origin.y,
+        rendered.size.width,
+        rendered.size.height
+      );
       await printer.print(imageData, rendered.profile, {
         density: state.settings.density,
         threshold: state.settings.threshold,
-        copies: serialElements.length ? 1 : copies,
+        copies: activeJob.copies,
         labelType: state.settings.labelType
       }, (progress, message) => {
-        const combined = serialElements.length
-          ? Math.round((index * 100 + progress) / printDocuments.length)
-          : progress;
-        updateProgress(combined, message);
+        const combined = Math.round((index * 100 + progress) / Math.max(1, printJobs.length));
+        const batchPrefix = batchDocuments.length
+          ? `第 ${activeJob.batchIndex + 1} / ${batchDocuments.length} 张 · `
+          : '';
+        updateProgress(combined, `${batchPrefix}${message}`);
       });
+      if (batchDocuments.length && activeJob.lastForDocument) {
+        state.pendingBatchIndex = activeJob.batchIndex + 1;
+        recordPrint('success', '', activeJob.sourceDocument, copies);
+      }
     }
     state.printing = false;
     state.printProgress = 100;
-    state.printMessage = '打印完成';
+    state.printMessage = batchDocuments.length ? `${batchDocuments.length} 张标签全部打印完成` : '打印完成';
     state.printError = null;
+    if (!batchDocuments.length) recordPrint('success');
+    const finishedBatchCount = batchDocuments.length;
+    state.pendingBatchDocuments = [];
+    state.pendingBatchIndex = 0;
     renderModalOnly();
-    recordPrint('success');
-    toast('打印完成');
+    haptic([12, 40, 12]);
+    toast(finishedBatchCount ? `${finishedBatchCount} 张标签打印完成` : '打印完成');
   } catch (error) {
     state.printing = false;
     // PrinterClient clears its own `cancelled` flag in a finally block that
@@ -1985,7 +2935,7 @@ async function startPrint() {
     // failure the user may only notice after looking back at the printer.
     state.printError = cancelled ? null : { message: friendlyPrintError(error) };
     renderModalOnly();
-    recordPrint(cancelled ? 'cancelled' : 'failed', error.message);
+    recordPrint(cancelled ? 'cancelled' : 'failed', error.message, activeJob && activeJob.sourceDocument);
     toast(cancelled ? '打印已取消' : state.printError.message, cancelled ? undefined : 'error');
   }
 }
@@ -1993,10 +2943,21 @@ async function startPrint() {
 /** Turn protocol/BLE errors into something a shop owner can act on. */
 function friendlyPrintError(error) {
   const raw = String((error && error.message) || '打印失败');
-  if (/断开|disconnect|未连接|not connected/i.test(raw)) return '打印机连接已断开，请靠近后重新连接再试';
-  if (/超时|timeout/i.test(raw)) return '打印机没有响应，请检查电源与纸仓后重试';
+  if (/断开|disconnect|未连接|not connected|no connection/i.test(raw)) return '打印机连接已断开，请靠近后重新连接再试';
   if (/缺纸|no paper|paper/i.test(raw)) return '打印机缺纸或纸仓未合上，装好标签纸后重试';
-  if (/电量|battery/i.test(raw)) return '打印机电量过低，充电后重试';
+  if (/上盖|纸仓盖|cover/i.test(raw)) return '打印机上盖未关闭，请合上纸仓盖后重试';
+  if (/电量|电池|battery/i.test(raw)) return '打印机电量过低，请充电后重试';
+  if (/过热|温度过高|overheat/i.test(raw)) return '打印头温度过高，请稍等片刻再打印';
+  if (/正忙|busy|尚未完成当前任务/i.test(raw)) return '打印机正忙，请等待当前任务结束后重试';
+  if (/位图宽度|超过打印头/.test(raw)) return '标签超过当前机型的打印幅面，请更换适配的尺寸或机型';
+  if (/协议协商|handshake/i.test(raw)) return '打印机握手失败，请重启打印机后重新连接';
+  if (/超时|timeout/i.test(raw)) return '打印机没有响应，请检查电源与纸仓后重试';
+  if (/MTU|载荷|写入特征|通知特征|BLE 服务|writeBLE|readBLE|notifyBLE|BLECharacteristic|BLEConnection|GATT|characteristic/i.test(raw)) {
+    return '蓝牙传输出现问题，请重新连接打印机后再试';
+  }
+  // Raw platform errors carry no Chinese copy and would otherwise reach the
+  // user verbatim.
+  if (!/[\u4e00-\u9fff]/.test(raw)) return `打印失败（${raw}）`;
   return raw;
 }
 
@@ -2020,12 +2981,17 @@ async function closeModal() {
     }
     state.scanning = false;
   }
+  if (state.modal === 'scan-code') stopBarcodeScanner();
+  if (state.modal === 'save-template') state.saveTemplateExitAfterSave = false;
+  if (state.modal === 'rename-document') state.documentNameExitAfterSave = false;
   state.modal = '';
   state.templatePreviewId = '';
   state.printIntent = false;
   state.printBlock = null;
   state.printError = null;
-  renderModalOnly();
+  // Settings changed inside a sheet must be reflected in the page beneath it.
+  // Focus restoration uses a stable identity so the opener survives this render.
+  render();
   return true;
 }
 
@@ -2043,14 +3009,15 @@ async function cancelPrint() {
   }
 }
 
-function recordPrint(result, error) {
+function recordPrint(result, error, documentOverride, copiesOverride) {
   let history = [];
   try {
     history = JSON.parse(localStorage.getItem('niim-label:print-history') || '[]');
   } catch (parseError) {
     history = [];
   }
-  const documentValue = state.document ? cloneDocument(state.document) : null;
+  const sourceDocument = documentOverride || state.document;
+  const documentValue = sourceDocument ? cloneDocument(sourceDocument) : null;
   history.unshift({
     id: `print-${Date.now().toString(36)}`,
     name: documentValue ? documentValue.name : '',
@@ -2059,7 +3026,7 @@ function recordPrint(result, error) {
     heightMm: documentValue ? documentValue.heightMm : null,
     document: documentValue,
     device: state.device ? state.device.name : '',
-    copies: state.settings.copies,
+    copies: copiesOverride == null ? state.settings.copies : copiesOverride,
     result,
     error: error || '',
     createdAt: Date.now()
@@ -2070,6 +3037,7 @@ function recordPrint(result, error) {
     index < 10 ? item : { ...item, document: null }
   ));
   state.printHistory = next;
+  state.recentPrints = buildRecentPrints(next);
   try {
     localStorage.setItem('niim-label:print-history', JSON.stringify(next));
   } catch (writeError) {
@@ -2085,15 +3053,78 @@ function recordPrint(result, error) {
 }
 
 function backupData() {
-  const data = {
-    schemaVersion: 1,
-    exportedAt: new Date().toISOString(),
+  const result = buildBackup({
     projects: state.projects,
     templates: state.userTemplates,
     settings: state.settings,
     dataRows: state.dataRows
-  };
-  download('niim-label-backup.json', JSON.stringify(data, null, 2), 'application/json');
+  });
+  if (!result.ok) {
+    toast(result.errors[0] && result.errors[0].message || '备份生成失败', 'error');
+    return false;
+  }
+  const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  download(`shangyue-label-backup-${day}.json`, JSON.stringify(result.backup, null, 2), 'application/json');
+  state.backupStatus = `已导出 ${result.stats.projects} 个标签、${result.stats.templates} 个模板、${result.stats.dataRows} 行数据`;
+  if (state.modal === 'backup-restore') renderModalOnly();
+  toast('备份已导出');
+  return true;
+}
+
+function writeRestoredDataAtomically(data) {
+  const entries = [
+    [KEYS.projects, data.projects],
+    [KEYS.templates, data.templates],
+    [KEYS.settings, data.settings],
+    [KEYS.dataRows, data.dataRows]
+  ];
+  const previous = entries.map(([key]) => [key, localStorage.getItem(key)]);
+  try {
+    entries.forEach(([key, value]) => write(key, value));
+  } catch (error) {
+    previous.forEach(([key, value]) => {
+      try {
+        if (value == null) localStorage.removeItem(key);
+        else localStorage.setItem(key, value);
+      } catch (_) {}
+    });
+    throw error;
+  }
+}
+
+async function restoreDataFromFile() {
+  const file = await chooseFile('application/json,.json');
+  if (!file) return;
+  if (file.size > 25 * 1024 * 1024) {
+    toast('备份文件不能超过 25 MB', 'error');
+    return;
+  }
+  try {
+    const strategy = state.backupStrategy || 'merge';
+    if (strategy === 'replace' && !window.confirm('替换恢复会覆盖当前本机数据，确定继续？建议先导出当前备份。')) return;
+    const source = await readFile(file);
+    const result = restoreBackup(source, {
+      projects: state.projects,
+      templates: state.userTemplates,
+      settings: state.settings,
+      dataRows: state.dataRows
+    }, { strategy });
+    if (!result.ok) throw new Error(result.errors[0] && result.errors[0].message || '备份文件无效');
+    writeRestoredDataAtomically(result.data);
+    state.projects = result.data.projects;
+    state.userTemplates = result.data.templates;
+    state.settings = result.data.settings;
+    state.dataRows = result.data.dataRows;
+    state.backupStatus = strategy === 'replace'
+      ? `已替换恢复：${result.data.projects.length} 个标签、${result.data.templates.length} 个模板`
+      : `已合并：新增 ${result.stats.projects.added} 个标签、${result.stats.templates.added} 个模板、${result.stats.dataRows.added} 行数据`;
+    render();
+    toast('数据恢复完成');
+  } catch (error) {
+    state.backupStatus = `恢复失败：${error.message}`;
+    if (state.modal === 'backup-restore') renderModalOnly();
+    toast(error.message, 'error');
+  }
 }
 
 function handleNavigation(route) {
@@ -2102,7 +3133,7 @@ function handleNavigation(route) {
     createBlankLabel();
     return;
   }
-  if (state.route === 'editor' && state.document) {
+  if (state.route === 'editor' && state.document && shouldPersistEditorDraft()) {
     try {
       upsertProject(state);
     } catch (error) {
@@ -2113,6 +3144,19 @@ function handleNavigation(route) {
   state.route = route;
   state.modal = '';
   render();
+  if (route === 'templates') ensureAuthorizedCatalog('templates');
+}
+
+function restoreProgressiveListFocus(loadAction, fallbackSelector, scrollY) {
+  requestAnimationFrame(() => {
+    window.scrollTo(0, scrollY);
+    const fallbackItems = Array.from(appRoot.querySelectorAll(fallbackSelector));
+    const target = appRoot.querySelector(`[data-action="${loadAction}"]`)
+      || fallbackItems[fallbackItems.length - 1];
+    if (target && typeof target.focus === 'function') {
+      try { target.focus({ preventScroll: true }); } catch (_) { target.focus(); }
+    }
+  });
 }
 
 function selectedItems() {
@@ -2135,9 +3179,7 @@ function commitSelected(mutator, includeLocked) {
   });
 }
 
-function rotateDocument() {
-  if (!state.document) return;
-  commit((documentValue) => {
+function rotateDocumentValue(documentValue) {
     const oldWidth = documentValue.widthMm;
     const oldHeight = documentValue.heightMm;
     documentValue.elements.forEach((element) => {
@@ -2151,6 +3193,12 @@ function rotateDocument() {
     });
     documentValue.widthMm = oldHeight;
     documentValue.heightMm = oldWidth;
+}
+
+function rotateDocument() {
+  if (!state.document) return;
+  commit((documentValue) => {
+    rotateDocumentValue(documentValue);
     state.zoom = 100;
   });
 }
@@ -2218,20 +3266,65 @@ function distributeSelection(axis) {
   });
 }
 
-function saveAsTemplate() {
+function openSaveTemplate(exitAfterSave) {
   if (!state.document) return;
+  state.saveTemplateName = `${state.document.name || '未命名标签'}模板`;
+  state.saveTemplateFolder = state.saveTemplateFolder || '未分类';
+  state.saveTemplateExitAfterSave = !!exitAfterSave;
+  state.modal = 'save-template';
+  renderModalOnly();
+  requestAnimationFrame(() => {
+    const input = document.getElementById('save-template-name');
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  });
+}
+
+function saveAsTemplate() {
+  openSaveTemplate(false);
+}
+
+function confirmSaveAsTemplate() {
+  if (!state.document) return false;
+  const name = String(state.saveTemplateName || '').trim();
+  const folder = String(state.saveTemplateFolder || '').trim() || '未分类';
+  if (!name) {
+    toast('请输入模板名称', 'error');
+    const input = document.getElementById('save-template-name');
+    if (input) input.focus();
+    return false;
+  }
   const copy = cloneDocument(state.document);
   copy.id = `user-template-${Date.now().toString(36)}`;
-  copy.name = `${copy.name || '未命名标签'}模板`;
-  const nextTemplates = [{ id: copy.id, name: copy.name, document: copy, createdAt: Date.now() }, ...state.userTemplates];
+  copy.name = name;
+  const nextTemplates = [{
+    id: copy.id,
+    name,
+    folder,
+    document: copy,
+    createdAt: Date.now(),
+    source: 'user'
+  }, ...state.userTemplates];
   try {
     write(KEYS.templates, nextTemplates);
     state.userTemplates = nextTemplates;
     invalidateThumbsByPrefix(copy.id);
-    toast('已保存为模板');
-    render();
+    const exitAfterSave = state.saveTemplateExitAfterSave;
+    state.saveTemplateExitAfterSave = false;
+    state.modal = '';
+    if (exitAfterSave) {
+      discardAutosavedProjectChanges();
+      exitEditorNow();
+    } else {
+      render();
+    }
+    toast(`已保存到“${folder}”`);
+    return true;
   } catch (error) {
     toast('保存模板失败：本地存储空间不足', 'error');
+    return false;
   }
 }
 
@@ -2296,31 +3389,143 @@ async function handleAction(action, target) {
     case 'history-reprint':
       openHistoryDocument(findHistoryItem(target.dataset.id), true);
       break;
+    case 'reprint-history': {
+      const rawId = target.dataset.id;
+      if (!rawId) {
+        toast('无法找到这张标签', 'error');
+        break;
+      }
+      // Recent-print cards carry projectId (or the history id for unsaved labels).
+      const project = state.projects.find((entry) => entry.id === rawId);
+      if (project && project.document) {
+        openEditorDocument(project.document, project.id);
+        state.modal = '';
+        render();
+        requestAnimationFrame(() => openPrint());
+        break;
+      }
+      const item = (state.printHistory || [])
+        .find((entry) => entry.id === rawId || entry.projectId === rawId) || null;
+      if (item && item.document) {
+        openEditorDocument(item.document, item.projectId || '');
+        state.modal = '';
+        render();
+        requestAnimationFrame(() => openPrint());
+        break;
+      }
+      toast('无法找到这张标签', 'error');
+      break;
+    }
+    case 'onboarding-next':
+      if ((Number(state.onboardingStep) || 1) >= 3) {
+        state.settings.onboardingDone = true;
+        persistSettings(state);
+      } else {
+        state.onboardingStep = Math.min(3, (Number(state.onboardingStep) || 1) + 1);
+      }
+      render();
+      break;
+    case 'onboarding-skip':
+      state.settings.onboardingDone = true;
+      persistSettings(state);
+      render();
+      break;
     case 'open-industry':
       state.route = 'templates';
-      state.templateIndustry = '行业标识';
+      state.templateIndustry = '行业库';
       state.templateCategory = '全部';
+      state.templateScene = '全部';
+      state.templateTask = '全部';
+      state.templateSize = '全部尺寸';
+      state.libraryScene = '全部';
+      state.librarySize = '全部';
+      state.templateVisibleCount = 24;
+      state.modal = '';
+      render();
+      ensureAuthorizedCatalog('templates');
+      break;
+    case 'open-scene':
+      state.route = 'templates';
+      state.templateScene = target.dataset.scene || '全部';
+      state.templateTask = '全部';
+      state.templateSize = '全部尺寸';
+      state.templateIndustry = '全部';
+      state.templateCategory = '全部';
+      state.templateFolder = '全部';
+      state.templateQuery = '';
+      state.libraryScene = '全部';
+      state.librarySize = '全部';
+      state.templateVisibleCount = 24;
       state.modal = '';
       render();
       break;
+    case 'template-scene':
+      state.templateScene = target.dataset.scene || '全部';
+      state.templateTask = '全部';
+      state.templateSize = '全部尺寸';
+      state.templateVisibleCount = 24;
+      render();
+      break;
+    case 'template-task':
+      state.templateTask = target.dataset.task || '全部';
+      state.templateSize = '全部尺寸';
+      state.templateVisibleCount = 24;
+      render();
+      break;
+    case 'template-size':
+      state.templateSize = target.dataset.size || '全部尺寸';
+      state.templateVisibleCount = 24;
+      render();
+      break;
     case 'scan-placeholder':
-      toast('扫一扫将在接入相机能力后启用；可先用模板库中的二维码模板');
+      openCodeScanner('barcode');
       break;
     case 'open-project': openProject(target.dataset.id); break;
     case 'template-category':
       state.templateCategory = target.dataset.category;
+      if (state.templateCategory !== '我的') state.templateFolder = '全部';
+      state.templateVisibleCount = 24;
+      render();
+      break;
+    case 'template-folder':
+      state.templateFolder = target.dataset.folder || '全部';
+      state.templateVisibleCount = 24;
       render();
       break;
     case 'template-industry':
       state.templateIndustry = target.dataset.industry || '全部';
+      state.templateSize = '全部尺寸';
+      state.libraryScene = '全部';
+      state.librarySize = '全部';
+      state.templateVisibleCount = 24;
       render();
       break;
-    case 'save-project': saveProject(); break;
+    case 'library-scene':
+      state.libraryScene = target.dataset.scene || '全部';
+      state.templateVisibleCount = 24;
+      render();
+      break;
+    case 'library-size':
+      state.librarySize = target.dataset.size || '全部';
+      state.templateVisibleCount = 24;
+      render();
+      break;
+    case 'save-project': requestSaveProject(false); break;
+    case 'rename-document': openDocumentNameSheet(false); break;
+    case 'confirm-document-name': confirmDocumentName(); break;
     case 'save-as-template':
       state.editorMenu = false;
       saveAsTemplate();
       break;
     case 'close-editor': closeEditor(); break;
+    case 'cancel-close-editor':
+      state.modal = '';
+      renderModalOnly();
+      break;
+    case 'save-and-close-editor': saveAndCloseEditor(); break;
+    case 'discard-and-close-editor': discardAndCloseEditor(); break;
+    case 'save-template-and-close': openSaveTemplate(true); break;
+    case 'confirm-save-template': confirmSaveAsTemplate(); break;
     case 'undo': undo(); break;
     case 'redo': redo(); break;
     case 'clear-elements':
@@ -2346,7 +3551,15 @@ async function handleAction(action, target) {
     }
     case 'rotate-document':
       state.editorMenu = false;
-      rotateDocument();
+      if (state.modal === 'stock' && state.document) {
+        const previousWidth = state.stockWidthMm;
+        state.stockWidthMm = state.stockHeightMm;
+        state.stockHeightMm = previousWidth;
+        state.stockRotationTurns = ((Number(state.stockRotationTurns) || 0) + 1) % 4;
+        renderModalOnly();
+      } else {
+        rotateDocument();
+      }
       break;
     case 'toggle-multi-select':
       state.editorMenu = false;
@@ -2491,15 +3704,17 @@ async function handleAction(action, target) {
       if (!el || el.locked || el.type !== 'date') break;
       commit(() => {
         const element = dateControlElement(selectedElement(state));
-        const label = target.value || '制作日期';
+        const selectedLabel = target.value == null ? '制作日期' : target.value;
+        const label = selectedLabel === '__custom__' ? (element.customLabel || '日期') : selectedLabel;
         element.label = label;
+        if (selectedLabel === '__custom__') element.customLabel = label;
         if (label === '保质期至') {
           element.dateRole = 'expire';
           if (!element.expirePresetHours) element.expirePresetHours = 24;
         } else if (label === '制作日期' || label === '生产日期' || label === '打印时间' || label === '上架日期' || label === '开封时间') {
           element.dateRole = 'made';
         } else {
-          element.dateRole = 'generic'; // 无前缀 / 自定义
+          element.dateRole = 'generic';
         }
       });
       break;
@@ -2581,7 +3796,10 @@ async function handleAction(action, target) {
       break;
     case 'set-font':
       if (selectedElement(state) && !selectedElement(state).locked) {
-        softCommit(() => { selectedElement(state).fontFamily = target.dataset.value || 'sans-serif'; }, { refreshChrome: true });
+        softCommit(() => {
+          selectedElement(state).fontFamily = resolveFontId(target.dataset.value || 'sans-serif');
+          delete selectedElement(state).sourceFontFamily;
+        }, { refreshChrome: true });
       }
       break;
     case 'nudge-letter': {
@@ -2616,8 +3834,8 @@ async function handleAction(action, target) {
       openStockSheet();
       break;
     case 'pick-stock-preset':
-      state.stockWidthMm = Number(target.dataset.width) || 50;
-      state.stockHeightMm = Number(target.dataset.height) || 30;
+      state.stockWidthMm = Number(target.dataset.width) || 40;
+      state.stockHeightMm = Number(target.dataset.height) || 12;
       renderModalOnly();
       break;
     case 'apply-stock':
@@ -2626,8 +3844,61 @@ async function handleAction(action, target) {
     case 'open-batch-sheet':
       openBatchSheet();
       break;
+    case 'apply-editor-data-row': {
+      const rowIndex = Number(target.dataset.row);
+      const row = state.dataRows[rowIndex];
+      if (!row || !state.document) break;
+      try {
+        commit((documentValue) => applyRowToDocument(documentValue, row));
+        state.editorDataRowIndex = rowIndex;
+        state.editorPanelTab = 'data-source';
+        refreshEditorChrome();
+        toast(`已套用第 ${rowIndex + 1} 行数据`);
+      } catch (error) {
+        toast(error.message, 'error');
+      }
+      break;
+    }
+    case 'set-date-format': {
+      const el = selectedElement(state);
+      if (!el || el.locked || el.type !== 'date') break;
+      commit(() => {
+        const element = dateControlElement(selectedElement(state));
+        element.format = target.value || 'YYYY年MM月DD日 HH:mm';
+        element.showTime = /HH|mm|ss/.test(element.format);
+        element.showSeconds = /ss/.test(element.format);
+      });
+      break;
+    }
+    case 'manage-editor-data':
+      state.dataReturnToEditor = true;
+      state.route = 'data';
+      state.modal = '';
+      render();
+      break;
+    case 'return-to-editor':
+      if (state.document) {
+        state.route = 'editor';
+        state.dataReturnToEditor = false;
+        state.selectedIds = [];
+        state.selectedId = '';
+        state.multiSelect = false;
+        state.editorPanelTab = 'data-source';
+        state.editorMode = 'add';
+        render();
+      }
+      break;
     case 'run-batch':
       runBatch();
+      break;
+    case 'cancel-batch-print':
+      state.pendingBatchDocuments = [];
+      state.pendingBatchIndex = 0;
+      state.modal = '';
+      state.printError = null;
+      state.printBlock = null;
+      render();
+      toast('批量打印任务已取消');
       break;
     case 'batch-select-all':
       state.batchSelectedRows = state.dataRows.map((_, index) => index);
@@ -2759,10 +4030,14 @@ async function handleAction(action, target) {
       state.editorMenu = false;
       toast('多选已开启，继续点选元素');
       break;
-        case 'open-border-sheet':
-      state.pendingBorderAdd = !(selectedElement(state) && selectedElement(state).type === 'rect' && selectedElement(state).borderStyle);
+    case 'open-border-sheet':
+      state.pendingBorderAdd = !(selectedElement(state) && (
+        (selectedElement(state).type === 'rect' && selectedElement(state).borderStyle)
+        || (selectedElement(state).type === 'image' && selectedElement(state).remoteBorderId)
+      ));
       state.modal = 'border';
       renderModalOnly();
+      ensureAuthorizedCatalog('borders');
       break;
     case 'border-chip': {
       const chip = target.dataset.chip || '最新';
@@ -2779,16 +4054,104 @@ async function handleAction(action, target) {
       paintBorderThumbs();
       break;
     }
+    case 'confirm-placeholder-value': {
+      const id = target.dataset.id;
+      commit((documentValue) => {
+        const element = (documentValue.elements || []).find((item) => item.id === id);
+        if (!element || element.requiresInputReason !== 'sample-code') return;
+        element.requiresInput = false;
+        delete element.requiresInputReason;
+        element.sampleValueConfirmed = true;
+      });
+      state.printBlock = evaluatePrintBlock();
+      renderModalOnly();
+      toast('已确认使用当前编码');
+      break;
+    }
+    case 'fix-code-size': {
+      const id = target.dataset.id;
+      let outcome = null;
+      commit((documentValue) => {
+        const element = (documentValue.elements || []).find((item) => item.id === id);
+        if (!element) throw new Error('找不到需要调整的条码或二维码');
+        outcome = resizeCodeElementToMinimum(element, documentValue, currentProfile().dpi);
+        if (!outcome.ok) throw new Error(outcome.message);
+      });
+      if (outcome && outcome.ok) {
+        state.modal = null;
+        const element = (state.document.elements || []).find((item) => item.id === id);
+        if (element) enterSelectedMode([id], { tab: 'style', reason: 'select' });
+        toast(outcome.changed ? '已按最小清晰度放大，请检查周边排版' : '当前尺寸已经满足清晰度要求');
+      }
+      break;
+    }
+    case 'load-more-online-borders':
+      await loadAuthorizedCatalogPage('borders');
+      break;
     case 'pick-border': {
       const borderId = target.dataset.border || 'simple';
       const selected = selectedElement(state);
+      const remoteBorder = (state.remoteBorders || []).find((item) => item.id === borderId);
+      if (remoteBorder) {
+        const selectedProgrammaticBorderId = selected
+          && selected.type === 'rect'
+          && selected.borderStyle
+          ? selected.id
+          : '';
+        commit((documentValue) => {
+          const selectedNow = selectedElement(state);
+          const current = selectedNow && selectedNow.type === 'image' && selectedNow.remoteBorderId
+            ? selectedNow
+            : documentValue.elements.find((item) => item.type === 'image' && item.remoteBorderId);
+          documentValue.elements = documentValue.elements.filter((item) => !(
+            item.type === 'rect'
+            && item.borderStyle
+            && (item.decorativeBorder || item.id === selectedProgrammaticBorderId)
+          ));
+          if (current) {
+            documentValue.elements = documentValue.elements.filter((item) => !(
+              item.type === 'image' && item.remoteBorderId && item.id !== current.id
+            ));
+            current.path = remoteBorder.asset || remoteBorder.previewSrc;
+            current.remoteBorderId = remoteBorder.id;
+            current.sourceMeta = remoteBorder.sourceMeta;
+            current.ninePatch = remoteBorder.ninePatch || null;
+            imageCache.invalidate(state.images, current.id);
+            return;
+          }
+          const element = createElement('image', documentValue);
+          element.x = 0;
+          element.y = 0;
+          element.width = documentValue.widthMm;
+          element.height = documentValue.heightMm;
+          element.path = remoteBorder.asset || remoteBorder.previewSrc;
+          element.remoteBorderId = remoteBorder.id;
+          element.sourceMeta = remoteBorder.sourceMeta;
+          element.ninePatch = remoteBorder.ninePatch || null;
+          // A decorative border belongs behind the label's editable content.
+          documentValue.elements.unshift(element);
+          state.selectedIds = [element.id];
+          state.selectedId = element.id;
+          state.editorPanelTab = 'style';
+          state.editorMode = 'selected';
+          state.panelCollapsed = false;
+        });
+        state.modal = '';
+        state.pendingBorderAdd = false;
+        render();
+        break;
+      }
       if (selected && selected.type === 'rect' && selected.borderStyle && !state.pendingBorderAdd) {
-        commit(() => {
+        commit((documentValue) => {
+          documentValue.elements = documentValue.elements.filter((item) => !(
+            item.type === 'image' && item.remoteBorderId
+          ));
           const el = selectedElement(state);
           if (el && el.type === 'rect' && !el.locked) {
             el.borderStyle = borderId;
             el.filled = false;
             el.shapeKind = 'rect';
+            el.decorativeBorder = true;
           }
         });
         state.modal = '';
@@ -2799,10 +4162,14 @@ async function handleAction(action, target) {
         render();
       } else {
         commit((documentValue) => {
+          documentValue.elements = documentValue.elements.filter((item) => !(
+            item.type === 'image' && item.remoteBorderId
+          ));
           const element = createElement('rect', documentValue);
           element.borderStyle = borderId;
           element.filled = false;
           element.shapeKind = 'rect';
+          element.decorativeBorder = true;
           placeNewElement(element, documentValue);
           documentValue.elements.push(element);
           state.selectedIds = state.multiSelect ? [...state.selectedIds, element.id] : [element.id];
@@ -2866,10 +4233,11 @@ async function handleAction(action, target) {
       }, { patchActive: true });
       break;
     }
-case 'open-material-sheet':
+    case 'open-material-sheet':
       state.pendingMaterialAdd = !(selectedElement(state) && selectedElement(state).type === 'material');
       state.modal = 'material';
       renderModalOnly();
+      ensureAuthorizedCatalog('materials');
       break;
     case 'material-chip': {
       const chip = target.dataset.chip || DEFAULT_MATERIAL_CHIP;
@@ -2885,6 +4253,9 @@ case 'open-material-sheet':
       paintMaterialThumbs();
       break;
     }
+    case 'load-more-online-materials':
+      await loadAuthorizedCatalogPage('materials');
+      break;
     case 'editor-tpl-size':
       state.editorTplSize = target.value || '全部尺寸';
       refreshEditorChrome();
@@ -2895,7 +4266,8 @@ case 'open-material-sheet':
       break;
     case 'pick-material': {
       const symbol = target.dataset.symbol || 'check';
-      const material = materialById(symbol);
+      const material = (state.remoteMaterials || []).find((item) => item.id === symbol)
+        || materialById(symbol);
       const selected = selectedElement(state);
       if (selected && selected.type === 'material' && !state.pendingMaterialAdd) {
         commit(() => {
@@ -2931,19 +4303,84 @@ case 'open-material-sheet':
       break;
     }
     case 'open-advanced-qr':
+      state.advancedQrType = 'wifi';
+      state.advancedQrDraft = { security: 'WPA', hidden: false };
+      state.advancedQrErrors = {};
+      state.advancedQrEditId = '';
       state.modal = 'advanced-qr';
       renderModalOnly();
       break;
-    case 'scan-code':
-      // Video opens camera scanner; stub with toast + focus content
-      toast('请将相机对准条码或二维码（模拟器可用内容栏手动输入）');
-      if (selectedElement(state) && ['barcode', 'qrcode'].includes(selectedElement(state).type)) {
-        state.editorPanelTab = 'content';
-        state.panelCollapsed = false;
-        render();
-        requestAnimationFrame(() => focusElementEditor(selectedElement(state)));
-      }
+    case 'edit-advanced-qr': {
+      const selected = selectedElement(state);
+      if (!selected || selected.locked || selected.type !== 'qrcode') break;
+      const parsed = parseAdvancedQrPayload(selected.value || '');
+      state.advancedQrType = parsed.type;
+      state.advancedQrDraft = parsed.data;
+      state.advancedQrErrors = {};
+      state.advancedQrEditId = selected.id;
+      state.modal = 'advanced-qr';
+      renderModalOnly();
       break;
+    }
+    case 'scan-code':
+      openCodeScanner(target.dataset.type === 'qrcode' ? 'qrcode' : 'barcode');
+      break;
+    case 'restart-scan-camera':
+      stopBarcodeScanner();
+      state.scanStatus = 'starting';
+      state.scanError = '';
+      renderModalOnly();
+      requestAnimationFrame(startLiveScanner);
+      break;
+    case 'scan-take-photo': await pickScanImage('camera'); break;
+    case 'scan-pick-image': await pickScanImage('photos'); break;
+    case 'confirm-scan-manual':
+      applyScannedValue(state.scanManualValue, state.scanCreateType === 'qrcode' ? 'qrcode' : 'code128');
+      break;
+    case 'advanced-qr-type':
+      state.advancedQrType = target.dataset.type || 'text';
+      state.advancedQrErrors = {};
+      renderModalOnly();
+      break;
+    case 'confirm-advanced-qr': {
+      const validation = validateAdvancedQrData(state.advancedQrType, state.advancedQrDraft || {});
+      if (!validation.valid) {
+        state.advancedQrErrors = validation.errors.reduce((errors, item) => {
+          const key = String(item.field || '').split('.')[0];
+          if (key && !errors[key]) errors[key] = item.message;
+          return errors;
+        }, {});
+        renderModalOnly();
+        const firstInvalid = modalRoot.querySelector('.field.invalid input, .field.invalid textarea, .field.invalid select');
+        if (firstInvalid) firstInvalid.focus();
+        break;
+      }
+      const payload = buildAdvancedQrPayload(state.advancedQrType, state.advancedQrDraft || {});
+      const editId = state.advancedQrEditId || '';
+      state.modal = '';
+      commit((documentValue) => {
+        let element = editId ? documentValue.elements.find((item) => item.id === editId && item.type === 'qrcode') : null;
+        if (!element) {
+          element = createElement('qrcode', documentValue);
+          placeNewElement(element, documentValue);
+          documentValue.elements.push(element);
+        }
+        element.value = payload;
+        element.advanced = true;
+        element.advancedType = validation.type;
+        element.advancedData = validation.data;
+        element.requiresInput = false;
+        delete element.requiresInputReason;
+        state.selectedIds = [element.id];
+        state.selectedId = element.id;
+        state.editorPanelTab = 'content';
+        state.editorMode = 'selected';
+        state.panelCollapsed = false;
+      });
+      state.advancedQrEditId = '';
+      toast(editId ? '高级二维码已更新' : '高级二维码已插入');
+      break;
+    }
     case 'toast-feature':
       toast(target.dataset.msg || '该功能后续接入');
       break;
@@ -2996,6 +4433,7 @@ case 'open-material-sheet':
     }
     case 'add-image': await addImage(false); break;
     case 'add-photo': await addImage(false, true); break;
+    case 'replace-photo': await addImage(true, true); break;
     case 'replace-image': await addImage(true); break;
     case 'delete-element':
     case 'delete-selected': {
@@ -3066,6 +4504,18 @@ case 'open-material-sheet':
           documentValue.elements.splice(destination, 0, item);
         }
       });
+      break;
+    }
+    case 'set-image-fit':
+      if (selectedElement(state) && !selectedElement(state).locked && selectedElement(state).type === 'image') {
+        commitSelected((element) => { element.imageFit = target.dataset.value || 'contain'; });
+      }
+      break;
+    case 'select-and-move-layer': {
+      const id = target.dataset.id;
+      if (!id) break;
+      setSelection([id]);
+      handleAction('move-layer', { dataset: { delta: target.dataset.delta || '0' } });
       break;
     }
     case 'rotate-element':
@@ -3212,6 +4662,39 @@ case 'open-material-sheet':
       state.templateQuery = '';
       state.templateCategory = '全部';
       state.templateIndustry = '全部';
+      state.templateScene = '全部';
+      state.templateTask = '全部';
+      state.templateSize = '全部尺寸';
+      state.libraryScene = '全部';
+      state.librarySize = '全部';
+      state.templateVisibleCount = 24;
+      render();
+      break;
+    case 'load-more-online-templates': {
+      const scrollY = Math.max(0, Number(window.scrollY) || 0);
+      const loaded = await loadAuthorizedCatalogPage('templates');
+      if (loaded) state.templateVisibleCount = (Number(state.templateVisibleCount) || 24) + AUTHORIZED_PAGE_SIZE;
+      render();
+      restoreProgressiveListFocus('load-more-online-templates', '.template-card', scrollY);
+      break;
+    }
+    case 'load-more-templates': {
+      const scrollY = Math.max(0, Number(window.scrollY) || 0);
+      state.templateVisibleCount = (Number(state.templateVisibleCount) || 24) + 24;
+      render();
+      restoreProgressiveListFocus('load-more-templates', '.template-card', scrollY);
+      break;
+    }
+    case 'load-more-projects': {
+      const scrollY = Math.max(0, Number(window.scrollY) || 0);
+      state.projectVisibleCount = (Number(state.projectVisibleCount) || 24) + 24;
+      render();
+      restoreProgressiveListFocus('load-more-projects', '[data-action="open-project"]', scrollY);
+      break;
+    }
+    case 'clear-project-search':
+      state.projectQuery = '';
+      state.projectVisibleCount = 24;
       render();
       break;
     case 'import-project': await importProject(); break;
@@ -3228,7 +4711,13 @@ case 'open-material-sheet':
     case 'import-csv': await importCsv(); break;
     case 'export-csv': exportCsv(); break;
     case 'batch-create': batchCreate(); break;
-    case 'backup-data': backupData(); break;
+    case 'backup-data':
+      state.backupStatus = '';
+      state.modal = 'backup-restore';
+      renderModalOnly();
+      break;
+    case 'export-backup': backupData(); break;
+    case 'import-backup': await restoreDataFromFile(); break;
     case 'toggle-cloud':
       state.settings.cloudSync = !state.settings.cloudSync;
       persistSettings(state);
@@ -3237,11 +4726,14 @@ case 'open-material-sheet':
     case 'account-login': state.modal = 'login'; renderModalOnly(); break;
     case 'open-about': state.modal = 'about'; renderModalOnly(); break;
     case 'help': state.modal = 'help'; renderModalOnly(); break;
-    case 'default-print-settings': state.modal = 'cloud'; renderModalOnly(); break;
+    case 'default-print-settings': state.modal = 'default-print-settings'; renderModalOnly(); break;
+    case 'cloud-info': state.modal = 'cloud'; renderModalOnly(); break;
+    case 'unit-info': state.modal = 'unit-info'; renderModalOnly(); break;
     case 'editor-settings':
       state.settings.units = state.settings.units === 'mm' ? 'in' : 'mm';
       persistSettings(state);
       render();
+      toast(`编辑器单位已切换为${state.settings.units === 'mm' ? '毫米' : '英寸'}`);
       break;
     case 'print-history':
       state.printHistory = readPrintHistory();
@@ -3250,12 +4742,96 @@ case 'open-material-sheet':
       break;
     case 'notification-settings': toast('通知设置由 Android 系统管理'); break;
     case 'import-template': await importProject(); break;
-    case 'all-projects': state.route = 'home'; render(); break;
+    case 'all-projects':
+      state.route = 'projects';
+      state.projectQuery = '';
+      state.projectVisibleCount = 24;
+      render();
+      break;
     default: break;
   }
 }
 
+function beginContinuousInputUndo() {
+  if (!contentUndoBefore && state.document) contentUndoBefore = cloneDocument(state.document);
+}
+
+function applyElementFieldValue(documentValue, element, field, value) {
+  if (!element || element.locked) return;
+  if (field === 'rows' || field === 'columns') {
+    element[field] = Math.max(1, Math.min(field === 'rows' ? 20 : 12, Math.round(value)));
+    const cellCount = element.rows * element.columns;
+    element.cells = Array.from({ length: cellCount }, (_, index) => (element.cells || [])[index] || '');
+    const rowH = Number(element.rowH) || (element.height / Math.max(1, element.rows));
+    const colW = Number(element.colW) || (element.width / Math.max(1, element.columns));
+    element.rowH = rowH;
+    element.colW = colW;
+    element.height = rowH * element.rows;
+    element.width = colW * element.columns;
+  } else if (field === 'rowH') {
+    element.rowH = Math.max(2, Math.min(20, value));
+    element.height = element.rowH * Math.max(1, Number(element.rows) || 1);
+  } else if (field === 'colW') {
+    element.colW = Math.max(4, Math.min(40, value));
+    element.width = element.colW * Math.max(1, Number(element.columns) || 1);
+  } else if (field === 'digits') {
+    element[field] = Math.max(1, Math.min(12, Math.round(value)));
+  } else {
+    element[field] = field === 'textArcAngle' ? clampTextArcAngle(value) : value;
+    updateInputConfirmationAfterEdit(element, field);
+    if (field === 'fontFamily') {
+      element.fontFamily = resolveFontId(value);
+      delete element.sourceFontFamily;
+    }
+  }
+}
+
 function handleField(action, target) {
+  if (action === 'document-name-draft') {
+    state.documentNameDraft = target.value;
+    return;
+  }
+  if (action === 'save-template-name') {
+    state.saveTemplateName = target.value;
+    return;
+  }
+  if (action === 'save-template-folder') {
+    state.saveTemplateFolder = target.value;
+    return;
+  }
+  if (action === 'scan-manual-value') {
+    state.scanManualValue = target.value;
+    const button = modalRoot.querySelector('[data-action="confirm-scan-manual"]');
+    if (button) button.disabled = !String(target.value || '').trim();
+    return;
+  }
+  if (action === 'advanced-qr-field') {
+    const field = target.dataset.field;
+    if (!field) return;
+    state.advancedQrDraft = { ...(state.advancedQrDraft || {}), [field]: target.value };
+    if (state.advancedQrErrors && state.advancedQrErrors[field]) {
+      delete state.advancedQrErrors[field];
+      const container = target.closest('.field');
+      if (container) {
+        container.classList.remove('invalid');
+        const error = container.querySelector('[role="alert"]');
+        if (error) error.remove();
+      }
+    }
+    return;
+  }
+  if (action === 'update-date-custom-label') {
+    const value = String(target.value || '').slice(0, 16);
+    beginContinuousInputUndo();
+    softUpdate(() => {
+      const element = dateControlElement(selectedElement(state));
+      if (!element || element.locked || element.type !== 'date') return;
+      element.label = value;
+      element.customLabel = value;
+      element.dateRole = 'generic';
+    }, { autosave: false });
+    return;
+  }
   if (action === 'editor-tpl-size') {
     state.editorTplSize = target.value || '全部尺寸';
     refreshEditorChrome();
@@ -3271,6 +4847,11 @@ function handleField(action, target) {
     const cursor = target.selectionStart;
     if (state.modal === 'border') renderModalOnly();
     else refreshEditorChrome();
+    const next = document.querySelector('[data-action="border-search"]');
+    if (next) {
+      next.focus();
+      try { next.setSelectionRange(cursor, cursor); } catch (_) {}
+    }
     paintBorderThumbs();
     return;
   }
@@ -3300,6 +4881,7 @@ function handleField(action, target) {
   }
   if (action === 'template-search') {
     state.templateQuery = target.value;
+    state.templateVisibleCount = 24;
     const cursor = target.selectionStart;
     render();
     const next = document.querySelector('[data-action="template-search"]');
@@ -3309,13 +4891,41 @@ function handleField(action, target) {
     }
     return;
   }
+  if (action === 'project-search') {
+    state.projectQuery = target.value;
+    state.projectVisibleCount = 24;
+    const cursor = target.selectionStart;
+    render();
+    const next = document.querySelector('[data-action="project-search"]');
+    if (next) {
+      next.focus();
+      try { next.setSelectionRange(cursor, cursor); } catch (_) {}
+    }
+    return;
+  }
   if (action === 'template-category') {
     state.templateCategory = target.dataset.category;
+    state.templateVisibleCount = 24;
     render();
     return;
   }
-    if (action === 'set-table-dim') {
-    handleAction(action, target);
+  if (action === 'set-table-dim') {
+    const field = target.dataset.field || 'rowH';
+    const value = Number(target.value);
+    if (!Number.isFinite(value)) return;
+    const element = selectedElement(state);
+    if (!element || element.locked || element.type !== 'table') return;
+    beginContinuousInputUndo();
+    softUpdate(() => {
+      applyElementFieldValue(state.document, element, field, value);
+    }, {
+      autosave: false,
+      patchReadout: () => {
+        const row = target.closest('.niim-form-row');
+        const readout = row && row.querySelector('label strong, em');
+        if (readout) readout.textContent = Number(value).toFixed(1);
+      }
+    });
     return;
   }
   if (action === 'update-element') {
@@ -3326,18 +4936,20 @@ function handleField(action, target) {
     ];
     const value = numeric.includes(field) ? Number(target.value) : target.value;
     if (numeric.includes(field) && !Number.isFinite(value)) return;
-    // Live fields: paint canvas only, keep input focused (video: no flash while typing / sliding)
-    const softFields = new Set(['text', 'value', 'fixedValue', 'prefix', 'suffix', 'fontSize', 'rotation', 'textArcAngle']);
-    if (softFields.has(field) && state.route === 'editor') {
+    // Every continuous editor input updates the mounted canvas without
+    // replacing its DOM node. The matching change event commits one undo step.
+    const continuousInput = state.route === 'editor'
+      && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
+      && field !== 'document-width'
+      && field !== 'document-height';
+    if (continuousInput) {
       const element = selectedElement(state);
       if (!element || element.locked) return;
-      if (!contentUndoBefore && ['text', 'value', 'fixedValue', 'prefix', 'suffix', 'fontSize', 'rotation', 'textArcAngle'].includes(field)) {
-        contentUndoBefore = cloneDocument(state.document);
-      }
+      beginContinuousInputUndo();
       softUpdate(() => {
-        element[field] = field === 'textArcAngle' ? clampTextArcAngle(value) : value;
+        applyElementFieldValue(state.document, element, field, value);
       }, {
-        autosave: field === 'fontSize' || field === 'textArcAngle',
+        autosave: false,
         syncClear: field === 'text' || field === 'value',
         patchReadout: field === 'fontSize'
           ? () => {
@@ -3346,6 +4958,12 @@ function handleField(action, target) {
             const slider = document.querySelector('.niim-size-slider');
             if (slider) slider.value = String(value);
           }
+          : field === 'threshold'
+            ? () => {
+              const row = target.closest('.niim-form-row');
+              const readout = row && row.querySelector('label strong');
+              if (readout) readout.textContent = String(Math.round(value));
+            }
           : field === 'textArcAngle'
             ? () => {
               const angle = clampTextArcAngle(value);
@@ -3368,39 +4986,19 @@ function handleField(action, target) {
       }
       const element = selectedElement(state);
       if (!element) return;
-      if (element.locked) return;
-      if (field === 'rows' || field === 'columns') {
-        element[field] = Math.max(1, Math.min(field === 'rows' ? 20 : 12, Math.round(value)));
-        const cellCount = element.rows * element.columns;
-        element.cells = Array.from({ length: cellCount }, (_, index) => (element.cells || [])[index] || '');
-        const rowH = Number(element.rowH) || (element.height / Math.max(1, element.rows));
-        const colW = Number(element.colW) || (element.width / Math.max(1, element.columns));
-        element.rowH = rowH;
-        element.colW = colW;
-        element.height = rowH * element.rows;
-        element.width = colW * element.columns;
-      } else if (field === 'rowH') {
-        element.rowH = Math.max(2, Math.min(20, value));
-        element.height = element.rowH * Math.max(1, Number(element.rows) || 1);
-      } else if (field === 'colW') {
-        element.colW = Math.max(4, Math.min(40, value));
-        element.width = element.colW * Math.max(1, Number(element.columns) || 1);
-      } else if (field === 'digits') {
-        element[field] = Math.max(1, Math.min(12, Math.round(value)));
-      } else {
-        element[field] = value;
-      }
+      applyElementFieldValue(documentValue, element, field, value);
     });
     return;
   }
   if (action === 'update-table-cell') {
     const index = Number(target.dataset.index);
-    commit(() => {
+    beginContinuousInputUndo();
+    softUpdate(() => {
       const element = selectedElement(state);
       if (element && !element.locked && element.type === 'table' && Number.isInteger(index) && index >= 0) {
         element.cells[index] = target.value;
       }
-    });
+    }, { autosave: false });
     return;
   }
   if (action === 'toggle-element') {
@@ -3416,7 +5014,7 @@ function handleField(action, target) {
     commit(() => {
       const element = selectedElement(state);
       if (element && !element.locked && element.type === 'barcode') {
-        element.format = target.value;
+        confirmBarcodeFormat(element, target.value);
       }
     });
     return;
@@ -3429,7 +5027,9 @@ function handleField(action, target) {
     const field = target.dataset.field;
     state.settings[field] = ['density', 'threshold', 'copies', 'labelType'].includes(field)
       ? Number(target.value)
-      : target.value;
+      : field === 'onboardingDone'
+        ? target.value === 'true'
+        : target.value;
     persistSettings(state);
     // Switching the model is the main escape hatch from a blocked print —
     // re-check immediately so the warning bar clears itself.
@@ -3440,8 +5040,25 @@ function handleField(action, target) {
       render();
       return;
     }
+    if (state.modal === 'default-print-settings' && ['density', 'threshold', 'defaultProfileId', 'labelType'].includes(field)) {
+      if (field === 'defaultProfileId') {
+        renderModalOnly();
+      } else if (field === 'density' || field === 'threshold') {
+        const control = modalRoot.querySelector(`[data-action="update-setting"][data-field="${field}"]`);
+        const readout = control && control.closest('.field') && control.closest('.field').querySelector('label strong');
+        if (readout) readout.textContent = String(state.settings[field]);
+      }
+      return;
+    }
     if (state.modal === 'print' && ['density', 'threshold', 'defaultProfileId', 'labelType'].includes(field)) {
-      renderModalOnly();
+      if (field === 'density' || field === 'threshold') {
+        const control = modalRoot.querySelector(`[data-action="update-setting"][data-field="${field}"]`);
+        const readout = control && control.closest('.field') && control.closest('.field').querySelector('label strong');
+        if (readout) readout.textContent = String(state.settings[field]);
+        if (field === 'threshold') renderPrintPreview();
+      } else {
+        renderModalOnly();
+      }
     }
     return;
   }
@@ -3450,6 +5067,10 @@ function handleField(action, target) {
     const value = Number(target.value);
     if (!Number.isFinite(value)) return;
     state[field] = value;
+    return;
+  }
+  if (action === 'stock-label-type') {
+    state.stockLabelType = Math.max(1, Math.min(4, Number(target.value) || 1));
     return;
   }
   if (action === 'rename-template-field') {
@@ -3464,6 +5085,7 @@ function handleField(action, target) {
 }
 
 let rowSaveTimer = null;
+const IME_SEARCH_ACTIONS = new Set(['template-search', 'project-search', 'material-search', 'border-search', 'editor-tpl-search']);
 
 /**
  * Batch rows used to survive only if the user found the unlabelled save icon.
@@ -3491,6 +5113,22 @@ function setRowSaveStatus(text) {
   if (chip) chip.textContent = text;
 }
 
+function bindSearchComposition(root) {
+  root.addEventListener('compositionstart', (event) => {
+    const target = event.target.closest && event.target.closest('[data-action]');
+    if (target && IME_SEARCH_ACTIONS.has(target.dataset.action)) target.dataset.imeComposing = 'true';
+  });
+  root.addEventListener('compositionend', (event) => {
+    const target = event.target.closest && event.target.closest('[data-action]');
+    if (!target || !IME_SEARCH_ACTIONS.has(target.dataset.action)) return;
+    delete target.dataset.imeComposing;
+    handleField(target.dataset.action, target);
+  });
+}
+
+bindSearchComposition(appRoot);
+bindSearchComposition(modalRoot);
+
 appRoot.addEventListener('focusout', (event) => {
   const target = event.target.closest && event.target.closest('[data-action="update-data-cell"]');
   // Leaving the last cell must not wait out the debounce.
@@ -3499,19 +5137,20 @@ appRoot.addEventListener('focusout', (event) => {
 
 appRoot.addEventListener('click', (event) => {
   const target = event.target.closest('[data-action]');
-  if (target) handleAction(target.dataset.action, target);
+  if (target && !target.matches('input, select, textarea, option')) handleAction(target.dataset.action, target);
 });
 
 modalRoot.addEventListener('click', (event) => {
   const target = event.target.closest('[data-action]');
-  if (target) handleAction(target.dataset.action, target);
+  if (target && !target.matches('input, select, textarea, option')) handleAction(target.dataset.action, target);
 });
 
 appRoot.addEventListener('input', (event) => {
   const target = event.target.closest('[data-action]');
   if (!target) return;
+  if (event.isComposing || target.dataset.imeComposing === 'true') return;
   // Live: content typing + font size slider (no full remount)
-  if (['template-search', 'material-search', 'editor-tpl-search', 'update-data-cell', 'update-element', 'update-table-cell', 'set-table-dim', 'border-search'].includes(target.dataset.action)) {
+  if (['template-search', 'project-search', 'material-search', 'editor-tpl-search', 'update-data-cell', 'update-element', 'update-table-cell', 'set-table-dim', 'border-search', 'update-date-custom-label'].includes(target.dataset.action)) {
     handleField(target.dataset.action, target);
   }
 });
@@ -3521,6 +5160,9 @@ appRoot.addEventListener('keydown', (event) => {
   if (event.key !== 'Enter') return;
   const input = event.target;
   if (!input || !input.classList || !input.classList.contains('niim-content-line')) return;
+  // Text labels support real line breaks. Ctrl/Cmd+Enter remains a keyboard
+  // shortcut for the visible 完成 action; barcode/QR inputs still use Enter.
+  if (input.tagName === 'TEXTAREA' && !event.ctrlKey && !event.metaKey) return;
   event.preventDefault();
   handleAction('content-done', input);
 });
@@ -3529,21 +5171,19 @@ appRoot.addEventListener('change', (event) => {
   const target = event.target.closest('[data-action]');
   if (!target) return;
   // Date/time pickers commit on change (not click)
-  if (['set-date-base', 'set-date-label'].includes(target.dataset.action)) {
+  if (['set-date-base', 'set-date-label', 'set-date-format'].includes(target.dataset.action)) {
     handleAction(target.dataset.action, target);
     return;
   }
-  // text/value already handled live on input — finalize undo on change
-  if (target.dataset.action === 'update-element' && contentUndoBefore) {
-    const field = target.dataset.field;
-    if (['text', 'value', 'fixedValue', 'prefix', 'suffix', 'fontSize', 'rotation', 'textArcAngle'].includes(field)) {
-      state.undo.push(contentUndoBefore);
-      if (state.undo.length > 30) state.undo.shift();
-      state.redo = [];
-      contentUndoBefore = null;
-      autosave();
-      return;
-    }
+  // Continuous inputs already changed the in-memory document without a DOM
+  // remount. Finalize the whole typing session as exactly one undo step.
+  if (contentUndoBefore && ['update-element', 'update-table-cell', 'update-date-custom-label', 'set-table-dim'].includes(target.dataset.action)) {
+    state.undo.push(contentUndoBefore);
+    if (state.undo.length > 30) state.undo.shift();
+    state.redo = [];
+    contentUndoBefore = null;
+    autosave();
+    return;
   }
   handleField(target.dataset.action, target);
 });
@@ -3551,7 +5191,8 @@ appRoot.addEventListener('change', (event) => {
 modalRoot.addEventListener('input', (event) => {
   const target = event.target.closest('[data-action]');
   if (!target) return;
-  if (target.dataset.action === 'update-setting' || target.dataset.action === 'stock-field' || target.dataset.action === 'rename-template-field') {
+  if (event.isComposing || target.dataset.imeComposing === 'true') return;
+  if (['update-setting', 'stock-field', 'rename-template-field', 'rename-template-folder-field', 'border-search', 'material-search', 'save-template-name', 'save-template-folder', 'scan-manual-value', 'advanced-qr-field', 'document-name-draft'].includes(target.dataset.action)) {
     handleField(target.dataset.action, target);
   }
 });
@@ -3559,11 +5200,29 @@ modalRoot.addEventListener('input', (event) => {
 modalRoot.addEventListener('change', (event) => {
   const target = event.target.closest('[data-action]');
   if (!target) return;
+  if (target.dataset.action === 'advanced-qr-field') {
+    handleField(target.dataset.action, target);
+    return;
+  }
+  if (target.dataset.action === 'backup-strategy') {
+    state.backupStrategy = target.value === 'replace' ? 'replace' : 'merge';
+    return;
+  }
+  if (target.dataset.action === 'advanced-qr-hidden') {
+    state.advancedQrDraft = { ...(state.advancedQrDraft || {}), hidden: !!target.checked };
+    return;
+  }
   if (target.dataset.action === 'stock-apply-current') {
     state.stockApplyCurrent = !!target.checked;
     return;
   }
   if (target.dataset.action === 'batch-template') {
+    const batchTemplate = findRuntimeTemplate(target.value);
+    if (!isBatchCompatibleTemplate(batchTemplate)) {
+      toast('该模板不支持批量数据', 'error');
+      renderModalOnly();
+      return;
+    }
     state.settings.batchTemplateId = target.value;
     persistSettings(state);
     return;
@@ -3573,18 +5232,65 @@ modalRoot.addEventListener('change', (event) => {
     return;
   }
   if (target.dataset.action === 'batch-toggle-row') {
+    const scrollHost = modalRoot.querySelector('.batch-row-list') || modalRoot.querySelector('.batch-sheet');
+    const scrollTop = scrollHost ? scrollHost.scrollTop : 0;
     const row = Number(target.dataset.row);
     const set = new Set(Array.isArray(state.batchSelectedRows) ? state.batchSelectedRows : []);
     if (target.checked) set.add(row);
     else set.delete(row);
     state.batchSelectedRows = Array.from(set).sort((a, b) => a - b);
     renderModalOnly();
+    requestAnimationFrame(() => {
+      const nextHost = modalRoot.querySelector('.batch-row-list') || modalRoot.querySelector('.batch-sheet');
+      if (nextHost) nextHost.scrollTop = scrollTop;
+      const nextToggle = modalRoot.querySelector(`[data-action="batch-toggle-row"][data-row="${row}"]`);
+      if (nextToggle) {
+        try { nextToggle.focus({ preventScroll: true }); } catch (_) { nextToggle.focus(); }
+      }
+    });
     return;
   }
   handleField(target.dataset.action, target);
 });
 
 window.addEventListener('keydown', (event) => {
+  const currentTab = event.target && event.target.closest ? event.target.closest('[role="tab"]') : null;
+  if (currentTab && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) {
+    const tablist = currentTab.closest('[role="tablist"]');
+    const tabs = tablist ? Array.from(tablist.querySelectorAll('[role="tab"]:not([disabled])')) : [];
+    if (tabs.length) {
+      event.preventDefault();
+      const currentIndex = Math.max(0, tabs.indexOf(currentTab));
+      let nextIndex = currentIndex;
+      if (event.key === 'Home') nextIndex = 0;
+      else if (event.key === 'End') nextIndex = tabs.length - 1;
+      else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') nextIndex = (currentIndex + 1) % tabs.length;
+      else nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+      const nextTab = tabs[nextIndex];
+      const root = modalRoot.contains(nextTab) ? modalRoot : appRoot;
+      const focusSnapshot = captureFocusState(root, nextTab, 'roving-tab');
+      nextTab.click();
+      requestAnimationFrame(() => restoreFocusState(root, focusSnapshot, 'roving-tab'));
+      return;
+    }
+  }
+  if (event.key === 'Tab' && state.modal) {
+    const focusable = Array.from(modalRoot.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'));
+    if (focusable.length) {
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !modalRoot.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+        return;
+      }
+      if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+        return;
+      }
+    }
+  }
   if (event.key === 'Escape' && state.modal) {
     event.preventDefault();
     closeModal();
@@ -3635,7 +5341,7 @@ window.addEventListener('resize', () => {
 window.addEventListener('beforeunload', () => {
   if (rowSaveTimer) flushRowSave();
   try {
-    if (state.document) upsertProject(state);
+    if (shouldPersistEditorDraft()) upsertProject(state);
   } catch (error) {
     // The page is closing; the in-memory document remains available until unload.
   }
@@ -3692,3 +5398,4 @@ function bindBackButton() {
 write(KEYS.projects, state.projects);
 render();
 bindBackButton();
+autoReconnectLastDevice();

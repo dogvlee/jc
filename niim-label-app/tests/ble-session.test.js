@@ -1,7 +1,14 @@
 ﻿const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { BleSession, withTimeout } = require('../src/services/ble-session');
+const {
+  BleSession,
+  NOTIFY_CHARACTERISTIC,
+  PRIMARY_SERVICE,
+  WRITE_CHARACTERISTIC,
+  selectTrustedChannel,
+  withTimeout
+} = require('../src/services/ble-session');
 const { COMMAND, RESPONSE, encodePacket } = require('../src/core/protocol');
 
 function readySession(onWrite) {
@@ -78,5 +85,37 @@ test('writeBytes preserves a full protocol frame and rejects an insufficient MTU
     /完整打印帧需要 27 字节/
   );
   assert.equal(writes, 0);
+});
+
+test('BLE discovery accepts only the verified NIIMBOT service and characteristics', () => {
+  const services = [
+    { uuid: 'untrusted-service' },
+    { uuid: PRIMARY_SERVICE.toUpperCase() }
+  ];
+  const characteristics = [
+    { uuid: 'arbitrary-writable', properties: { writeNoResponse: true, notify: true } },
+    { uuid: WRITE_CHARACTERISTIC.toUpperCase(), properties: { writeNoResponse: true } },
+    { uuid: NOTIFY_CHARACTERISTIC.toUpperCase(), properties: { notify: true } }
+  ];
+  const channel = selectTrustedChannel(services, (service) => (
+    service.uuid === services[1].uuid ? characteristics : []
+  ));
+  assert.equal(channel.serviceId, services[1].uuid);
+  assert.equal(channel.write.uuid, WRITE_CHARACTERISTIC.toUpperCase());
+  assert.equal(channel.notify.uuid, NOTIFY_CHARACTERISTIC.toUpperCase());
+});
+
+test('BLE discovery rejects arbitrary writable channels and incomplete NIIMBOT channels', () => {
+  const arbitrary = selectTrustedChannel(
+    [{ uuid: 'untrusted-service' }],
+    () => [{ uuid: 'anything', properties: { write: true, notify: true } }]
+  );
+  assert.equal(arbitrary, null);
+
+  const incomplete = selectTrustedChannel(
+    [{ uuid: PRIMARY_SERVICE }],
+    () => [{ uuid: WRITE_CHARACTERISTIC, properties: { write: true } }]
+  );
+  assert.equal(incomplete, null);
 });
 

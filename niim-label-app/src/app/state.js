@@ -3,12 +3,9 @@ const {
   createDocument
 } = require('../core/document');
 const { KEYS, read, write } = require('../services/store');
-const { templates } = require('./catalog');
 const { buildTemplateDocument } = require('./template-layouts');
-const { IMPORTED_TEMPLATES } = require('./imported-templates');
-const { ONLINE_TEMPLATES } = require('./online-templates-pack');
-const ONLINE_SEED = ONLINE_TEMPLATES;
 const { DEFAULT_MATERIAL_CHIP } = require('../core/materials');
+const { normalizeElementFont } = require('../core/font-family');
 
 function templateDocument(template) {
   return buildTemplateDocument(template);
@@ -68,122 +65,21 @@ function userTemplateFromCatalog(template, index) {
 }
 
 function seedProjects() {
-  // Imported + online pack first, then full catalog (no cap on catalog).
-  const imported = IMPORTED_TEMPLATES.map((item, i) => projectFromImported(item, i));
-  const online = ONLINE_SEED.map((item, i) => ({
-    ...projectFromImported(item, IMPORTED_TEMPLATES.length + i),
-    source: 'online-niim'
-  }));
-  const seededIds = new Set([
-    ...IMPORTED_TEMPLATES.map((i) => i.id),
-    ...ONLINE_SEED.map((i) => i.id)
-  ]);
-  const extras = templates
-    .filter((t) => !seededIds.has(t.id))
-    .map((template, index) => projectFromCatalog(template, imported.length + online.length + index));
-  return [...imported, ...online, ...extras];
+  // Projects are user work, not a second copy of the bundled template catalog.
+  return [];
 }
 
 function seedUserTemplates() {
-  // Full library: imported + online seed, then every catalog template; dedupe by id.
-  const seen = new Set();
-  const out = [];
-  IMPORTED_TEMPLATES.forEach((item, i) => {
-    if (seen.has(item.id)) return;
-    seen.add(item.id);
-    out.push(userTemplateFromImported(item, i));
-  });
-  ONLINE_SEED.forEach((item, i) => {
-    if (seen.has(item.id)) return;
-    seen.add(item.id);
-    const ut = userTemplateFromImported(item, IMPORTED_TEMPLATES.length + i);
-    ut.source = 'online-niim';
-    out.push(ut);
-  });
-  templates.forEach((template) => {
-    if (seen.has(template.id)) return;
-    seen.add(template.id);
-    out.push(userTemplateFromCatalog(template, out.length));
-  });
-  return out;
+  // "My templates" starts empty and only contains explicit user saves/imports.
+  return [];
 }
 
-/**
- * Ensure every catalog/imported template exists as project + userTemplate (idempotent by id).
- * Imported first in order, then rest of catalog. Persists when changed.
- */
+/** Normalize the two user-owned collections without copying the catalog into them. */
 function ensureTemplateLibrary(state) {
-  let changed = false;
-  const existingIds = new Set((state.projects || []).map((p) => p.id));
-  const toAdd = [];
-
-  IMPORTED_TEMPLATES.forEach((item, index) => {
-    const pid = `project-${item.id}`;
-    if (!existingIds.has(pid)) {
-      toAdd.push(projectFromImported(item, index));
-      existingIds.add(pid);
-      changed = true;
-    }
-  });
-
-  ONLINE_SEED.forEach((item, index) => {
-    const pid = `project-${item.id}`;
-    if (!existingIds.has(pid)) {
-      const p = projectFromImported(item, IMPORTED_TEMPLATES.length + index);
-      p.source = 'online-niim';
-      toAdd.push(p);
-      existingIds.add(pid);
-      changed = true;
-    }
-  });
-
-  templates.forEach((template, index) => {
-    const pid = `project-${template.id}`;
-    if (!existingIds.has(pid)) {
-      toAdd.push(projectFromCatalog(template, IMPORTED_TEMPLATES.length + ONLINE_SEED.length + index));
-      existingIds.add(pid);
-      changed = true;
-    }
-  });
-
-  if (toAdd.length) {
-    state.projects = [...toAdd, ...(state.projects || [])];
-  }
-
-  const uids = new Set((state.userTemplates || []).map((t) => t.id));
-  const uAdd = [];
-  IMPORTED_TEMPLATES.forEach((item, index) => {
-    if (!uids.has(item.id)) {
-      uAdd.push(userTemplateFromImported(item, index));
-      uids.add(item.id);
-      changed = true;
-    }
-  });
-  ONLINE_SEED.forEach((item, index) => {
-    if (!uids.has(item.id)) {
-      const ut = userTemplateFromImported(item, IMPORTED_TEMPLATES.length + index);
-      ut.source = 'online-niim';
-      uAdd.push(ut);
-      uids.add(item.id);
-      changed = true;
-    }
-  });
-  templates.forEach((template) => {
-    if (uids.has(template.id)) return;
-    uAdd.push(userTemplateFromCatalog(template, uAdd.length));
-    uids.add(template.id);
-    changed = true;
-  });
-  if (uAdd.length) {
-    state.userTemplates = [...uAdd, ...(state.userTemplates || [])];
-  }
-
-  if (changed) {
-    try {
-      write(KEYS.projects, state.projects);
-      write(KEYS.templates, state.userTemplates);
-    } catch (_) { /* ignore quota */ }
-  }
+  // Kept as a compatibility hook for older callers. Bundled templates live in
+  // catalog.js and must never be materialized as fake projects/user templates.
+  state.projects = Array.isArray(state.projects) ? state.projects : [];
+  state.userTemplates = Array.isArray(state.userTemplates) ? state.userTemplates : [];
   return state;
 }
 
@@ -201,13 +97,19 @@ function defaultSettings() {
     threshold: 180,
     copies: 1,
     labelType: 1,
-    defaultWidthMm: 50,
-    defaultHeightMm: 30,
-    installedStock: 'T50×30 203 空白标签',
+    // 40×12 is the largest starter stock that fits every currently verified
+    // D11/D110/B1/B21 profile without asking a new user to fix a blocker first.
+    defaultWidthMm: 40,
+    defaultHeightMm: 12,
+    installedStock: 'T40×12 203 空白标签',
+    stockDefaultsVersion: 2,
     batchTemplateId: 'product-simple',
     importedLibraryV1: false,
     importedLibraryV2: false,
-    importedLibraryV4: false
+    importedLibraryV4: false,
+    onboardingDone: false,
+    lastDeviceId: '',
+    lastDeviceName: ''
   };
 }
 
@@ -219,9 +121,59 @@ function readPrintHistory() {
   }
 }
 
+/**
+ * Home "最近打印" strip: successful prints only, newest first, one per
+ * project (or per history entry when the label was never saved), max 8.
+ * Each entry carries the fields views.js renders for reprint cards.
+ */
+function buildRecentPrints(history) {
+  const entries = Array.isArray(history) ? history : [];
+  const byKey = new Map();
+  entries.forEach((item) => {
+    if (!item || item.result !== 'success') return;
+    const key = item.projectId || item.id || 'print-unknown';
+    if (byKey.has(key)) return;
+    byKey.set(key, item);
+  });
+  return Array.from(byKey.values()).slice(0, 8).map((item) => {
+    const documentValue = item.document || {};
+    const elements = documentValue.elements || [];
+    let kind = 'accent';
+    if (elements.some((element) => element && element.type === 'qrcode')) kind = 'qr';
+    else if (elements.some((element) => element && element.type === 'barcode')) kind = 'barcode';
+    const widthMm = Number(item.widthMm) || Number(documentValue.widthMm) || 40;
+    const heightMm = Number(item.heightMm) || Number(documentValue.heightMm) || 30;
+    return {
+      name: item.name || documentValue.name || '未命名标签',
+      projectId: item.projectId || '',
+      id: item.id || '',
+      kind,
+      widthMm,
+      heightMm,
+      sizeText: `${widthMm}×${heightMm} mm`
+    };
+  });
+}
+
 function initialState() {
   const projects = read(KEYS.projects, seedProjects());
   const userTemplates = read(KEYS.templates, seedUserTemplates());
+  const storedSettings = read(KEYS.settings, {});
+  const settings = Object.assign(defaultSettings(), storedSettings);
+  // v1 accidentally made 50×30 the starter stock although it fits none of
+  // the verified D11/D110/B1/B21 printheads. Migrate only that exact legacy
+  // default; all genuine custom sizes remain untouched.
+  const legacyStarterStock = storedSettings.stockDefaultsVersion == null
+    && Number(storedSettings.defaultWidthMm) === 50
+    && Number(storedSettings.defaultHeightMm) === 30
+    && (!storedSettings.installedStock || /^T50×30\s+(?:203|230)\b/.test(storedSettings.installedStock));
+  if (legacyStarterStock) {
+    settings.defaultWidthMm = 40;
+    settings.defaultHeightMm = 12;
+    settings.installedStock = 'T40×12 203 空白标签';
+    settings.stockDefaultsVersion = 2;
+    write(KEYS.settings, settings);
+  }
   const dataRows = read(KEYS.dataRows, [
     { name: '样品 A', code: '6901234567892', price: '19.90', date: '2026-08-02' },
     { name: '样品 B', code: '6901234567885', price: '29.90', date: '2026-08-02' },
@@ -231,15 +183,49 @@ function initialState() {
     route: 'home',
     projects,
     userTemplates,
-    settings: Object.assign(defaultSettings(), read(KEYS.settings, {})),
+    settings,
     dataRows,
     templateCategory: '全部',
+    templateFolder: '全部',
     templateIndustry: '全部',
+    templateScene: '全部',
+    templateTask: '全部',
+    templateSize: '全部尺寸',
+    libraryScene: '全部',
+    librarySize: '全部',
     templateQuery: '',
+    templateVisibleCount: 24,
+    // Authorized public catalog pages are session-only. The bundled starter
+    // library remains the offline fallback and these records are never copied
+    // into projects/userTemplates automatically.
+    remoteTemplates: [],
+    remoteTemplatePage: 0,
+    remoteTemplateTotal: 0,
+    remoteTemplateHasMore: false,
+    remoteTemplateLoading: false,
+    remoteTemplateError: '',
+    remoteMaterials: [],
+    remoteMaterialPage: 0,
+    remoteMaterialTotal: 0,
+    remoteMaterialHasMore: false,
+    remoteMaterialLoading: false,
+    remoteMaterialError: '',
+    remoteBorders: [],
+    remoteBorderPage: 0,
+    remoteBorderTotal: 0,
+    remoteBorderHasMore: false,
+    remoteBorderLoading: false,
+    remoteBorderError: '',
+    projectQuery: '',
+    projectVisibleCount: 24,
     templatePreviewId: '',
     printHistory: readPrintHistory(),
+    recentPrints: buildRecentPrints(readPrintHistory()),
+    onboardingStep: 1,
     document: null,
     projectId: '',
+    editorReturnRoute: 'home',
+    editorReturnScrollY: 0,
     selectedId: '',
     selectedIds: [],
     multiSelect: false,
@@ -268,16 +254,43 @@ function initialState() {
     printIntent: false,
     modal: '',
     draftSavedAt: 0,
+    blankDraftBaseline: '',
     // UI drafts for sheets
-    stockWidthMm: 50,
-    stockHeightMm: 30,
+    stockWidthMm: 40,
+    stockHeightMm: 12,
     stockApplyCurrent: true,
+    stockLabelType: null,
+    stockRotationTurns: 0,
     batchSelectedRows: null,
     batchMode: 'open-first',
+    pendingBatchDocuments: [],
+    pendingBatchIndex: 0,
     manageTemplateId: '',
+    saveTemplateName: '',
+    saveTemplateFolder: '未分类',
+    saveTemplateExitAfterSave: false,
+    scanTargetId: '',
+    scanCreateType: 'barcode',
+    scanStatus: 'idle',
+    scanError: '',
+    scanManualValue: '',
+    scanDetectedFormat: '',
+    advancedQrType: 'wifi',
+    advancedQrDraft: {},
+    advancedQrErrors: {},
+    advancedQrEditId: '',
+    editorBaselineDocument: null,
+    editorBaselineProject: null,
+    editorBaselineProjectId: '',
+    documentNameDraft: '',
+    documentNameExitAfterSave: false,
+    backupStrategy: 'merge',
+    backupStatus: '',
     editorTplSize: '全部尺寸',
     editorTplIndustry: '全部',
     editorTplQuery: '',
+    editorDataRowIndex: -1,
+    dataReturnToEditor: false,
     materialChip: DEFAULT_MATERIAL_CHIP,
     materialQuery: '',
     materialSearchOpen: false,
@@ -287,7 +300,8 @@ function initialState() {
     pendingBorderAdd: false
   };
 
-  // Merge full catalog + imported + online library (idempotent). v3 re-merges online pack.
+  // Legacy migration flag is retained, but the catalog is no longer copied into
+  // projects or "My templates". Existing user data is preserved as-is.
   if (!state.settings.importedLibraryV4) {
     ensureTemplateLibrary(state);
     state.settings.importedLibraryV1 = true;
@@ -340,7 +354,14 @@ function upsertProject(state) {
 
 function openDocument(state, document, projectId) {
   state.document = cloneDocument(document);
+  (state.document.elements || []).forEach(normalizeElementFont);
   state.projectId = projectId || '';
+  const sourceProject = state.projectId
+    ? state.projects.find((item) => item.id === state.projectId)
+    : null;
+  // A fresh label is not saved merely because the previous document was.
+  state.draftSavedAt = sourceProject ? Number(sourceProject.updatedAt) || 0 : 0;
+  state.blankDraftBaseline = '';
   const first = state.document.elements[0];
   if (first) {
     state.selectedId = first.id;
@@ -365,7 +386,14 @@ function openDocument(state, document, projectId) {
   state.route = 'editor';
 }
 
+function shouldPersistDraft(document, projectId, blankDraftBaseline) {
+  if (!document) return false;
+  if (projectId || !blankDraftBaseline) return true;
+  return JSON.stringify(document) !== blankDraftBaseline;
+}
+
 module.exports = {
+  buildRecentPrints,
   defaultSettings,
   ensureImportedLibrary,
   ensureTemplateLibrary,
@@ -379,6 +407,7 @@ module.exports = {
   readPrintHistory,
   seedProjects,
   seedUserTemplates,
+  shouldPersistDraft,
   templateDocument,
   userTemplateFromCatalog,
   userTemplateFromImported,

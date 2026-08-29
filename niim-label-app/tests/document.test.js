@@ -1,7 +1,7 @@
 ﻿const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { clampElement, createDocument, createElement, hitTest, placeNewElement } = require('../src/core/document');
+const { clampElement, createDocument, createElement, hitTest, hitTestAll, placeNewElement } = require('../src/core/document');
 
 test('hitTest follows element rotation instead of using an unrotated box', () => {
   const document = {
@@ -38,6 +38,33 @@ test('clampElement preserves local dimensions when a quarter-turn fits the page'
   assert.ok(centerX + element.height / 2 <= document.widthMm + 1e-9);
   assert.ok(centerY - element.width / 2 >= -1e-9);
   assert.ok(centerY + element.width / 2 <= document.heightMm + 1e-9);
+});
+
+test('hitTestAll gives a sub-2mm element an invisible minimum selection target', () => {
+  const document = {
+    elements: [
+      { id: 'background', x: 0, y: 0, width: 40, height: 20, rotation: 0 },
+      { id: 'hairline', x: 9.5, y: 9.8, width: 1, height: 0.4, rotation: 0 }
+    ]
+  };
+
+  assert.equal(hitTest(document, 10, 11.8).id, 'background');
+  assert.deepEqual(
+    hitTestAll(document, 10, 11.8, { minWidthMm: 4, minHeightMm: 4 }).map((item) => item.id),
+    ['hairline', 'background']
+  );
+});
+
+test('hitTestAll returns every overlap in visual z-order for repeat-tap cycling', () => {
+  const document = {
+    elements: [
+      { id: 'bottom', x: 5, y: 5, width: 10, height: 6, rotation: 0 },
+      { id: 'middle', x: 5, y: 5, width: 10, height: 6, rotation: 0 },
+      { id: 'top', x: 5, y: 5, width: 10, height: 6, rotation: 0 }
+    ]
+  };
+
+  assert.deepEqual(hitTestAll(document, 10, 8).map((item) => item.id), ['top', 'middle', 'bottom']);
 });
 
 test('placeNewElement keeps new items visible and avoids an existing default text element', () => {

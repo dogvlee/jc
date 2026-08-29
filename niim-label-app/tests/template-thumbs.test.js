@@ -7,7 +7,9 @@ const {
   contentFingerprint,
   getCachedThumb,
   invalidateThumbsByPrefix,
+  normalizedMaxSide,
   setCachedThumb,
+  thumbRasterLayout,
   thumbCacheKey
 } = require('../src/app/template-thumbs');
 
@@ -32,6 +34,23 @@ test('every catalog id has a unique thumb cache key that changes with content', 
   }
 });
 
+test('thumb cache key keeps different raster resolutions separate', () => {
+  const document = buildTemplateDocument(templates[0]);
+  const compact = thumbCacheKey(templates[0].id, document, 203, 400);
+  const retina = thumbCacheKey(templates[0].id, document, 203, 800);
+  assert.notEqual(compact, retina);
+  assert.match(compact, /\|203\|400\|/);
+  assert.match(retina, /\|203\|800\|/);
+  assert.equal(normalizedMaxSide(9999), 1200);
+});
+
+test('small printer-DPI documents are rasterized at the requested screen resolution', () => {
+  const layout = thumbRasterLayout({ width: 240, height: 96 }, 800, 14);
+  assert.equal(layout.width, 800);
+  assert.equal(layout.height, 337);
+  assert.ok(layout.scale > 3);
+});
+
 test('thumb cache set/get/invalidate works', () => {
   invalidateThumbsByPrefix('');
   const document = buildTemplateDocument(templates[0]);
@@ -47,6 +66,17 @@ test('contentFingerprint is stable for identical documents', () => {
   const left = buildTemplateDocument(templates[0]);
   const right = buildTemplateDocument(templates[0]);
   assert.equal(contentFingerprint(left), contentFingerprint(right));
+});
+
+test('contentFingerprint changes for raster paths and visual styling', () => {
+  const base = buildTemplateDocument(templates[0]);
+  const imageChanged = JSON.parse(JSON.stringify(base));
+  imageChanged.elements[0].path = 'assets/user/new-image.png';
+  assert.notEqual(contentFingerprint(base), contentFingerprint(imageChanged));
+
+  const styleChanged = JSON.parse(JSON.stringify(base));
+  styleChanged.elements[0].rotation = 15;
+  assert.notEqual(contentFingerprint(base), contentFingerprint(styleChanged));
 });
 
 test('print history payload shape includes reopen fields', () => {

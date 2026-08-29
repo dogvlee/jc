@@ -143,22 +143,107 @@ function profileForModelId(modelId, deviceName, protocolVersion) {
   return guessProfile(deviceName);
 }
 
+// Physical stock is often slightly wider than the printable head area: a B21
+// feeds 50 mm paper but its 384-dot head prints the centered 48.05 mm, and a
+// D110 accepts 15 mm tape over a 96-dot (12.01 mm) head. Within this tolerance
+// the raster is center-cropped to the head instead of refusing to print.
+// Anything beyond it stays a hard error because most of the label would be cut.
+const PRINT_CROP_TOLERANCE_MM = 3.5;
+
 function alignedCanvasSize(document, profile) {
   const size = previewCanvasSize(document, profile.dpi);
   const dotsPerMillimeter = profile.dpi / 25.4;
+  const toleranceDots = PRINT_CROP_TOLERANCE_MM * dotsPerMillimeter;
   let { width, height } = size;
   if (profile.printDirection === 'left') {
     height = Math.ceil(height / 8) * 8;
     if (height > profile.printheadPixels) {
-      throw new Error(`当前机型打印高度最多约 ${(profile.printheadPixels / dotsPerMillimeter).toFixed(1)} mm`);
+      if (size.height - profile.printheadPixels > toleranceDots) {
+        throw new Error(`当前机型打印高度最多约 ${(profile.printheadPixels / dotsPerMillimeter).toFixed(1)} mm`);
+      }
+      return {
+        width,
+        height: profile.printheadPixels,
+        cropOffsetX: 0,
+        cropOffsetY: Math.floor((size.height - profile.printheadPixels) / 2),
+        cropped: true
+      };
     }
   } else {
     width = Math.ceil(width / 8) * 8;
     if (width > profile.printheadPixels) {
-      throw new Error(`当前机型打印宽度最多约 ${(profile.printheadPixels / dotsPerMillimeter).toFixed(1)} mm`);
+      if (size.width - profile.printheadPixels > toleranceDots) {
+        throw new Error(`当前机型打印宽度最多约 ${(profile.printheadPixels / dotsPerMillimeter).toFixed(1)} mm`);
+      }
+      return {
+        width: profile.printheadPixels,
+        height,
+        cropOffsetX: Math.floor((size.width - profile.printheadPixels) / 2),
+        cropOffsetY: 0,
+        cropped: true
+      };
     }
   }
   return { width, height };
+}
+
+/**
+ * The printable window in label millimetres when the stock is wider than the
+ * head (center crop), or null when the whole label fits the printhead.
+ */
+function rotatedBoundsMm(element) {
+  const width = Number(element.width) || 0;
+  const height = Number(element.height) || 0;
+  const centerX = (Number(element.x) || 0) + width / 2;
+  const centerY = (Number(element.y) || 0) + height / 2;
+  const radians = ((Number(element.rotation) || 0) * Math.PI) / 180;
+  const cos = Math.abs(Math.cos(radians));
+  const sin = Math.abs(Math.sin(radians));
+  const boundsWidth = width * cos + height * sin;
+  const boundsHeight = width * sin + height * cos;
+  return {
+    x: centerX - boundsWidth / 2,
+    y: centerY - boundsHeight / 2,
+    width: boundsWidth,
+    height: boundsHeight
+  };
+}
+
+/**
+ * Elements whose visual bounds reach into the physically unprintable margin
+ * of center-cropped stock. Empty when the label fits the head entirely.
+ */
+function elementsCutByCrop(document, profile, types) {
+  const window = printableWindowMm(document, profile);
+  if (!window) return [];
+  const wanted = Array.isArray(types) && types.length ? new Set(types) : null;
+  const epsilon = 0.05;
+  return (document.elements || []).filter((element) => {
+    if (wanted && !wanted.has(element.type)) return false;
+    const bounds = rotatedBoundsMm(element);
+    return bounds.x < window.x - epsilon
+      || bounds.y < window.y - epsilon
+      || bounds.x + bounds.width > window.x + window.width + epsilon
+      || bounds.y + bounds.height > window.y + window.height + epsilon;
+  });
+}
+
+function printableWindowMm(document, profile) {
+  const size = alignedCanvasSize(document, profile);
+  if (!size.cropped) return null;
+  const dotsPerMillimeter = profile.dpi / 25.4;
+  const croppedAxis = profile.printDirection === 'left' ? 'height' : 'width';
+  const printableMm = profile.printheadPixels / dotsPerMillimeter;
+  const totalMm = croppedAxis === 'height' ? Number(document.heightMm) : Number(document.widthMm);
+  return {
+    x: size.cropOffsetX / dotsPerMillimeter,
+    y: size.cropOffsetY / dotsPerMillimeter,
+    width: croppedAxis === 'width' ? printableMm : Number(document.widthMm),
+    height: croppedAxis === 'height' ? printableMm : Number(document.heightMm),
+    axis: croppedAxis,
+    printableMm,
+    marginMm: Math.max(0, (totalMm - printableMm) / 2)
+  };
 }
 
 /**
@@ -168,8 +253,20 @@ function alignedCanvasSize(document, profile) {
  */
 function evaluatePrintability(document, profile) {
   try {
-    alignedCanvasSize(document, profile);
-    return { ok: true, message: '', suggestProfileId: '' };
+    const size = alignedCanvasSize(document, profile);
+    if (size.cropped) {
+      const window = printableWindowMm(document, profile);
+      const axisLabel = window.axis === 'height' ? '高' : '宽';
+      const sideLabel = window.axis === 'height' ? '上下' : '左右';
+      const totalMm = window.axis === 'height' ? Number(document.heightMm) : Number(document.widthMm);
+      return {
+        ok: true,
+        message: '',
+        suggestProfileId: '',
+        notice: `标签${axisLabel} ${totalMm} mm 超过当前机型可打${axisLabel} ${window.printableMm.toFixed(1)} mm，将居中打印，${sideLabel}各约 ${window.marginMm.toFixed(1)} mm 不出墨。首次使用请先试打一张核对边距。`
+      };
+    }
+    return { ok: true, message: '', suggestProfileId: '', notice: '' };
   } catch (error) {
     const fallback = PROFILES.find((item) => {
       if (item.id === profile.id) return false;
@@ -180,10 +277,16 @@ function evaluatePrintability(document, profile) {
         return false;
       }
     });
+    const maximumVerifiedHeadMm = Math.max(...PROFILES.map((item) => (
+      item.printheadPixels / (item.dpi / 25.4)
+    )));
     return {
       ok: false,
-      message: error.message,
-      suggestProfileId: fallback ? fallback.id : ''
+      message: fallback
+        ? error.message
+        : `${error.message}；现有已验证机型中没有可直接打印该尺寸的配置（最大已验证打印头约 ${maximumVerifiedHeadMm.toFixed(1)} mm）。请改用适配标签纸，或在目标宽幅机型完成协议与真机样张验证后再新增机型配置。`,
+      suggestProfileId: fallback ? fallback.id : '',
+      notice: ''
     };
   }
 }
@@ -207,9 +310,11 @@ function previewCanvasSize(document, dpi) {
 module.exports = {
   PROFILES,
   alignedCanvasSize,
+  elementsCutByCrop,
   evaluatePrintability,
   getProfile,
   guessProfile,
   previewCanvasSize,
+  printableWindowMm,
   profileForModelId
 };

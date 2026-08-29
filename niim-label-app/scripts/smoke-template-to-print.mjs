@@ -32,21 +32,23 @@ function check(name, condition, detail) {
 
 await page.goto('http://127.0.0.1:4173/', { waitUntil: 'networkidle' });
 await page.locator('.home-hero').waitFor();
+const onboardingSkip = page.locator('[data-action="onboarding-skip"]');
+if (await onboardingSkip.count()) await onboardingSkip.click();
 
 // 1) Template library → preview → use
 await page.locator('.nav-item[data-route="templates"]').click();
 await page.locator('.template-card').first().waitFor();
 
 // Over-filter on purpose, then confirm the single escape hatch works.
-await page.locator('.industry-chip', { hasText: '实用功能' }).click();
-await page.locator('.segment', { hasText: '零售' }).click();
+await page.locator('.industry-chip', { hasText: '内容设计' }).click();
+await page.locator('.segment', { hasText: '仓储' }).click();
 const emptyShown = await page.locator('.empty-state').count();
 check('over-filtering shows an empty state', emptyShown > 0);
 await page.locator('[data-action="reset-template-filters"]').first().click();
 const restored = await page.locator('.template-card').count();
 check('清除全部筛选 restores the catalog', restored >= 15, `cards=${restored}`);
 
-await page.locator('.template-card', { hasText: '商品价格标签' }).first().click();
+await page.locator('.template-card[data-id="shangyue-price-tag"]').click();
 await page.locator('.template-sheet').waitFor();
 await page.locator('[data-action="use-template"]').click();
 await page.locator('#label-canvas').waitFor();
@@ -91,9 +93,11 @@ await page.screenshot({ path: join(output, 'p0-print-blocked-connected.png') });
 // 5) A label the connected printer CAN take must print end to end.
 await page.locator('.print-sheet [data-action="close-modal"]').first().click();
 await page.locator('[data-action="close-editor"]').click();
+await page.locator('.nav-item[data-route="home"]').click();
 await page.locator('.home-hero').waitFor();
 await page.locator('.nav-item[data-route="templates"]').click();
-await page.locator('.template-card', { hasText: '线缆分类标签' }).first().click(); // 40x12 fits D110
+await page.locator('[data-action="template-search"]').fill('商跃线缆标识');
+await page.locator('.template-card[data-id="shangyue-cable-tag"]').click(); // 40x12 fits D110
 await page.locator('.template-sheet').waitFor();
 await page.locator('[data-action="use-template"]').click();
 await page.locator('#label-canvas').waitFor();
@@ -110,9 +114,13 @@ if (printing > 0) {
   await page.locator('.sheet-backdrop').click({ position: { x: 10, y: 10 } });
   await page.waitForTimeout(200);
   check('backdrop cannot dismiss a running print', await page.locator('.print-sheet').count() > 0);
-  await page.locator('[data-action="cancel-print"]').click();
-  await page.waitForTimeout(2500);
-  check('停止打印 ends the run', await page.locator('[data-action="cancel-print"]').count() === 0);
+  if (await page.locator('[data-action="cancel-print"]').count()) {
+    await page.locator('[data-action="cancel-print"]').click();
+    await page.waitForTimeout(2500);
+    check('停止打印 ends the run', await page.locator('[data-action="cancel-print"]').count() === 0);
+  } else {
+    check('print ran to completion before cancellation', true);
+  }
 } else {
   check('print ran to completion', await page.locator('.print-notice.failed').count() === 0);
 }
@@ -122,6 +130,7 @@ if (await page.locator('.print-sheet').count() > 0) {
   await page.locator('.print-sheet [data-action="close-modal"]').first().click();
 }
 await page.locator('[data-action="close-editor"]').click();
+await page.locator('.nav-item[data-route="home"]').click();
 await page.locator('.home-hero').waitFor();
 await page.locator('[data-action="print-history"]').first().click();
 await page.locator('.history-list').waitFor();

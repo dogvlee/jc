@@ -189,9 +189,14 @@ function evaluatePrintability(document, profile) {
         return false;
       }
     });
+    const maximumVerifiedHeadMm = Math.max(...PROFILES.map((item) => (
+      item.printheadPixels / (item.dpi / 25.4)
+    )));
     return {
       ok: false,
-      message: error.message,
+      message: fallback
+        ? error.message
+        : `${error.message}；现有已验证机型中没有可直接打印该尺寸的配置（最大已验证打印头约 ${maximumVerifiedHeadMm.toFixed(1)} mm）。请改用适配标签纸，或在目标宽幅机型完成协议与真机样张验证后再新增机型配置。`,
       suggestProfileId: fallback ? fallback.id : ''
     };
   }

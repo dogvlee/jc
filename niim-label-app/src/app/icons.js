@@ -63,19 +63,27 @@ const symbols = {
   alignRight: '<path d="M4 5h16M8 12h12M4 19h16"/>',
   verticalTop: '<path d="M4 5h16M8 9h8M8 13h8M8 17h8"/>',
   verticalCenter: '<path d="M8 5h8M4 12h16M8 19h8"/>',
-  verticalBottom: '<path d="M8 7h8M8 11h8M4 19h16"/>'
+  verticalBottom: '<path d="M8 7h8M8 11h8M4 19h16"/>',
+  wifi: '<path d="M5 13a10 10 0 0 1 14 0"/><path d="M8.5 16.5a5 5 0 0 1 7 0"/><path d="M2 8.8a15 15 0 0 1 20 0"/><path d="M12 20h.01"/>',
+  support: '<path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"/><path d="M8 9h8M8 13h5"/>',
+  shapeLine: '<path d="M5 19 19 5"/>',
+  shapeRounded: '<rect x="4" y="5" width="16" height="14" rx="4"/>',
+  shapeRect: '<rect x="4" y="5" width="16" height="14"/>',
+  shapeEllipse: '<ellipse cx="12" cy="12" rx="9" ry="6"/>',
+  shapeCircle: '<circle cx="12" cy="12" r="8"/>',
+  star: '<path d="m12 2.8 2.8 5.7 6.3.9-4.6 4.4 1.1 6.3-5.6-3-5.6 3 1.1-6.3-4.6-4.4 6.3-.9Z"/>'
 };
 
 function sprite() {
   const content = Object.entries(symbols)
     .map(([name, paths]) => `<symbol id="i-${name}" viewBox="0 0 24 24">${paths}</symbol>`)
     .join('');
-  return `<svg aria-hidden="true" width="0" height="0" style="position:absolute;overflow:hidden">${content}</svg>`;
+  return `<svg aria-hidden="true" focusable="false" width="0" height="0" viewBox="0 0 24 24" style="position:absolute;overflow:hidden">${content}</svg>`;
 }
 
 function icon(name, className) {
   const safe = Object.prototype.hasOwnProperty.call(symbols, name) ? name : 'help';
-  return `<svg class="icon${className ? ` ${className}` : ''}" aria-hidden="true"><use href="#i-${safe}"></use></svg>`;
+  return `<svg class="icon${className ? ` ${className}` : ''}" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" preserveAspectRatio="xMidYMid meet"><use href="#i-${safe}"></use></svg>`;
 }
 
 module.exports = { icon, sprite };

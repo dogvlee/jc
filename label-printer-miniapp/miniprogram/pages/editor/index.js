@@ -1,20 +1,25 @@
 const { BleSession } = require('../../services/ble-session');
 const { PrinterClient } = require('../../services/printer-client');
+const { templates: catalogTemplates } = require('../../app/catalog');
+const { buildTemplateDocument } = require('../../app/template-layouts');
 const {
   clampElement,
   cloneDocument,
   createDocument,
   createElement,
+  elementTypeLabel,
   hitTest,
+  hitTestAll,
   placeNewElement
 } = require('../../core/document');
 const {
   changeTextMode,
+  clampGroupDelta,
   fitElementToSelectionBounds,
   normalizeAngleDelta,
   pointerAngle,
   resizeRotatedElement,
-  selectionHandleMode,
+  selectionHandleModeAtPoint,
   snapElementPosition
 } = require('../../core/geometry');
 const { BORDER_CATALOG } = require('../../core/borders');
@@ -36,13 +41,32 @@ const {
   validateDocument
 } = require('../../core/renderer');
 const { TEXT_MODE_OPTIONS } = require('../../core/text-direction');
-const { longPressSelection } = require('../../core/editor-gesture');
+const {
+  longPressSelection,
+  nextSelectionId,
+  selectionHitDecision,
+  selectionTargetSizeMm
+} = require('../../core/editor-gesture');
 const { createImageCacheRegistry } = require('../../core/image-cache');
 const { applyScanToElement } = require('../../core/scan-label');
+const { localizeUrl } = require('../../services/remote-image-cache');
 const { KEYS, Repository, normalizeDocument } = require('../../services/repository');
 const { scanCode } = require('../../services/scanner');
+const { fontFallbackInfo, listFontCatalog, resolveFontId } = require('../../core/font-family');
+const { ensureDocumentFonts } = require('../../core/font-loader');
+const { resizeCodeElementToMinimum } = require('../../core/code-quality');
+
+function fontRuntime() {
+  return { wx: typeof wx === 'undefined' ? null : wx };
+}
+
+const EDITOR_FONT_CATALOG = listFontCatalog();
+const EDITOR_REMOTE_FONT_COUNT = EDITOR_FONT_CATALOG.filter((font) => font.remote).length;
+const EDITOR_FONT_CATALOG_NOTE = `${EDITOR_FONT_CATALOG.length} 款字体 · ${EDITOR_REMOTE_FONT_COUNT} 款 OFL 开源字体按需加载`;
 
 const STORAGE_DOCUMENT = 'label-printer:last-document';
+const MILLIMETERS_PER_INCH = 25.4;
+const PREVIEW_WIDTH_RPX = 672;
 const SIZE_OPTIONS = [
   { label: '30 x 12 mm', width: 30, height: 12 },
   { label: '40 x 12 mm', width: 40, height: 12 },
@@ -66,29 +90,178 @@ const ELEMENT_TOOLS = [
   { type: 'line', label: '线条', mark: '―' }
 ];
 
+function isLiveStringField(element, field) {
+  if (!element) return false;
+  if (element.type === 'text') return field === 'text';
+  if (element.type === 'barcode' || element.type === 'qrcode') return field === 'value';
+  if (element.type === 'serial') return field === 'prefix' || field === 'suffix';
+  return false;
+}
+
+function updateInputConfirmationAfterEdit(element, field) {
+  const isEditableContent = element && (
+    (element.type === 'text' && field === 'text')
+    || ((element.type === 'barcode' || element.type === 'qrcode') && field === 'value')
+  );
+  if (!isEditableContent) return element;
+  const value = element.type === 'text' ? element.text : element.value;
+  element.requiresInput = !String(value == null ? '' : value).trim();
+  element.requiresInputReason = element.requiresInput
+    ? (element.type === 'text' ? 'empty-text' : 'empty-code')
+    : undefined;
+  delete element.invalidCode;
+  delete element.codeValidationMessage;
+  return element;
+}
+
+function confirmBarcodeFormat(element, format) {
+  if (!element || element.type !== 'barcode') return element;
+  element.format = format;
+  element.formatChangedByUser = true;
+  delete element.unsupportedCodeType;
+  delete element.requiresFormatConfirmation;
+  delete element.invalidCode;
+  delete element.codeValidationMessage;
+  const reason = element.requiresInputReason;
+  const keepContentConfirmation = reason === 'data-binding' || reason === 'sample-code';
+  const empty = !String(element.value == null ? '' : element.value).trim();
+  element.requiresInput = empty || keepContentConfirmation;
+  if (empty) element.requiresInputReason = 'empty-code';
+  else if (!keepContentConfirmation) delete element.requiresInputReason;
+  return element;
+}
+
+function previewFrameHeight(documentValue, windowInfo) {
+  const windowWidth = Number(windowInfo && windowInfo.windowWidth);
+  const widthMm = Number(documentValue && documentValue.widthMm);
+  const heightMm = Number(documentValue && documentValue.heightMm);
+  if (!Number.isFinite(windowWidth) || windowWidth <= 0
+    || !Number.isFinite(widthMm) || widthMm <= 0
+    || !Number.isFinite(heightMm) || heightMm <= 0) {
+    return 1;
+  }
+  const frameWidth = windowWidth * PREVIEW_WIDTH_RPX / 750;
+  // Keep the unrounded ratio for CSS. Rounding to an integer pixel is visible
+  // on narrow/tall labels and makes the two overlaid canvases drift at edges.
+  return Number((frameWidth * heightMm / widthMm).toFixed(4));
+}
+
+function previewCanvasMetrics(documentValue, cssSize, pixelRatio) {
+  const cssWidth = Number(cssSize && cssSize.width);
+  const cssHeight = Number(cssSize && cssSize.height);
+  const widthMm = Number(documentValue && documentValue.widthMm);
+  const heightMm = Number(documentValue && documentValue.heightMm);
+  const ratio = Number(pixelRatio);
+  if (!Number.isFinite(cssWidth) || cssWidth <= 0
+    || !Number.isFinite(cssHeight) || cssHeight <= 0
+    || !Number.isFinite(widthMm) || widthMm <= 0
+    || !Number.isFinite(heightMm) || heightMm <= 0) {
+    throw new Error('预览画布尺寸无效');
+  }
+  const devicePixelRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+  const canvasSize = {
+    width: Math.max(1, Math.round(cssWidth * devicePixelRatio)),
+    height: Math.max(1, Math.round(cssHeight * devicePixelRatio))
+  };
+  return {
+    canvasSize,
+    devicePixelRatio,
+    // Rendering uses a preview-only dot density derived from the measured CSS
+    // width. Printing continues to use the printer profile's fixed 203 dpi.
+    dpi: canvasSize.width * MILLIMETERS_PER_INCH / widthMm
+  };
+}
+
 function placeholderPrintBlock(element) {
   if (!element) return null;
   if (element.type === 'text') {
     const value = String(element.text || '').trim();
-    if (!value || value === '双击编辑') return '请先编辑文字内容，当前仍是默认占位';
+    if (element.requiresInput === true || !value || value === '双击编辑'
+      || value === '双击文本框编辑' || value === '点击后编辑文字') {
+      return '请先编辑文字内容，当前仍是默认占位';
+    }
   }
   if (element.type === 'barcode') {
+    if (element.unsupportedCodeType === true || element.invalidCode === true) return null;
     const value = String(element.value || '').trim();
-    if (!value || value === '0') return '请先填写条码内容，当前仍是默认值';
+    if (element.requiresInput === true || !value || value === '0') return '请先填写并确认条码内容';
   }
   if (element.type === 'qrcode') {
     const value = String(element.value || '').trim();
-    if (!value || value === 'https://example.com') return '请先填写二维码内容，当前仍是默认链接';
+    if (element.requiresInput === true || !value || value === 'https://example.com') return '请先填写并确认二维码内容';
   }
   return null;
 }
 
+function templateAttentionMessage(documentValue) {
+  const meta = documentValue && documentValue.templateMeta;
+  if (!meta) return '';
+  const elements = Array.isArray(documentValue.elements) ? documentValue.elements : [];
+  const liveUnsupported = elements.filter((element) => element.unsupportedCodeType === true).length;
+  const liveInvalid = elements.filter((element) => element.invalidCode === true).length;
+  const liveRequired = elements.filter((element) => element.requiresInput === true).length;
+  const messages = [];
+  if (Number(meta.missingImageCount) > 0) {
+    messages.push(`源模板有 ${Number(meta.missingImageCount)} 张图片缺失，已跳过，请补图`);
+  }
+  if (meta.sizeClamped) {
+    messages.push(`源尺寸 ${meta.sourceWidthMm}×${meta.sourceHeightMm} mm 超出编辑上限，当前副本为 ${documentValue.widthMm}×${documentValue.heightMm} mm`);
+  }
+  if (liveUnsupported > 0) {
+    messages.push(`有 ${liveUnsupported} 个条码码制待确认`);
+  }
+  if (liveInvalid > 0) {
+    messages.push(`有 ${liveInvalid} 个条码内容不符合声明码制`);
+  }
+  const otherRequired = Math.max(0, liveRequired - liveUnsupported - liveInvalid);
+  if (otherRequired > 0) messages.push(`有 ${otherRequired} 个内容需要填写或确认`);
+  return messages.join('；');
+}
+
+function previewAssetPath(value) {
+  const path = String(value || '').trim();
+  if (!path || /^(?:https?:\/\/|wxfile:\/\/|\/)/i.test(path)) return path;
+  return `/${path.replace(/^\/+/, '')}`;
+}
+
+function materialOption(item) {
+  return {
+    id: item.id,
+    label: item.label,
+    previewSrc: previewAssetPath(item.asset),
+    symbol: item.symbol || '',
+    remote: item.source === 'remote-niim-material',
+    vip: Boolean(item.vip)
+  };
+}
+
+function borderOption(item) {
+  return {
+    id: item.id,
+    label: item.label,
+    previewSrc: previewAssetPath(item.previewSrc || item.asset),
+    remote: item.source === 'remote-niim-border',
+    vip: Boolean(item.vip)
+  };
+}
+
 function friendlyPrintError(error) {
   const raw = String(error && error.message || '打印失败');
-  if (/断开|disconnect|未连接|not connected/i.test(raw)) return '打印机连接已断开，请靠近后重新连接再试';
-  if (/超时|timeout/i.test(raw)) return '打印机没有响应，请检查电源与纸仓后重试';
+  if (/断开|disconnect|未连接|not connected|no connection/i.test(raw)) return '打印机连接已断开，请靠近后重新连接再试';
   if (/缺纸|no paper|paper/i.test(raw)) return '打印机缺纸或纸仓未合上，装好标签纸后重试';
-  if (/电量|battery/i.test(raw)) return '打印机电量过低，充电后重试';
+  if (/上盖|纸仓盖|cover/i.test(raw)) return '打印机上盖未关闭，请合上纸仓盖后重试';
+  if (/电量|电池|battery/i.test(raw)) return '打印机电量过低，请充电后重试';
+  if (/过热|温度过高|overheat/i.test(raw)) return '打印头温度过高，请稍等片刻再打印';
+  if (/正忙|busy|尚未完成当前任务/i.test(raw)) return '打印机正忙，请等待当前任务结束后重试';
+  if (/位图宽度|超过打印头/.test(raw)) return '标签超过当前机型的打印幅面，请在打印设置中改用适配的尺寸或机型';
+  if (/协议协商|协议尚未|handshake/i.test(raw)) return '打印机握手失败，请重启打印机后重新连接';
+  if (/超时|timeout/i.test(raw)) return '打印机没有响应，请检查电源与纸仓后重试';
+  if (/MTU|载荷|写入特征|通知特征|BLE 服务|writeBLE|readBLE|notifyBLE|BLECharacteristic|BLEConnection|GATT|characteristic/i.test(raw)) {
+    return '蓝牙传输出现问题，请重新连接打印机后再试';
+  }
+  // Raw platform errors with no Chinese copy would otherwise reach the user
+  // verbatim (e.g. "operateBLECharacteristic:fail").
+  if (!/[\u4e00-\u9fff]/.test(raw)) return `打印失败（${raw}）`;
   return raw;
 }
 
@@ -132,13 +305,22 @@ Page({
     editorPanelTab: 'elements',
     elementTools: ELEMENT_TOOLS,
     textModeOptions: TEXT_MODE_OPTIONS,
-    materialOptions: MATERIAL_CATALOG.map((item) => ({
-      id: item.id,
-      label: item.label,
-      asset: item.asset || '',
-      symbol: item.symbol || ''
-    })),
-    borderOptions: BORDER_CATALOG,
+    materialOptions: MATERIAL_CATALOG.map(materialOption),
+    borderOptions: BORDER_CATALOG.map(borderOption),
+    remoteMaterialPage: 0,
+    remoteMaterialTotal: 0,
+    remoteMaterialHasMore: false,
+    remoteMaterialLoading: false,
+    remoteMaterialError: '',
+    remoteMaterialStatusText: '仅使用商跃内置素材',
+    materialAssetLoadingId: '',
+    remoteBorderPage: 0,
+    remoteBorderTotal: 0,
+    remoteBorderHasMore: false,
+    remoteBorderLoading: false,
+    remoteBorderError: '',
+    remoteBorderStatusText: '仅使用商跃程序化边框',
+    borderAssetLoadingId: '',
     showPrintSheet: false,
     showSettingsSheet: false,
     showLayersSheet: false,
@@ -149,13 +331,43 @@ Page({
     suggestedProfileName: '',
     selectedDateValue: '',
     selectedSerialValue: '',
+    selectedFontFamily: 'sans-serif',
+    fontCatalog: EDITOR_FONT_CATALOG,
+    fontCatalogNote: EDITOR_FONT_CATALOG_NOTE,
+    fontFallbackNote: '',
+    templateAttentionMessage: '',
     shapeKindOptions: ['rect', 'rounded', 'circle', 'ellipse'],
     tableCellIndexes: [],
-    safeTop: 24
+    safeTop: 24,
+    menuSafeRightPx: 9
+  },
+
+  headerRightInset(windowInfo, menuRect) {
+    const windowWidth = Number(windowInfo && windowInfo.windowWidth);
+    const fallback = Number.isFinite(windowWidth) && windowWidth > 0
+      ? Math.max(8, Math.round(windowWidth * 18 / 750))
+      : 9;
+    let rect = menuRect;
+    if (!rect && wx.getMenuButtonBoundingClientRect) {
+      try {
+        rect = wx.getMenuButtonBoundingClientRect();
+      } catch (_) {
+        rect = null;
+      }
+    }
+    const menuLeft = Number(rect && rect.left);
+    if (!Number.isFinite(windowWidth) || windowWidth <= 0
+      || !Number.isFinite(menuLeft) || menuLeft <= 0 || menuLeft >= windowWidth) {
+      return fallback;
+    }
+    // End custom controls before the native WeChat capsule, with an 8 px gap.
+    return Math.ceil(windowWidth - menuLeft + 8);
   },
 
   onLoad(options) {
     this.pageActive = true;
+    this.remoteMaterials = [];
+    this.remoteBorders = [];
     this.devicePickerGeneration = 0;
     this.printTaskGeneration = 0;
     const app = getApp();
@@ -176,6 +388,7 @@ Page({
       draft = null;
     }
     this.projectId = draft && draft.projectId ? String(draft.projectId) : '';
+    this.dirtySinceSave = false;
     const storedDocument = draft && normalizeDocument(draft.document);
     this.document = storedDocument || this.loadLastDocument()
       || createDocument(Number(settings.stockWidthMm) || 50, Number(settings.stockHeightMm) || 30);
@@ -235,7 +448,8 @@ Page({
       threshold: Number(settings.threshold) || 180,
       labelTypeIndex: Math.max(0, Math.min(3, (Number(settings.labelType) || 1) - 1)),
       projectId: this.projectId,
-      safeTop: Number(info.safeArea && info.safeArea.top) || Number(info.statusBarHeight) || 24
+      safeTop: Number(info.safeArea && info.safeArea.top) || Number(info.statusBarHeight) || 24,
+      menuSafeRightPx: this.headerRightInset(info)
     });
     this.loadTemplates();
     this.syncPageData();
@@ -251,6 +465,9 @@ Page({
   },
 
   async onUnload() {
+    // A system navigation can unload the page before the focused input emits
+    // blur. Persist the latest live preview so typed text is never discarded.
+    this.commitFieldEditDraft();
     this.pageActive = false;
     this.printCancelRequested = true;
     this.printTaskGeneration = (this.printTaskGeneration || 0) + 1;
@@ -283,6 +500,8 @@ Page({
 
   onResize() {
     clearTimeout(this.resizeTimer);
+    const info = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+    this.setData({ menuSafeRightPx: this.headerRightInset(info) });
     this.resizeTimer = setTimeout(() => {
       if (this.pageActive) this.syncPageData(() => this.initCanvas());
     }, 100);
@@ -317,10 +536,21 @@ Page({
   },
 
   loadTemplates() {
-    const templates = this.repository.getUserTemplates();
+    const systemTemplates = catalogTemplates
+      .filter((item) => item.publicCatalog === true && item.releaseApproved === true)
+      .map((item) => ({
+        id: item.id,
+        name: item.name,
+        displayName: `${item.name} · ${item.authorizedRedesign === true ? '精诚授权改编' : '商跃原创'}`,
+        document: buildTemplateDocument(item),
+        source: item.source,
+        approvalStatus: item.approvalStatus
+      }));
+    const userTemplates = this.repository.getUserTemplates().map((item) => Object.assign({ source: 'user' }, item));
+    const templates = systemTemplates.concat(userTemplates);
     this.setData({
       templates,
-      templateNames: templates.length ? templates.map((item) => item.name) : ['暂无模板']
+      templateNames: templates.length ? templates.map((item) => item.displayName || item.name) : ['暂无模板']
     });
   },
 
@@ -358,17 +588,23 @@ Page({
       this.selectedId = this.selectedIds[this.selectedIds.length - 1];
     }
     const selected = this.selectedElement();
+    const selectedFont = selected
+      ? fontFallbackInfo(selected.fontFamily, selected.sourceFontFamily)
+      : { requested: '', renderFamily: 'sans-serif', fallback: false };
     const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
-    const frameWidth = windowInfo.windowWidth * 672 / 750;
-    const previewHeightPx = Math.round(frameWidth * this.document.heightMm / this.document.widthMm);
+    const previewHeightPx = previewFrameHeight(this.document, windowInfo);
     const sizeIndex = SIZE_OPTIONS.findIndex((item) => {
       return item.width === this.document.widthMm && item.height === this.document.heightMm;
     });
     const documentView = cloneDocument(this.document);
-    documentView.elements.forEach((item) => { item._selected = this.selectedIds.includes(item.id); });
+    documentView.elements.forEach((item) => {
+      item._selected = this.selectedIds.includes(item.id);
+      item._typeLabel = elementTypeLabel(item.type);
+    });
     this.setData({
       document: documentView,
       selected: selected ? Object.assign({}, selected) : null,
+      selectedTypeLabel: selected ? elementTypeLabel(selected.type) : '',
       selectionCount: this.selectedIds.length,
       multiSelect: this.multiSelect,
       previewHeightPx,
@@ -379,6 +615,11 @@ Page({
       projectId: this.projectId || '',
       selectedDateValue: selected && selected.type === 'date' ? formatDateValue(selected) : '',
       selectedSerialValue: selected && selected.type === 'serial' ? serialValue(selected) : '',
+      selectedFontFamily: selectedFont.renderFamily,
+      fontFallbackNote: selectedFont.fallback
+        ? `源字体“${selectedFont.requested}”未随模板提供，已用开源「${selectedFont.label}」稳定替代。请选择下方字体确认替换。`
+        : '',
+      templateAttentionMessage: templateAttentionMessage(this.document),
       tableCellIndexes: selected && selected.type === 'table'
         ? Array.from({ length: Math.max(1, Number(selected.rows) || 1) * Math.max(1, Number(selected.columns) || 1) }, (item, index) => index)
         : []
@@ -397,18 +638,29 @@ Page({
           return;
         }
         try {
-          this.canvasSize = previewCanvasSize(this.document, this.profile.dpi);
+          const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+          const metrics = previewCanvasMetrics(this.document, {
+            width: result[1].width,
+            height: result[1].height
+          }, windowInfo.pixelRatio);
+          this.canvasSize = metrics.canvasSize;
+          this.previewDpi = metrics.dpi;
+          this.previewPixelRatio = metrics.devicePixelRatio;
         } catch (error) {
           this.context = null;
           this.selectionContext = null;
           this.canvasSize = null;
+          this.previewDpi = 0;
+          this.previewPixelRatio = 1;
           this.setData({ canvasReady: false });
           wx.showToast({ title: error.message, icon: 'none' });
           return;
         }
         this.canvas = result[0].node;
         this.selectionCanvas = result[1].node;
-        this.canvasRect = { width: result[0].width, height: result[0].height };
+        // Touch events are bound to the selection canvas, so its measured CSS
+        // box is the source of truth for px -> mm conversion.
+        this.canvasRect = { width: result[1].width, height: result[1].height };
         [this.canvas, this.selectionCanvas].forEach((canvas) => {
           canvas.width = this.canvasSize.width;
           canvas.height = this.canvasSize.height;
@@ -421,13 +673,36 @@ Page({
       });
   },
 
-  renderAll() {
-    if (!this.context || !this.selectionContext) {
+  paintCanvases() {
+    if (!this.context || !this.selectionContext || !this.previewDpi) {
       return;
     }
-    renderDocument(this.context, this.document, this.canvasSize, this.profile.dpi, this.images);
+    renderDocument(this.context, this.document, this.canvasSize, this.previewDpi, this.images);
     const selection = this.selectedElements();
-    renderSelection(this.selectionContext, selection.length > 1 ? selection : selection[0], this.canvasSize, this.profile.dpi, this.snapGuides || []);
+    renderSelection(
+      this.selectionContext,
+      selection.length > 1 ? selection : selection[0],
+      this.canvasSize,
+      this.previewDpi,
+      this.snapGuides || [],
+      this.previewPixelRatio || 1
+    );
+  },
+
+  renderAll() {
+    this.paintCanvases();
+    this.refreshLoadedFonts();
+  },
+
+  refreshLoadedFonts() {
+    if (this._fontRefreshInFlight || !this.document) return;
+    this._fontRefreshInFlight = true;
+    ensureDocumentFonts(this.document, fontRuntime()).then((result) => {
+      this._fontRefreshInFlight = false;
+      if (result && result.newlyLoaded) this.paintCanvases();
+    }, () => {
+      this._fontRefreshInFlight = false;
+    });
   },
 
   resolveImagePath(path) {
@@ -486,14 +761,16 @@ Page({
   },
 
   async ensureImagesReady() {
-    const required = this.document.elements.filter((item) => item.type === 'image' && item.path);
+    const required = this.document.elements.filter((item) => (
+      (item.type === 'image' || item.type === 'material') && item.path
+    ));
     if (!required.length) {
       return;
     }
     await Promise.all(this.loadDocumentImages());
     const missing = required.find((item) => !this.images[item.id]);
     if (missing) {
-      throw new Error('标签中的图片加载失败，请重新选择图片');
+      throw new Error('标签中的图片或素材加载失败，请重新选择后再打印');
     }
   },
 
@@ -503,6 +780,7 @@ Page({
       this.undoStack.shift();
     }
     this.redoStack = [];
+    this.dirtySinceSave = true;
   },
 
   commit(mutator, reinitializeCanvas) {
@@ -527,6 +805,7 @@ Page({
     }
     this.redoStack.push(cloneDocument(this.document));
     this.document = this.undoStack.pop();
+    this.dirtySinceSave = true;
     this.setSelection([], false);
     this.persistDocument();
     this.syncPageData(() => this.initCanvas());
@@ -538,6 +817,7 @@ Page({
     }
     this.undoStack.push(cloneDocument(this.document));
     this.document = this.redoStack.pop();
+    this.dirtySinceSave = true;
     this.setSelection([], false);
     this.persistDocument();
     this.syncPageData(() => this.initCanvas());
@@ -556,15 +836,47 @@ Page({
       return;
     }
     const point = this.touchPoint(event);
-    const element = hitTest(this.document, point.x, point.y);
     this.pressBaseIds = (this.selectedIds || []).slice();
     const previous = this.selectedElement();
     let mode = 'move';
-    if (!this.multiSelect && previous && !previous.locked && previous === element) {
-      const tolerance = Math.max(1.2, Math.min(2.8, this.document.widthMm / 18));
-      mode = selectionHandleMode(previous, point, tolerance);
-      if (mode !== 'move' && previous._fit) fitElementToSelectionBounds(previous);
+    let handleOriginal = null;
+    if (!this.multiSelect && previous && !previous.locked) {
+      mode = selectionHandleModeAtPoint(
+        previous,
+        point,
+        this.document,
+        this.canvasRect,
+        'touch'
+      );
+      if (mode !== 'move') {
+        handleOriginal = Object.assign({}, previous);
+        if (previous._fit) fitElementToSelectionBounds(handleOriginal, previous._fit);
+      }
     }
+    // Handles extend outside the element's strict content bounds. Give the
+    // already selected handle first refusal before normal z-order hit testing.
+    const hitDecision = mode === 'move'
+      ? selectionHitDecision(
+        hitTestAll(
+          this.document,
+          point.x,
+          point.y,
+          selectionTargetSizeMm(this.document, this.canvasRect, 'touch')
+        ),
+        this.multiSelect || !previous ? '' : previous.id
+      )
+      : { element: previous, candidateIds: previous ? [previous.id] : [], cycleOnTap: false };
+    const element = hitDecision.element;
+    const touch = event.touches[0] || event.changedTouches[0] || {};
+    this.selectionTapCycle = !this.multiSelect && mode === 'move' && hitDecision.cycleOnTap
+      ? {
+        candidateIds: hitDecision.candidateIds,
+        selectedId: previous.id,
+        startClientX: Number(touch.x) || 0,
+        startClientY: Number(touch.y) || 0,
+        moved: false
+      }
+      : null;
     if (this.multiSelect) {
       if (!element) this.setSelection([], false);
       else if (!this.selectedIds.includes(element.id)) this.setSelection(this.selectedIds.concat(element.id), true);
@@ -576,24 +888,43 @@ Page({
     const groupOriginals = group ? this.selectedElements().filter((item) => !item.locked).map((item) => ({
       id: item.id,
       x: item.x,
-      y: item.y
+      y: item.y,
+      width: item.width,
+      height: item.height,
+      rotation: item.rotation
     })) : [];
+    const gestureOriginal = handleOriginal || element;
     this.drag = element && !element.locked && (!group || groupOriginals.length) ? {
       before: cloneDocument(this.document),
       startX: point.x,
       startY: point.y,
       originalX: element.x,
       originalY: element.y,
-      original: Object.assign({}, element),
+      original: Object.assign({}, gestureOriginal),
+      promotedFit: Boolean(handleOriginal && previous && previous._fit),
       mode: group ? 'group' : mode,
       groupOriginals,
-      startAngle: pointerAngle(point, { x: element.x + element.width / 2, y: element.y + element.height / 2 }),
+      startClientX: Number(touch.x) || 0,
+      startClientY: Number(touch.y) || 0,
+      passedDeadzone: !['move', 'group'].includes(group ? 'group' : mode),
+      startAngle: pointerAngle(point, {
+        x: gestureOriginal.x + gestureOriginal.width / 2,
+        y: gestureOriginal.y + gestureOriginal.height / 2
+      }),
       moved: false
     } : null;
     this.syncPageData(() => this.renderAll());
   },
 
   onCanvasTouchMove(event) {
+    if (this.selectionTapCycle) {
+      const touch = event.touches[0] || event.changedTouches[0] || {};
+      const distance = Math.hypot(
+        (Number(touch.x) || 0) - this.selectionTapCycle.startClientX,
+        (Number(touch.y) || 0) - this.selectionTapCycle.startClientY
+      );
+      if (distance >= 8) this.selectionTapCycle.moved = true;
+    }
     if (!this.drag) {
       return;
     }
@@ -602,14 +933,23 @@ Page({
     if (!element) {
       return;
     }
+    if (!this.drag.passedDeadzone && ['move', 'group'].includes(this.drag.mode)) {
+      const touch = event.touches[0] || event.changedTouches[0] || {};
+      const distance = Math.hypot(
+        (Number(touch.x) || 0) - this.drag.startClientX,
+        (Number(touch.y) || 0) - this.drag.startClientY
+      );
+      if (distance < 8) return;
+      this.drag.passedDeadzone = true;
+    }
     const delta = { x: point.x - this.drag.startX, y: point.y - this.drag.startY };
     if (this.drag.mode === 'group') {
+      const groupDelta = clampGroupDelta(this.drag.groupOriginals, this.document, delta);
       this.drag.groupOriginals.forEach((original) => {
         const item = this.document.elements.find((candidate) => candidate.id === original.id);
         if (!item) return;
-        item.x = original.x + delta.x;
-        item.y = original.y + delta.y;
-        clampElement(item, this.document);
+        item.x = original.x + groupDelta.x;
+        item.y = original.y + groupDelta.y;
       });
       this.snapGuides = [];
     } else if (this.drag.mode === 'resize-e' || this.drag.mode === 'resize-s') {
@@ -622,7 +962,17 @@ Page({
         y: this.drag.original.y + this.drag.original.height / 2
       };
       const nextAngle = pointerAngle(point, center);
-      element.rotation = (this.drag.original.rotation + normalizeAngleDelta(nextAngle - this.drag.startAngle) + 360) % 360;
+      if (this.drag.promotedFit) {
+        Object.assign(element, {
+          x: this.drag.original.x,
+          y: this.drag.original.y,
+          width: this.drag.original.width,
+          height: this.drag.original.height,
+          selectionFit: false
+        });
+      }
+      element.rotation = (this.drag.original.rotation
+        + normalizeAngleDelta(nextAngle - this.drag.startAngle) + 360) % 360;
       this.snapGuides = [];
     } else {
       element.x = this.drag.originalX + delta.x;
@@ -639,15 +989,27 @@ Page({
   },
 
   onCanvasTouchEnd() {
+    const cycle = this.selectionTapCycle;
+    const shouldCycle = cycle && !cycle.moved && !(this.drag && this.drag.moved);
+    let cycled = false;
     if (this.drag && this.drag.moved) {
       this.recordSnapshot(this.drag.before);
       this.persistDocument();
       this.syncPageData(() => this.renderAll());
     }
+    if (shouldCycle) {
+      const nextId = nextSelectionId(cycle.candidateIds, cycle.selectedId);
+      if (nextId) {
+        this.setSelection([nextId], false);
+        cycled = true;
+      }
+    }
     this.drag = null;
+    this.selectionTapCycle = null;
     this.pressBaseIds = [];
     this.snapGuides = [];
-    this.renderAll();
+    if (cycled) this.syncPageData(() => this.renderAll());
+    else this.renderAll();
   },
 
   addElement(event) {
@@ -658,7 +1020,7 @@ Page({
     }
     if (type === 'material') {
       this.replaceMaterial = false;
-      this.setData({ showMaterialSheet: true });
+      this.setData({ showMaterialSheet: true }, () => this.ensureRemoteMaterialCatalog());
       return;
     }
     this.commit((document) => {
@@ -754,6 +1116,72 @@ Page({
     });
   },
 
+  startFieldEdit(event) {
+    const field = event.currentTarget.dataset.field;
+    const element = this.selectedElement();
+    if (!isLiveStringField(element, field)) {
+      this.fieldEditDraft = null;
+      return;
+    }
+    this.fieldEditDraft = {
+      elementId: element.id,
+      field,
+      before: cloneDocument(this.document)
+    };
+  },
+
+  previewField(event) {
+    const field = event.currentTarget.dataset.field;
+    const draft = this.fieldEditDraft;
+    if (!draft || draft.field !== field) return;
+    const element = this.document.elements.find((item) => item.id === draft.elementId);
+    if (!isLiveStringField(element, field)) return;
+    element[field] = String(event.detail.value == null ? '' : event.detail.value);
+    updateInputConfirmationAfterEdit(element, field);
+    if (this.selectedId === element.id) {
+      const patch = { selected: Object.assign({}, element) };
+      if (element.type === 'serial') patch.selectedSerialValue = serialValue(element);
+      this.setData(patch);
+    }
+    this.renderAll();
+  },
+
+  commitFieldEditDraft() {
+    const draft = this.fieldEditDraft;
+    if (!draft) return false;
+    this.fieldEditDraft = null;
+    const element = this.document && this.document.elements.find((item) => item.id === draft.elementId);
+    const beforeElement = draft.before && draft.before.elements.find((item) => item.id === draft.elementId);
+    if (!isLiveStringField(element, draft.field) || !beforeElement) return false;
+    const beforeValue = String(beforeElement[draft.field] == null ? '' : beforeElement[draft.field]);
+    const value = String(element[draft.field] == null ? '' : element[draft.field]);
+    if (beforeValue === value) return false;
+    this.recordSnapshot(draft.before);
+    this.persistDocument();
+    return true;
+  },
+
+  finishFieldEdit(event) {
+    const field = event.currentTarget.dataset.field;
+    const draft = this.fieldEditDraft;
+    if (!draft || draft.field !== field) {
+      this.updateField(event);
+      return;
+    }
+    const element = this.document.elements.find((item) => item.id === draft.elementId);
+    const beforeElement = draft.before.elements.find((item) => item.id === draft.elementId);
+    if (!isLiveStringField(element, field) || !beforeElement) {
+      this.fieldEditDraft = null;
+      return;
+    }
+
+    const value = String(event.detail.value == null ? '' : event.detail.value);
+    element[field] = value;
+    updateInputConfirmationAfterEdit(element, field);
+    this.commitFieldEditDraft();
+    this.syncPageData(() => this.renderAll());
+  },
+
   updateField(event) {
     const field = event.currentTarget.dataset.field;
     const numeric = [
@@ -769,6 +1197,7 @@ Page({
       const selected = this.selectedElement();
       if (selected) {
         selected[field] = value;
+        updateInputConfirmationAfterEdit(selected, field);
       }
     });
   },
@@ -811,6 +1240,16 @@ Page({
     });
   },
 
+  setFontFamily(event) {
+    const value = resolveFontId(event.currentTarget.dataset.value || 'sans-serif');
+    this.commit(() => {
+      const selected = this.selectedElement();
+      if (!selected || selected.locked) return;
+      selected.fontFamily = value;
+      delete selected.sourceFontFamily;
+    });
+  },
+
   async scanSelectedCode() {
     if (this.codeScanInFlight) return;
     const selected = this.selectedElement();
@@ -827,6 +1266,7 @@ Page({
       this.commit(() => {
         const current = this.selectedElement();
         applyScanToElement(current, result);
+        updateInputConfirmationAfterEdit(current, 'value');
       });
       wx.showToast({ title: selected.type === 'barcode' ? '条码已填入' : '二维码已填入', icon: 'success' });
     } catch (error) {
@@ -870,7 +1310,10 @@ Page({
     if (!field) return;
     this.commit(() => {
       const selected = this.selectedElement();
-      if (selected) selected[field] = value;
+      if (selected) {
+        if (field === 'format' && selected.type === 'barcode') confirmBarcodeFormat(selected, value);
+        else selected[field] = value;
+      }
     });
   },
 
@@ -981,11 +1424,29 @@ Page({
   closeSettings() { this.setData({ showSettingsSheet: false }); },
   openMaterialSheet() {
     this.replaceMaterial = Boolean(this.selectedElement() && this.selectedElement().type === 'material');
-    this.setData({ showMaterialSheet: true });
+    this.setData({ showMaterialSheet: true }, () => this.ensureRemoteMaterialCatalog());
   },
   closeMaterialSheet() { this.setData({ showMaterialSheet: false }); },
-  openBorderSheet() { this.setData({ showBorderSheet: true }); },
+  openBorderSheet() {
+    this.setData({ showBorderSheet: true }, () => this.ensureRemoteBorderCatalog());
+  },
   closeBorderSheet() { this.setData({ showBorderSheet: false }); },
+
+  ensureRemoteMaterialCatalog() {
+    return Promise.resolve();
+  },
+
+  loadMoreRemoteMaterials() {
+    return Promise.resolve();
+  },
+
+  ensureRemoteBorderCatalog() {
+    return Promise.resolve();
+  },
+
+  loadMoreRemoteBorders() {
+    return Promise.resolve();
+  },
 
   selectLayer(event) {
     const id = event.currentTarget.dataset.id;
@@ -1003,8 +1464,14 @@ Page({
 
   onCanvasLongPress(event) {
     if (!this.canvasRect) return;
+    this.selectionTapCycle = null;
     const point = this.touchPoint(event);
-    const element = hitTest(this.document, point.x, point.y);
+    const element = hitTest(
+      this.document,
+      point.x,
+      point.y,
+      selectionTargetSizeMm(this.document, this.canvasRect, 'touch')
+    );
     const decision = longPressSelection(this.pressBaseIds || [], element && element.id);
     if (!decision.enterMulti) return;
     this.drag = null;
@@ -1013,9 +1480,25 @@ Page({
     wx.showToast({ title: `已选择 ${decision.ids.length} 个元素`, icon: 'none' });
   },
 
-  pickMaterial(event) {
-    const material = MATERIAL_CATALOG.find((item) => item.id === event.currentTarget.dataset.id);
+  async pickMaterial(event) {
+    const id = event.currentTarget.dataset.id;
+    const material = MATERIAL_CATALOG.find((item) => item.id === id)
+      || (this.remoteMaterials || []).find((item) => item.id === id);
     if (!material) return;
+    let asset = material.asset || '';
+    if (material.source === 'remote-niim-material') {
+      if (this.data.materialAssetLoadingId) return;
+      this.setData({ materialAssetLoadingId: material.id });
+      try {
+        asset = await localizeUrl(wx, material.asset);
+      } catch (error) {
+        wx.showModal({ title: '素材图片加载失败', content: error.message || '请检查网络后重试', showCancel: false });
+        return;
+      } finally {
+        if (this.pageActive) this.setData({ materialAssetLoadingId: '' });
+      }
+      if (!this.pageActive) return;
+    }
     this.commit((document) => {
       let element = this.replaceMaterial && this.selectedElement();
       if (!element || element.type !== 'material') {
@@ -1025,18 +1508,67 @@ Page({
       }
       element.materialId = material.id;
       element.label = material.label;
-      element.path = material.asset || '';
-      element.symbol = material.symbol || (material.asset ? element.symbol : material.id);
+      element.path = asset;
+      element.symbol = material.symbol || (asset ? element.symbol : material.id);
+      if (material.sourceUrl) element.sourceUrl = material.sourceUrl;
       this.invalidateImage(element.id);
     });
     this.replaceMaterial = false;
-    this.setData({ showMaterialSheet: false, editorPanelTab: 'style' });
+    this.setData({ showMaterialSheet: false, editorPanelTab: 'elements' });
   },
 
-  pickBorder(event) {
-    const border = BORDER_CATALOG.find((item) => item.id === event.currentTarget.dataset.id);
+  async pickBorder(event) {
+    const id = event.currentTarget.dataset.id;
+    const border = BORDER_CATALOG.find((item) => item.id === id)
+      || (this.remoteBorders || []).find((item) => item.id === id);
     if (!border) return;
+    if (border.source === 'remote-niim-border') {
+      if (this.data.borderAssetLoadingId) return;
+      this.setData({ borderAssetLoadingId: border.id });
+      let asset;
+      try {
+        asset = await localizeUrl(wx, border.asset);
+      } catch (error) {
+        wx.showModal({ title: '边框图片加载失败', content: error.message || '请检查网络后重试', showCancel: false });
+        return;
+      } finally {
+        if (this.pageActive) this.setData({ borderAssetLoadingId: '' });
+      }
+      if (!this.pageActive) return;
+      const selectedProgrammaticBorderId = this.selectedId;
+      this.commit((document) => {
+        let element = document.elements.find((item) => item.type === 'image' && item.onlineBorderId);
+        if (!element) element = createElement('image', document);
+        document.elements = document.elements.filter((item) => !(
+          item.type === 'rect'
+          && item.borderStyle
+          && (item.decorativeBorder || item.id === selectedProgrammaticBorderId)
+        ));
+        element.x = 0;
+        element.y = 0;
+        element.width = document.widthMm;
+        element.height = document.heightMm;
+        element.rotation = 0;
+        // Online borders are full-canvas background layers. Lock them by
+        // default so a normal content drag cannot shift the frame by mistake;
+        // the inspector still exposes an explicit unlock action.
+        element.locked = true;
+        element.path = asset;
+        element.threshold = 180;
+        element.onlineBorderId = border.id;
+        element.label = border.label;
+        element.ninePatch = border.ninePatch || null;
+        if (border.sourceUrl) element.sourceUrl = border.sourceUrl;
+        document.elements = document.elements.filter((item) => item.id !== element.id);
+        document.elements.unshift(element);
+        this.invalidateImage(element.id);
+        this.setSelection([element.id], false);
+      });
+      this.setData({ showBorderSheet: false, editorPanelTab: 'elements' });
+      return;
+    }
     this.commit((document) => {
+      document.elements = document.elements.filter((item) => !(item.type === 'image' && item.onlineBorderId));
       let element = this.selectedElement();
       if (!element || element.type !== 'rect') {
         element = createElement('rect', document);
@@ -1044,8 +1576,9 @@ Page({
         this.setSelection([element.id], false);
       }
       element.borderStyle = border.id;
+      element.decorativeBorder = true;
     });
-    this.setData({ showBorderSheet: false, editorPanelTab: 'style' });
+    this.setData({ showBorderSheet: false, editorPanelTab: 'elements' });
   },
 
   updateTableCell(event) {
@@ -1121,8 +1654,8 @@ Page({
   onCustomSizeChange(event) {
     const field = event.currentTarget.dataset.field;
     const value = Number(event.detail.value);
-    if (!Number.isFinite(value) || value < 5 || value > 150) {
-      wx.showToast({ title: '标签尺寸须在 5-150 mm', icon: 'none' });
+    if (!Number.isFinite(value) || value < 5 || value > 500) {
+      wx.showToast({ title: '标签尺寸须在 5-500 mm', icon: 'none' });
       this.syncPageData();
       return;
     }
@@ -1161,6 +1694,16 @@ Page({
     this.setData({ copies: Math.max(1, Math.min(99, this.data.copies + delta)) });
   },
 
+  setCopiesInput(event) {
+    const rawText = String(event.detail.value == null ? '' : event.detail.value).trim();
+    const value = Math.round(Number(rawText));
+    this.setData({
+      copies: rawText && Number.isFinite(value)
+        ? Math.max(1, Math.min(99, value))
+        : this.data.copies
+    });
+  },
+
   saveTemplate() {
     wx.showModal({
       title: '保存模板',
@@ -1182,23 +1725,64 @@ Page({
     });
   },
 
-  saveProject() {
+  saveProjectSilently() {
     try {
+      const isNew = !this.projectId;
       const project = this.repository.saveProject(this.document, this.projectId);
       this.projectId = project.id;
+      this.dirtySinceSave = false;
       this.persistDocument();
       this.setData({ projectId: project.id });
-      wx.showToast({ title: '已保存', icon: 'success' });
+      return { ok: true, isNew };
     } catch (error) {
       wx.showModal({ title: '保存失败', content: error.message, showCancel: false });
+      return { ok: false, isNew: false };
     }
   },
 
-  closeEditor() {
+  saveProject() {
+    const result = this.saveProjectSilently();
+    if (!result.ok) return;
+    if (result.isNew) wx.showToast({ title: '已保存到「标签」页', icon: 'none' });
+    else wx.showToast({ title: '已保存', icon: 'success' });
+  },
+
+  exitEditor() {
     if (!this.projectId && this.document.elements.length) this.persistDocument();
     wx.navigateBack({
       fail: () => wx.reLaunch({ url: '/pages/home/index' })
     });
+  },
+
+  closeEditor() {
+    // Leaving without an explicit save must never silently drop edits made to
+    // an existing project (autosave only survives until the next editor open).
+    this.commitFieldEditDraft();
+    if (!this.dirtySinceSave || !this.document.elements.length) {
+      this.exitEditor();
+      return;
+    }
+    wx.showActionSheet({
+      alertText: '标签有未保存的修改',
+      itemList: ['保存并退出', '不保存退出'],
+      success: (result) => {
+        if (result.tapIndex === 0) {
+          const saved = this.saveProjectSilently();
+          if (saved.ok) this.exitEditor();
+        } else if (result.tapIndex === 1) {
+          this.exitEditor();
+        }
+      }
+    });
+  },
+
+  openDataManager() {
+    try {
+      wx.setStorageSync(KEYS.pendingHomeRoute, 'data');
+    } catch (error) {
+      // Falling back to the plain home route is acceptable.
+    }
+    this.closeEditor();
   },
 
   loadTemplate(event) {
@@ -1353,14 +1937,29 @@ Page({
     for (let index = 0; index < this.document.elements.length; index += 1) {
       const element = this.document.elements[index];
       const message = placeholderPrintBlock(element);
-      if (message) return { kind: 'placeholder', message, elementId: element.id, suggestProfileId: '' };
+      if (message) {
+        return {
+          kind: 'placeholder',
+          message,
+          elementId: element.id,
+          canConfirmOriginal: element.requiresInputReason === 'sample-code',
+          suggestProfileId: ''
+        };
+      }
     }
     const fit = evaluatePrintability(this.document, this.profile);
     if (!fit.ok) return { kind: 'size', message: fit.message, suggestProfileId: fit.suggestProfileId || '' };
     try {
       validateDocument(this.document, this.profile.dpi);
     } catch (error) {
-      return { kind: 'element', message: error.message, suggestProfileId: '' };
+      return {
+        kind: 'element',
+        message: error.message,
+        elementId: error.elementId || '',
+        elementType: error.elementType || '',
+        errorCode: error.code || '',
+        suggestProfileId: ''
+      };
     }
     return null;
   },
@@ -1380,7 +1979,12 @@ Page({
 
   openPrintSheet() {
     this.refreshPrintBlock();
-    this.setData({ showPrintSheet: true });
+    const patch = { showPrintSheet: true };
+    if (!this.data.printing) {
+      patch.printProgress = 0;
+      patch.printMessage = '';
+    }
+    this.setData(patch);
   },
 
   closePrintSheet() {
@@ -1409,6 +2013,57 @@ Page({
     this.syncPageData(() => {
       this.initCanvas();
       this.refreshPrintBlock();
+    });
+  },
+
+  focusPrintElement() {
+    const elementId = this.data.printBlock && this.data.printBlock.elementId;
+    if (!elementId || !this.document.elements.some((item) => item.id === elementId)) return;
+    this.setSelection([elementId], false);
+    this.setData({ showPrintSheet: false });
+    this.syncPageData(() => this.renderAll());
+  },
+
+  confirmPrintElementValue() {
+    const elementId = this.data.printBlock && this.data.printBlock.elementId;
+    const element = this.document.elements.find((item) => item.id === elementId);
+    if (!element || element.requiresInputReason !== 'sample-code') return;
+    this.commit((documentValue) => {
+      const current = documentValue.elements.find((item) => item.id === elementId);
+      if (!current || current.requiresInputReason !== 'sample-code') return;
+      current.requiresInput = false;
+      delete current.requiresInputReason;
+      current.sampleValueConfirmed = true;
+    });
+    this.refreshPrintBlock();
+    wx.showToast({ title: '已确认使用当前编码', icon: 'success' });
+  },
+
+  fixCodeSize() {
+    const elementId = this.data.printBlock && this.data.printBlock.elementId;
+    const probeDocument = cloneDocument(this.document);
+    const probeElement = probeDocument.elements.find((item) => item.id === elementId);
+    if (!probeElement) return;
+    let probe;
+    try {
+      probe = resizeCodeElementToMinimum(probeElement, probeDocument, this.profile.dpi);
+    } catch (error) {
+      wx.showToast({ title: error.message, icon: 'none', duration: 2800 });
+      return;
+    }
+    if (!probe.ok) {
+      wx.showToast({ title: probe.message, icon: 'none', duration: 3200 });
+      return;
+    }
+    this.setSelection([elementId], false);
+    this.setData({ showPrintSheet: false });
+    this.commit((documentValue) => {
+      const element = documentValue.elements.find((item) => item.id === elementId);
+      resizeCodeElementToMinimum(element, documentValue, this.profile.dpi);
+    });
+    wx.showToast({
+      title: probe.changed ? '已放大，请检查排版' : '尺寸已满足要求',
+      icon: 'none'
     });
   },
 
@@ -1514,6 +2169,7 @@ Page({
       }
 
       this.setData({ printProgress: 5, printMessage: '正在生成打印点阵' });
+      await ensureDocumentFonts(this.document, fontRuntime());
       await this.ensureImagesReady();
       this.assertPrintActive(taskGeneration);
       const serialElements = this.document.elements.filter((element) => element.type === 'serial');

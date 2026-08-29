@@ -1,4 +1,4 @@
-// Code 128 subset B. Values outside printable ASCII are rejected explicitly.
+// Code 128 subsets A/B/C. Values outside each subset are rejected explicitly.
 const PATTERNS = [
   '212222', '222122', '222221', '121223', '121322', '131222', '122213', '122312', '132212',
   '221213', '221312', '231212', '112232', '122132', '122231', '113222', '123122', '123221',
@@ -14,12 +14,45 @@ const PATTERNS = [
   '113141', '114131', '311141', '411131', '211412', '211214', '211232', '2331112'
 ];
 
-function encodeCode128B(value) {
-  const text = String(value || '');
+function finishEncoding(startCode, values, text) {
+  let checksum = startCode;
+  values.forEach((item, index) => {
+    checksum += item * (index + 1);
+  });
+  const symbols = [startCode, ...values, checksum % 103, 106];
+  return {
+    symbols,
+    patterns: symbols.map((item) => PATTERNS[item]),
+    moduleCount: symbols.reduce((total, item) => {
+      return total + PATTERNS[item].split('').reduce((sum, width) => sum + Number(width), 0);
+    }, 20),
+    text
+  };
+}
+
+function requiredText(value) {
+  const text = String(value == null ? '' : value);
   if (!text.length) {
     throw new Error('条码内容不能为空');
   }
+  return text;
+}
 
+function encodeCode128A(value) {
+  const text = requiredText(value);
+  const values = [];
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    if (code < 0 || code > 95) {
+      throw new Error('Code 128A 仅支持 ASCII 0-95 字符');
+    }
+    values.push(code < 32 ? code + 64 : code - 32);
+  }
+  return finishEncoding(103, values, text);
+}
+
+function encodeCode128B(value) {
+  const text = requiredText(value);
   const values = [];
   for (let index = 0; index < text.length; index += 1) {
     const code = text.charCodeAt(index);
@@ -28,19 +61,37 @@ function encodeCode128B(value) {
     }
     values.push(code - 32);
   }
-
-  let checksum = 104;
-  values.forEach((item, index) => {
-    checksum += item * (index + 1);
-  });
-  const symbols = [104, ...values, checksum % 103, 106];
-  return {
-    symbols,
-    patterns: symbols.map((item) => PATTERNS[item]),
-    moduleCount: symbols.reduce((total, item) => {
-      return total + PATTERNS[item].split('').reduce((sum, width) => sum + Number(width), 0);
-    }, 20)
-  };
+  return finishEncoding(104, values, text);
 }
 
-module.exports = { encodeCode128B };
+function encodeCode128C(value) {
+  const text = requiredText(value);
+  if (!/^\d+$/.test(text) || text.length % 2 !== 0) {
+    throw new Error('Code 128C 需要偶数位数字');
+  }
+  const values = [];
+  for (let index = 0; index < text.length; index += 2) {
+    values.push(Number(text.slice(index, index + 2)));
+  }
+  return finishEncoding(105, values, text);
+}
+
+function encodeCode128(value, subset) {
+  const text = requiredText(value);
+  const normalized = String(subset || 'auto').toLowerCase();
+  if (normalized === 'a') return encodeCode128A(text);
+  if (normalized === 'b') return encodeCode128B(text);
+  if (normalized === 'c') return encodeCode128C(text);
+  // Auto keeps mixed content compatible with the historic B encoder, while
+  // compacting an all-numeric even-length payload using subset C.
+  return /^\d{4,}$/.test(text) && text.length % 2 === 0
+    ? encodeCode128C(text)
+    : encodeCode128B(text);
+}
+
+module.exports = {
+  encodeCode128,
+  encodeCode128A,
+  encodeCode128B,
+  encodeCode128C
+};

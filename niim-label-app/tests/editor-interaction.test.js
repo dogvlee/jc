@@ -55,11 +55,13 @@ function textElement(locked) {
   };
 }
 
-test('locked selection keeps only the three safe float actions', () => {
+test('locked selection keeps only actionable float actions', () => {
   const lockedMarkup = contextActions(stateFor(textElement(true)));
   const unlockedMarkup = contextActions(stateFor(textElement(false)));
-  assert.equal((lockedMarkup.match(/class="niim-float-btn"/g) || []).length, 3);
-  assert.doesNotMatch(lockedMarkup, /data-action="toggle-lock"/);
+  assert.equal((lockedMarkup.match(/class="niim-float-btn"/g) || []).length, 2);
+  assert.match(lockedMarkup, /data-action="toggle-lock" title="解锁"/);
+  assert.doesNotMatch(lockedMarkup, /data-action="delete-element"/);
+  assert.doesNotMatch(lockedMarkup, /data-action="edit-element"/);
   assert.equal((unlockedMarkup.match(/class="niim-float-btn(?:\s|\")/g) || []).length, 6);
 });
 
@@ -84,8 +86,10 @@ test('text direction control exposes six native modes and an arc angle slider', 
 });
 
 test('arc angle live edits create one undo entry when the slider change finishes', () => {
-  assert.equal((mainSource.match(/'fontSize', 'rotation', 'textArcAngle'\]\.includes\(field\)/g) || []).length, 2);
-  assert.match(mainSource, /autosave:\s*field === 'fontSize' \|\| field === 'textArcAngle'/);
+  assert.match(mainSource, /function beginContinuousInputUndo\(\)/);
+  assert.match(mainSource, /field === 'textArcAngle'[\s\S]{0,500}niim-text-arc-readout/);
+  assert.match(mainSource, /\['update-element', 'update-table-cell', 'update-date-custom-label', 'set-table-dim'\]\.includes\(target\.dataset\.action\)/);
+  assert.match(mainSource, /state\.undo\.push\(contentUndoBefore\)[\s\S]{0,180}contentUndoBefore = null;[\s\S]{0,80}autosave\(\)/);
 });
 
 test('legacy vertical documents select the vertical mode without a textMode field', () => {
@@ -97,17 +101,18 @@ test('legacy vertical documents select the vertical mode without a textMode fiel
 
 test('locked selection exposes unlock in the property panel', () => {
   const markup = propertyPanel(stateFor(textElement(true)));
-  assert.match(markup, /class="niim-unlock-command"/);
   assert.match(markup, /data-action="toggle-lock"/);
-  assert.match(markup, /解锁元素/);
+  assert.match(markup, /这个元素已锁定/);
+  assert.match(markup, /复制为可编辑元素/);
+  assert.doesNotMatch(markup, /data-action="update-element"/);
 });
 
-test('locked content panel keeps the unlock command as a separate row', () => {
+test('locked content panel does not expose inert editing controls', () => {
   const state = stateFor(textElement(true));
   state.editorPanelTab = 'content';
   const markup = propertyPanel(state);
-  assert.match(markup, /class="niim-unlock-command"/);
-  assert.match(markup, /class="niim-panel-body editor-panel-body content-mode"/);
+  assert.match(markup, /data-panel-body="locked"/);
+  assert.doesNotMatch(markup, /class="niim-content-line"/);
 });
 
 test('canvas text placeholder does not leak into the content input', () => {
@@ -116,6 +121,6 @@ test('canvas text placeholder does not leak into the content input', () => {
   state.editorPanelTab = 'content';
   const markup = propertyPanel(state);
   assert.match(markup, /class="niim-content-line"/);
-  assert.match(markup, /value=""/);
+  assert.match(markup, /<textarea[^>]*><\/textarea>/);
   assert.doesNotMatch(markup, /class="niim-content-clear"/);
 });

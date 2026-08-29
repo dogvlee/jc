@@ -33,6 +33,39 @@ function readText(file) {
   return fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '');
 }
 
+function normalizePackPath(value) {
+  return String(value || '')
+    .replaceAll('\\', '/')
+    .replace(/^\.\//, '')
+    .replace(/^\/+|\/+$/g, '');
+}
+
+function loadPackIgnores() {
+  try {
+    const config = JSON.parse(readText(path.join(projectRoot, 'project.config.json')));
+    const entries = config && config.packOptions && Array.isArray(config.packOptions.ignore)
+      ? config.packOptions.ignore
+      : [];
+    return entries
+      .map((entry) => ({
+        type: entry && entry.type === 'folder' ? 'folder' : 'file',
+        value: normalizePackPath(entry && entry.value)
+      }))
+      .filter((entry) => entry.value && entry.value !== '..' && !entry.value.startsWith('../'));
+  } catch {
+    return [];
+  }
+}
+
+function isPackIgnored(file, ignores) {
+  const relativePath = path.relative(miniRoot, file).replaceAll('\\', '/');
+  return ignores.some((entry) => (
+    entry.type === 'folder'
+      ? relativePath === entry.value || relativePath.startsWith(`${entry.value}/`)
+      : relativePath === entry.value
+  ));
+}
+
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -206,10 +239,15 @@ for (const [assetPath, owners] of resourceRefs) {
 }
 console.log(`[check] Static assets: ${resourceRefs.size} referenced paths`);
 
-const packageFiles = walk(miniRoot);
+const packIgnores = loadPackIgnores();
+const allPackageFiles = walk(miniRoot);
+const packageFiles = allPackageFiles.filter((file) => !isPackIgnored(file, packIgnores));
+const ignoredPackageFiles = allPackageFiles.filter((file) => isPackIgnored(file, packIgnores));
+const ignoredPackageBytes = ignoredPackageFiles.reduce((sum, file) => sum + fs.statSync(file).size, 0);
 const packageBytes = packageFiles.reduce((sum, file) => sum + fs.statSync(file).size, 0);
 const packageMiB = packageBytes / 1024 / 1024;
 const usage = packageBytes / MAIN_PACKAGE_LIMIT;
+console.log(`[check] Pack ignore: ${ignoredPackageFiles.length} files, ${ignoredPackageBytes} bytes excluded by project.config.json`);
 console.log(`[check] Main package: ${packageFiles.length} files, ${packageBytes} bytes (${packageMiB.toFixed(2)} MiB, ${(usage * 100).toFixed(1)}% of 2 MiB)`);
 if (packageBytes > MAIN_PACKAGE_LIMIT) {
   errors.push(`Main package is ${packageBytes - MAIN_PACKAGE_LIMIT} bytes over the 2 MiB limit`);

@@ -1,4 +1,4 @@
-# 精臣标签（niim-label-app）
+# 商跃标签（niim-label-app）
 
 独立标签打印 App：行业模板库 → 预览 → 编辑 → 蓝牙打印。
 

@@ -1,11 +1,15 @@
 const qrcode = require('../vendor/qrcode');
-const { encodeCode128B } = require('./code128');
+const { encodeCode128, encodeCode128A, encodeCode128B, encodeCode128C } = require('./code128');
 const { encodeEan13 } = require('./ean13');
+const { encodeUpca } = require('./upca');
+const { encodeUpce } = require('./upce');
 const { drawMaterialSymbol } = require('./materials');
 const { drawBorderStyle, borderById } = require('./borders');
 const { clampTextArcAngle, normalizeTextMode } = require('./text-direction');
+const { CHROME } = require('./editor-gesture');
+const { QR_QUIET_ZONE_MODULES, validateCodeElement } = require('./code-quality');
+const { resolveFontFamily } = require('./font-family');
 
-const QR_QUIET_ZONE_MODULES = 4;
 const thresholdImageCache = new WeakMap();
 const DOT_EPSILON = 1e-6;
 
@@ -18,7 +22,7 @@ function mmToDots(value, dpi) {
 }
 
 function fontValue(element, fontPixels) {
-  return `${element.italic ? 'italic ' : ''}${element.bold ? 'bold ' : ''}${fontPixels}px ${element.fontFamily || 'sans-serif'}`;
+  return `${element.italic ? 'italic ' : ''}${element.bold ? 'bold ' : ''}${fontPixels}px ${resolveFontFamily(element.fontFamily)}`;
 }
 
 function lineSpacingValue(element) {
@@ -533,27 +537,28 @@ function formatDateValue(element, now) {
     return `${label}${element.fixedValue}`;
   }
   const date = resolveDateTime(element, now);
-  const datePart = `${date.getFullYear()}年${pad(date.getMonth() + 1, 2)}月${pad(date.getDate(), 2)}日`;
-  let timePart = '';
-  if (element.showTime !== false) {
-    timePart = ` ${pad(date.getHours(), 2)}:${pad(date.getMinutes(), 2)}`;
-    if (element.showSeconds !== false) timePart += `:${pad(date.getSeconds(), 2)}`;
+  let fmt = String(element.format || 'YYYY年MM月DD日 HH:mm').trim();
+  const hasTimeTokens = /HH|mm|ss/.test(fmt);
+  if (element.showTime === false && hasTimeTokens) {
+    // Imported documents may use custom separators. Remove the whole time run
+    // without rewriting the user's date format.
+    fmt = fmt
+      .replace(/(?:\s|T)*HH(?:[^YMDHms]*mm)?(?:[^YMDHms]*ss)?/g, '')
+      .replace(/(?:\s|T)*mm(?:[^YMDHms]*ss)?/g, '')
+      .replace(/(?:\s|T)*ss/g, '')
+      .trim();
+  } else if (element.showTime !== false && !hasTimeTokens) {
+    fmt = `${fmt} ${element.showSeconds === true ? 'HH:mm:ss' : 'HH:mm'}`;
   }
-  // Honor custom token format if provided and not Chinese default
-  const fmt = String(element.format || '');
-  if (fmt && /YYYY|MM|DD|HH|mm|ss/.test(fmt) && !fmt.includes('年')) {
-    const replacements = {
-      YYYY: String(date.getFullYear()),
-      MM: pad(date.getMonth() + 1, 2),
-      DD: pad(date.getDate(), 2),
-      HH: pad(date.getHours(), 2),
-      mm: pad(date.getMinutes(), 2),
-      ss: pad(date.getSeconds(), 2)
-    };
-    const body = fmt.replace(/YYYY|MM|DD|HH|mm|ss/g, (token) => replacements[token]);
-    return element.label ? `${element.label}：${body}` : body;
-  }
-  const body = `${datePart}${timePart}`;
+  const replacements = {
+    YYYY: String(date.getFullYear()),
+    MM: pad(date.getMonth() + 1, 2),
+    DD: pad(date.getDate(), 2),
+    HH: pad(date.getHours(), 2),
+    mm: pad(date.getMinutes(), 2),
+    ss: pad(date.getSeconds(), 2)
+  };
+  const body = fmt.replace(/YYYY|MM|DD|HH|mm|ss/g, (token) => replacements[token]);
   return element.label ? `${element.label}：${body}` : body;
 }
 
@@ -578,10 +583,39 @@ function drawGeneratedText(context, element, dpi, text) {
   drawText(context, Object.assign({}, element, { text }), dpi);
 }
 
+function drawCodeNotice(context, element, dpi, message) {
+  withElementTransform(context, element, dpi, (x, y, width, height) => {
+    const ink = element.color || '#000000';
+    context.strokeStyle = ink;
+    context.lineWidth = Math.max(1, mmToDots(0.25, dpi));
+    context.strokeRect(x, y, width, height);
+    context.fillStyle = ink;
+    context.font = `${Math.max(8, Math.min(height * 0.35, mmToDots(2.5, dpi)))}px sans-serif`;
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText(message, x + width / 2, y + height / 2, Math.max(1, width - 4));
+  });
+}
+
 function drawBarcode(context, element, dpi) {
+  const format = String(element.format || 'code128').toLowerCase();
+  if (element.unsupportedCodeType === true || element.requiresFormatConfirmation === true
+    || !['code128', 'code128a', 'code128b', 'code128c', 'ean13', 'upca', 'upce'].includes(format)) {
+    drawCodeNotice(context, element, dpi, '码制待确认');
+    return;
+  }
   let encoded;
   try {
-    encoded = element.format === 'ean13' ? encodeEan13(element.value) : encodeCode128B(element.value);
+    const encoders = {
+      code128: () => encodeCode128(element.value),
+      code128a: () => encodeCode128A(element.value),
+      code128b: () => encodeCode128B(element.value),
+      code128c: () => encodeCode128C(element.value),
+      ean13: () => encodeEan13(element.value),
+      upca: () => encodeUpca(element.value),
+      upce: () => encodeUpce(element.value)
+    };
+    encoded = encoders[format]();
   } catch (error) {
     return;
   }
@@ -669,26 +703,7 @@ function drawQrCode(context, element, dpi) {
 
 function validateDocument(document, dpi) {
   document.elements.forEach((element) => {
-    if (element.type === 'barcode') {
-      const encoded = element.format === 'ean13' ? encodeEan13(element.value) : encodeCode128B(element.value);
-      const availableDots = Math.floor(mmToDots(element.width, dpi));
-      if (availableDots < encoded.moduleCount) {
-        throw new Error(`条码元素过窄，当前内容至少需要 ${encoded.moduleCount} 个打印点`);
-      }
-    }
-    if (element.type === 'qrcode') {
-      const code = qrcode(0, element.errorCorrection || 'M');
-      code.addData(String(element.value || ''), 'Byte');
-      code.make();
-      const requiredDots = code.getModuleCount() + QR_QUIET_ZONE_MODULES * 2;
-      const availableDots = Math.floor(Math.min(
-        mmToDots(element.width, dpi),
-        mmToDots(element.height, dpi)
-      ) + DOT_EPSILON);
-      if (availableDots < requiredDots) {
-        throw new Error(`二维码元素过小，当前内容至少需要 ${requiredDots} x ${requiredDots} 个打印点`);
-      }
-    }
+    if (element.type === 'barcode' || element.type === 'qrcode') validateCodeElement(element, dpi);
   });
 }
 
@@ -819,8 +834,52 @@ function drawImage(context, element, dpi, images) {
     return;
   }
   withElementTransform(context, element, dpi, (x, y, width, height) => {
-    const renderedImage = thresholdedImage(context, image, width, height, element.threshold);
-    context.drawImage(renderedImage, x, y, width, height);
+    const fit = element.imageFit || 'stretch';
+    if (fit === 'stretch') {
+      const renderedImage = thresholdedImage(context, image, width, height, element.threshold);
+      context.drawImage(renderedImage, x, y, width, height);
+      return;
+    }
+    const naturalWidth = Math.max(1, Number(image.naturalWidth || image.videoWidth || image.width) || Math.abs(width));
+    const naturalHeight = Math.max(1, Number(image.naturalHeight || image.videoHeight || image.height) || Math.abs(height));
+    const rasterScale = Math.min(1, 2048 / Math.max(naturalWidth, naturalHeight));
+    const renderedImage = thresholdedImage(
+      context,
+      image,
+      naturalWidth * rasterScale,
+      naturalHeight * rasterScale,
+      element.threshold
+    );
+    const sourceWidth = Math.max(1, Number(renderedImage.width) || naturalWidth);
+    const sourceHeight = Math.max(1, Number(renderedImage.height) || naturalHeight);
+    context.save();
+    context.beginPath();
+    context.rect(x, y, width, height);
+    context.clip();
+    context.fillStyle = '#ffffff';
+    context.fillRect(x, y, width, height);
+    if (fit === 'contain') {
+      const scale = Math.min(width / sourceWidth, height / sourceHeight);
+      const drawWidth = sourceWidth * scale;
+      const drawHeight = sourceHeight * scale;
+      context.drawImage(renderedImage, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);
+    } else {
+      const sourceRatio = sourceWidth / sourceHeight;
+      const targetRatio = width / height;
+      let sx = 0;
+      let sy = 0;
+      let sw = sourceWidth;
+      let sh = sourceHeight;
+      if (sourceRatio > targetRatio) {
+        sw = sourceHeight * targetRatio;
+        sx = (sourceWidth - sw) / 2;
+      } else {
+        sh = sourceWidth / targetRatio;
+        sy = (sourceHeight - sh) / 2;
+      }
+      context.drawImage(renderedImage, sx, sy, sw, sh, x, y, width, height);
+    }
+    context.restore();
   });
 }
 
@@ -953,10 +1012,17 @@ function drawMaterial(context, element, dpi, images) {
   });
 }
 
-function renderDocument(context, document, canvasSize, dpi, images) {
+function renderDocument(context, document, canvasSize, dpi, images, options) {
   context.setTransform(1, 0, 0, 1, 0, 0);
   context.clearRect(0, 0, canvasSize.width, canvasSize.height);
-  context.fillStyle = '#ffffff';
+  // Editor-only workbench backdrop; defaults OFF so preview/thumbnail/print
+  // raster paths keep painting the label on pure white. Callers opt in with
+  // { editorCanvas: true } only for the live editor canvas.
+  if (options && options.editorCanvas) {
+    context.fillStyle = CHROME.backdrop;
+    context.fillRect(0, 0, canvasSize.width, canvasSize.height);
+  }
+  context.fillStyle = CHROME.paper;
   context.fillRect(0, 0, canvasSize.width, canvasSize.height);
   document.elements.forEach((element) => {
     if (element.type === 'text') {
@@ -985,12 +1051,12 @@ function drawSnapGuides(context, guides, canvasSize, dpi) {
   if (!guides || !guides.length) return;
   context.save();
   context.setTransform(1, 0, 0, 1, 0, 0);
-  // Original video: light-blue dashed rulers + mm ticks
-  context.strokeStyle = 'rgba(47, 128, 237, 0.85)';
-  context.lineWidth = 1;
-  context.setLineDash([5, 4]);
-  context.font = '11px sans-serif';
-  context.fillStyle = 'rgba(47, 128, 237, 0.95)';
+  // Snap rulers: blue dashed crosshair + mm ticks
+  context.strokeStyle = CHROME.guide;
+  context.lineWidth = CHROME.guideWidth;
+  context.setLineDash(CHROME.guideDash);
+  context.font = CHROME.guideLabelFont;
+  context.fillStyle = CHROME.guideLabel;
   context.textBaseline = 'middle';
   const stepMm = canvasSize.width > 400 ? 10 : 5;
   guides.forEach((guide) => {
@@ -1012,7 +1078,7 @@ function drawSnapGuides(context, guides, canvasSize, dpi) {
           context.fillText(String(mm), x + 6, y);
         }
       }
-      context.setLineDash([5, 4]);
+      context.setLineDash(CHROME.guideDash);
     } else if (guide.axis === 'h') {
       const y = mmToDots(guide.pos, dpi) + 0.5;
       context.beginPath();
@@ -1030,7 +1096,7 @@ function drawSnapGuides(context, guides, canvasSize, dpi) {
           context.fillText(String(mm), x + 2, y - 8);
         }
       }
-      context.setLineDash([5, 4]);
+      context.setLineDash(CHROME.guideDash);
     }
   });
   context.restore();
@@ -1042,9 +1108,9 @@ function renderSelection(context, selected, canvasSize, dpi, guides) {
   // paper margin only when guides active (drag) — keep select shot clean
   if (guides && guides.length) {
     context.save();
-    context.setLineDash([4, 3]);
-    context.strokeStyle = 'rgba(230,60,60,0.85)';
-    context.lineWidth = 1;
+    context.setLineDash(CHROME.paperMarginDash);
+    context.strokeStyle = CHROME.paperMargin;
+    context.lineWidth = CHROME.guideWidth;
     context.strokeRect(0.5, 0.5, canvasSize.width - 1, canvasSize.height - 1);
     context.restore();
   }
@@ -1066,9 +1132,9 @@ function renderSelection(context, selected, canvasSize, dpi, guides) {
       maxY = Math.max(maxY, mmToDots(element.y + element.height, dpi));
     });
     context.save();
-    context.strokeStyle = '#2F80ED';
-    context.lineWidth = 1.5;
-    context.setLineDash([6, 4]);
+    context.strokeStyle = CHROME.multiSelect;
+    context.lineWidth = CHROME.multiSelectWidth;
+    context.setLineDash(CHROME.multiSelectDash);
     context.strokeRect(minX - 1, minY - 1, maxX - minX + 2, maxY - minY + 2);
     context.restore();
   }
@@ -1076,7 +1142,7 @@ function renderSelection(context, selected, canvasSize, dpi, guides) {
   selections.forEach((element) => withElementTransform(context, Object.assign({}, element, { mirrorX: false, mirrorY: false }), dpi, (x, y, width, height) => {
     const isDate = element.type === 'date';
     const isTextLike = element.type === 'text' || element.type === 'date' || element.type === 'serial';
-    const color = element.locked ? '#8b98a0' : (isDate ? '#F5A623' : '#2F80ED');
+    const color = element.locked ? CHROME.locked : CHROME.selection;
     // Text-like selections hug the painted content until the first manual
     // handle drag promotes that fitted rectangle to the real element box.
     let sx = x;
@@ -1109,11 +1175,13 @@ function renderSelection(context, selected, canvasSize, dpi, guides) {
     } else {
       delete element._fit;
     }
-    // Date: orange dashed + hatch (screenshot); text: solid blue
+    // Date: dashed + hatch; other types: solid blue
     context.strokeStyle = color;
-    context.lineWidth = isDate ? 1.5 : 1.6;
+    context.lineWidth = CHROME.selectionWidth;
+    context.fillStyle = CHROME.selectionFill;
+    context.fillRect(sx, sy, sw, sh);
     if (isDate) {
-      context.setLineDash([5, 3]);
+      context.setLineDash(CHROME.dateDash);
       context.strokeRect(sx, sy, sw, sh);
       context.setLineDash([]);
       // light diagonal hatch
@@ -1121,7 +1189,7 @@ function renderSelection(context, selected, canvasSize, dpi, guides) {
       context.beginPath();
       context.rect(sx, sy, sw, sh);
       context.clip();
-      context.strokeStyle = 'rgba(245, 166, 35, 0.22)';
+      context.strokeStyle = CHROME.selectionFill;
       context.lineWidth = 1;
       const step = 6;
       for (let i = -sh; i < sw + sh; i += step) {
@@ -1136,8 +1204,8 @@ function renderSelection(context, selected, canvasSize, dpi, guides) {
       context.strokeRect(sx, sy, sw, sh);
     }
     if (element.locked) return;
-    // Handles on content-fitted box (贴蓝框), same as stroke
-    const r = Math.max(4.5, Math.min(7, dpi / 28));
+    // Handles on content-fitted box (贴蓝框): white dots with blue ring
+    const r = CHROME.handleRadius;
     const mids = [
       [sx + sw, sy + sh / 2],
       [sx + sw / 2, sy + sh]
@@ -1145,10 +1213,10 @@ function renderSelection(context, selected, canvasSize, dpi, guides) {
     mids.forEach((point) => {
       context.beginPath();
       context.arc(point[0], point[1], r, 0, Math.PI * 2);
-      context.fillStyle = color;
+      context.fillStyle = CHROME.handleFill;
       context.fill();
-      context.lineWidth = 1.5;
-      context.strokeStyle = '#ffffff';
+      context.lineWidth = CHROME.handleRingWidth;
+      context.strokeStyle = CHROME.handleRing;
       context.stroke();
     });
     // Rotate at SE of content box
@@ -1156,15 +1224,15 @@ function renderSelection(context, selected, canvasSize, dpi, guides) {
     const ry = sy + sh;
     context.beginPath();
     context.arc(rx, ry, r + 1, 0, Math.PI * 2);
-    context.fillStyle = '#ffffff';
+    context.fillStyle = CHROME.handleFill;
     context.fill();
-    context.strokeStyle = color;
-    context.lineWidth = 1.4;
+    context.strokeStyle = CHROME.handleRing;
+    context.lineWidth = CHROME.handleRingWidth;
     context.stroke();
     context.beginPath();
     context.arc(rx, ry, r * 0.55, -0.2, Math.PI * 1.2);
-    context.strokeStyle = color;
-    context.lineWidth = 1.5;
+    context.strokeStyle = CHROME.handleArrow;
+    context.lineWidth = CHROME.handleArrowWidth;
     context.stroke();
   }));
 }

@@ -2,6 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { createDocument, createElement } = require('../miniprogram/core/document');
+const { getTemplate } = require('../miniprogram/app/catalog');
+const { buildTemplateDocument } = require('../miniprogram/app/template-layouts');
 const { fitText } = require('../miniprogram/core/renderer');
 const {
   DOCUMENT_LIMITS,
@@ -25,7 +27,9 @@ function storage(initial) {
 
 test('normalizeDocument fills new element defaults and rejects broken dimensions', () => {
   assert.equal(normalizeDocument({ widthMm: 0, heightMm: 30 }), null);
-  assert.equal(normalizeDocument({ widthMm: 151, heightMm: 30 }), null);
+  assert.equal(normalizeDocument({ widthMm: 501, heightMm: 30 }), null);
+  // Long industrial labels are storable; printability is checked per profile.
+  assert.equal(normalizeDocument({ widthMm: 500, heightMm: 30, elements: [] }).widthMm, 500);
   const document = normalizeDocument({
     schemaVersion: 1,
     name: '旧标签',
@@ -37,6 +41,51 @@ test('normalizeDocument fills new element defaults and rejects broken dimensions
   assert.equal(document.elements[0].text, '内容');
   assert.equal(document.elements[0].verticalAlign, 'middle');
   assert.equal(document.elements[0].mirrorX, false);
+});
+
+test('template provenance survives normalize, user-template open, and project save chains', () => {
+  const source = buildTemplateDocument(getTemplate('shangyue-wish-card'));
+  const normalized = normalizeDocument(source);
+  assert.notEqual(normalized.templateMeta, source.templateMeta);
+  assert.equal(normalized.templateMeta.origin, 'shangyue-original');
+  assert.equal(normalized.templateMeta.source, 'shangyue-original');
+  assert.equal(normalized.templateMeta.approvedOriginal, true);
+  assert.equal(normalized.templateMeta.batchCompatible, false);
+
+  source.templateMeta.origin = 'mutated-after-normalize';
+  assert.equal(normalized.templateMeta.origin, 'shangyue-original');
+
+  const repository = new Repository(storage({ [KEYS.version]: STORAGE_VERSION }));
+  const savedTemplate = repository.saveUserTemplate(normalized, '心意卡副本');
+  const openedTemplate = repository.getUserTemplates().find((item) => item.id === savedTemplate.id);
+  assert.equal(openedTemplate.document.templateMeta.origin, 'shangyue-original');
+  assert.equal(openedTemplate.document.templateMeta.batchCompatible, false);
+
+  const savedProject = repository.saveProject(openedTemplate.document);
+  const openedProject = repository.getProjects().find((item) => item.id === savedProject.id);
+  assert.equal(openedProject.document.templateMeta.authorship, 'shangyue-clean-room');
+  assert.equal(openedProject.document.templateMeta.copyright, '© 2026 商跃');
+  assert.equal(openedProject.document.templateMeta.batchCompatible, false);
+});
+
+test('template metadata cloning bounds strings and drops unsafe or non-JSON values', () => {
+  const metadata = JSON.parse('{"origin":"user-import","__proto__":{"polluted":true},"constructor":"blocked"}');
+  metadata.note = 'x'.repeat(1500);
+  metadata.nonFinite = Infinity;
+  metadata.callback = () => 'no';
+  const document = normalizeDocument({
+    widthMm: 40,
+    heightMm: 30,
+    elements: [],
+    templateMeta: metadata
+  });
+  assert.equal(document.templateMeta.origin, 'user-import');
+  assert.equal(document.templateMeta.note.length, 1024);
+  assert.equal(Object.prototype.hasOwnProperty.call(document.templateMeta, '__proto__'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(document.templateMeta, 'constructor'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(document.templateMeta, 'nonFinite'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(document.templateMeta, 'callback'), false);
+  assert.equal({}.polluted, undefined);
 });
 
 test('normalizeDocument bounds hostile renderer values and text payloads', () => {
@@ -138,13 +187,13 @@ test('normalizeDocument caps the number of elements retained from a backup', () 
 test('settings normalization bounds imported and legacy values', () => {
   assert.deepEqual(normalizeSettings({
     defaultProfileId: '', density: 99, threshold: -1, labelType: 8,
-    stockWidthMm: 300, stockHeightMm: 0, onboardingDone: 1, unit: 'inch'
+    stockWidthMm: 600, stockHeightMm: 0, onboardingDone: 1, unit: 'inch'
   }), {
     defaultProfileId: 'd110',
     density: 5,
     threshold: 80,
     labelType: 4,
-    stockWidthMm: 150,
+    stockWidthMm: 500,
     stockHeightMm: 5,
     onboardingDone: true,
     unit: 'mm'
@@ -186,6 +235,34 @@ test('projects, templates and print history are bounded and cloned', () => {
   assert.equal(history.length, 80);
   assert.ok(history[9].document);
   assert.equal(history[10].document, undefined);
+});
+
+test('template pack import respects capacity, skips invalid items and keeps provenance', () => {
+  const repository = new Repository(storage({ [KEYS.version]: STORAGE_VERSION }));
+  for (let index = 0; index < 78; index += 1) {
+    repository.saveUserTemplate(createDocument(40, 30), `既有模板 ${index}`, `seed-${index}`);
+  }
+  const redesign = createDocument(53, 27.5);
+  redesign.templateMeta = {
+    origin: 'shangyue-authorized-redesign-review',
+    sourceProvider: 'operator-collection',
+    approvalStatus: 'internal-review'
+  };
+  const result = repository.importUserTemplates([
+    { name: '重设计 A', document: redesign },
+    { name: '重设计 B', document: createDocument(40, 30) },
+    { name: '溢出模板', document: createDocument(40, 30) },
+    { name: '坏数据', document: { widthMm: 0, heightMm: 30 } }
+  ]);
+  assert.equal(result.imported, 2);
+  assert.equal(result.overflow, 1);
+  assert.equal(result.invalid, 1);
+  const templates = repository.getUserTemplates();
+  assert.equal(templates.length, 80);
+  assert.ok(templates.some((item) => item.name === '既有模板 0'), '批量导入不得挤掉既有模板');
+  const imported = templates.find((item) => item.name === '重设计 A');
+  assert.equal(imported.document.templateMeta.origin, 'shangyue-authorized-redesign-review');
+  assert.equal(imported.document.templateMeta.approvalStatus, 'internal-review');
 });
 
 test('batch project save validates everything and commits with one storage write', () => {

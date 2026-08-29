@@ -150,7 +150,7 @@ Notify   bef8d6c9-9c21-4c9e-b632-bd58c1009f9e
 
 会话约束（`ble-session.js`）：
 
-1. 扫描 → 连接 → 枚举服务/特征（优先已知 UUID，否则按 properties 回退）
+1. 扫描 → 连接 → 枚举服务/特征；只接受上述已验证 UUID 组合，拒绝任意可写通道
 2. 开 notify（CCCD）后再 ready
 3. 协商 MTU，写上限 `mtu - 3`
 4. **完整协议帧**为最小写入单位；帧长 > maxWrite 则失败，不静默拆 GATT 包

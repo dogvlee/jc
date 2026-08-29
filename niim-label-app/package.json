@@ -2,11 +2,14 @@
   "name": "niim-label-app",
   "version": "1.0.0",
   "private": true,
-  "description": "精臣风格标签模板编辑与 BLE 打印 App（离线模板 + 蓝牙打印）",
+  "description": "商跃标签模板编辑与 BLE 打印 App（离线模板 + 蓝牙打印）",
   "scripts": {
     "build": "node scripts/build.mjs",
     "dev": "node scripts/dev.mjs",
     "serve": "node scripts/serve.mjs",
+    "audit:templates": "node scripts/audit-template-health.mjs",
+    "audit:cleanroom": "node scripts/audit-cleanroom-pack.mjs src/app/cleanroom-template-pack.js",
+    "sync:authorized-catalog": "node scripts/sync-authorized-catalog.mjs",
     "test": "node --test tests/*.test.js",
     "smoke": "node scripts/smoke-template-to-print.mjs && node scripts/smoke-editor-and-data.mjs",
     "verify": "npm run build && npm test",
@@ -23,7 +26,8 @@
     "@capacitor/core": "7.6.8",
     "@capacitor/filesystem": "7.1.8",
     "@capacitor/preferences": "7.0.4",
-    "@capacitor/share": "7.0.4"
+    "@capacitor/share": "7.0.4",
+    "@zxing/browser": "0.2.1"
   },
   "devDependencies": {
     "@capacitor/cli": "7.6.8",

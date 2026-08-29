@@ -3,9 +3,6 @@
  * Icons/colors mirror the original app center IA (行业 / 内容 / 实用),
  * without remote VIP assets or login gates.
  */
-const { IMPORTED_TEMPLATES } = require('./imported-templates');
-const { ONLINE_TEMPLATES } = require('./online-templates-pack');
-
 const baseTemplates = [
   {
     id: 'product-simple',
@@ -152,6 +149,461 @@ const baseTemplates = [
     accent: '#E09F3E'
   },
   {
+    id: 'shangyue-wish-card',
+    name: '商跃心意祝福卡',
+    category: '生活',
+    industry: '内容设计',
+    size: [40, 30],
+    kind: 'qr',
+    uses: 0,
+    badge: '原创',
+    blurb: '原创留白排版 + 祝福语 + 心意二维码',
+    accent: '#6C5CE7',
+    thumbSrc: 'assets/shangyue-thumbs/shangyue-wish-card-v1.png',
+    thumbSha256: '1760fceadeb068a38d1fe439fa1bc3f5d62e4a7afa8e72c274738410e046833e',
+    origin: 'shangyue-original',
+    copyright: '© 2026 商跃',
+    approvedOriginal: true,
+    approvalStatus: 'approved',
+    publicCatalog: true,
+    batchCompatible: false
+  },
+  {
+    id: 'shangyue-price-tag',
+    name: '商跃零售价签',
+    category: '零售',
+    industry: '行业标识',
+    size: [40, 30],
+    kind: 'barcode',
+    uses: 0,
+    badge: '原创',
+    blurb: '原创顶栏排版 + 售价/会员价 + EAN-13',
+    accent: '#C45C26',
+    thumbSrc: 'assets/shangyue-thumbs/shangyue-price-tag-v1.png',
+    thumbSha256: '4c1ede4a17f8fc77d59afd4964811befcea3fd42b121abbffdb8af355479e4a4',
+    origin: 'shangyue-original',
+    copyright: '© 2026 商跃',
+    approvedOriginal: true,
+    approvalStatus: 'approved',
+    publicCatalog: true,
+    batchCompatible: false
+  },
+  {
+    id: 'shangyue-bin-label',
+    name: '商跃仓储货位',
+    category: '仓储',
+    industry: '行业标识',
+    size: [40, 30],
+    kind: 'qr',
+    uses: 0,
+    badge: '原创',
+    blurb: '原创竖条货位 + 批次 + 入库二维码',
+    accent: '#1F4E5F',
+    thumbSrc: 'assets/shangyue-thumbs/shangyue-bin-label-v1.png',
+    thumbSha256: '5da703f658b06fc0ef2f144c4f9a06e39597e985d8885188035bcabae7b83852',
+    origin: 'shangyue-original',
+    copyright: '© 2026 商跃',
+    approvedOriginal: true,
+    approvalStatus: 'approved',
+    publicCatalog: true,
+    batchCompatible: false
+  },
+  {
+    id: 'shangyue-name-sticker',
+    name: '商跃姓名贴',
+    category: '生活',
+    industry: '实用功能',
+    size: [40, 20],
+    kind: 'accent',
+    uses: 0,
+    badge: '原创',
+    blurb: '原创横条签名 + 班级部门 + 联系电话',
+    accent: '#3D4A6B',
+    thumbSrc: 'assets/shangyue-thumbs/shangyue-name-sticker-v1.png',
+    thumbSha256: '8274b51fe9a3afdfe45442ae10125fc84d513f8b0f6eda78252b13a7f653e879',
+    origin: 'shangyue-original',
+    copyright: '© 2026 商跃',
+    approvedOriginal: true,
+    approvalStatus: 'approved',
+    publicCatalog: true,
+    batchCompatible: false
+  },
+  {
+    id: 'shangyue-fresh-date',
+    name: '商跃效期签',
+    category: '生活',
+    industry: '实用功能',
+    size: [40, 30],
+    kind: 'accent',
+    uses: 0,
+    badge: '原创',
+    blurb: '原创顶栏分区 + 制作/食用日期自动更新',
+    accent: '#2F6B4F',
+    thumbSrc: 'assets/shangyue-thumbs/shangyue-fresh-date-v1.png',
+    thumbSha256: 'e71807c82eba3c62645661af73d274fd3acac287b141b308d5e3584ab9d9d550',
+    origin: 'shangyue-original',
+    copyright: '© 2026 商跃',
+    approvedOriginal: true,
+    approvalStatus: 'approved',
+    publicCatalog: true,
+    batchCompatible: false
+  },
+  {
+    id: 'shangyue-wifi-card',
+    name: '商跃连网码',
+    category: '办公',
+    industry: '内容设计',
+    size: [40, 30],
+    kind: 'qr',
+    uses: 0,
+    badge: '授权改编',
+    blurb: '左码右凭据的访客通行证',
+    accent: '#355C7D',
+    thumbSrc: 'assets/shangyue-thumbs/shangyue-wifi-card-v1.png',
+    thumbSha256: '2c7de8eae7063011c31e6ede73a88ddf0cbd2569ad297b3e2fb140b574cf3aa3',
+    origin: 'shangyue-authorized-redesign',
+    authorship: 'shangyue-independent-redesign',
+    authorizationStatus: 'operator-confirmed-document-reference-pending',
+    authorizedRedesign: true,
+    copyright: '精诚授权改编 · 商跃重设计',
+    approvedOriginal: false,
+    approvalStatus: 'authorized',
+    publicCatalog: true,
+    batchCompatible: false
+  },
+  {
+    id: 'shangyue-promo-tag',
+    name: '商跃促销价签',
+    category: '零售',
+    industry: '内容设计',
+    size: [40, 30],
+    kind: 'barcode',
+    uses: 0,
+    badge: '授权改编',
+    blurb: '上置条码 + 右侧反白价格舱',
+    accent: '#C0392B',
+    thumbSrc: 'assets/shangyue-thumbs/shangyue-promo-tag-v1.png',
+    thumbSha256: 'e37550c265eb269e2eef97c7b4832dd999f899a957022e41a61174a2353a7c3f',
+    origin: 'shangyue-authorized-redesign',
+    authorship: 'shangyue-independent-redesign',
+    authorizationStatus: 'operator-confirmed-document-reference-pending',
+    authorizedRedesign: true,
+    copyright: '精诚授权改编 · 商跃重设计',
+    approvedOriginal: false,
+    approvalStatus: 'authorized',
+    publicCatalog: true,
+    batchCompatible: false
+  },
+  {
+    id: 'shangyue-jewelry-tag',
+    name: '商跃珠宝吊牌',
+    category: '零售',
+    industry: '内容设计',
+    size: [40, 30],
+    kind: 'barcode',
+    uses: 0,
+    badge: '原创',
+    blurb: '原创竖条金饰 + 克重编号 + Code128',
+    accent: '#8D6E4C',
+    thumbSrc: 'assets/shangyue-thumbs/shangyue-jewelry-tag-v1.png',
+    thumbSha256: 'caef0f6f8b83029647f08e602dc1c98fe5b4106ab1ff63a942848f045ba901d3',
+    origin: 'shangyue-original',
+    copyright: '© 2026 商跃',
+    approvedOriginal: true,
+    approvalStatus: 'approved',
+    publicCatalog: true,
+    batchCompatible: false
+  },
+  {
+    id: 'shangyue-garment-tag',
+    name: '商跃服装吊牌',
+    category: '零售',
+    industry: '内容设计',
+    size: [40, 30],
+    kind: 'barcode',
+    uses: 0,
+    badge: '原创',
+    blurb: '原创顶栏成衣 + 款号尺码 + EAN-13',
+    accent: '#5C4B73',
+    thumbSrc: 'assets/shangyue-thumbs/shangyue-garment-tag-v1.png',
+    thumbSha256: '01df2b2e7b4fe3d2d4c44ff80604e8011275237d830ee99a3c08b6b3a8808a4d',
+    origin: 'shangyue-original',
+    copyright: '© 2026 商跃',
+    approvedOriginal: true,
+    approvalStatus: 'approved',
+    publicCatalog: true,
+    batchCompatible: false
+  },
+  {
+    id: 'shangyue-ship-label',
+    name: '商跃物流简签',
+    category: '仓储',
+    industry: '行业标识',
+    size: [40, 30],
+    kind: 'qr',
+    uses: 0,
+    badge: '原创',
+    blurb: '原创竖条流向 + 运单条码 + 签收二维码',
+    accent: '#1B7A4E',
+    thumbSrc: 'assets/shangyue-thumbs/shangyue-ship-label-v1.png',
+    thumbSha256: 'b596c2a5ddd48d0c61d91f84e01c10d1cbe603fb2bdb24ecf51e16ef247714b6',
+    origin: 'shangyue-original',
+    copyright: '© 2026 商跃',
+    approvedOriginal: true,
+    approvalStatus: 'approved',
+    publicCatalog: true,
+    batchCompatible: false
+  },
+  {
+    id: 'shangyue-cable-tag',
+    name: '商跃线缆标识',
+    category: '办公',
+    industry: '行业标识',
+    size: [40, 12],
+    kind: 'barcode',
+    uses: 0,
+    badge: '原创',
+    blurb: '原创窄条线号 + 机柜位置 + Code128',
+    accent: '#0B6E75',
+    thumbSrc: 'assets/shangyue-thumbs/shangyue-cable-tag-v1.png',
+    thumbSha256: '420d9d81f1d84212e0ec0b7c28abd287fb5a90f3bb4be8ea97bb8923f9c3c501',
+    origin: 'shangyue-original',
+    copyright: '© 2026 商跃',
+    approvedOriginal: true,
+    approvalStatus: 'approved',
+    publicCatalog: true,
+    batchCompatible: false
+  },
+  {
+    id: 'shangyue-asset-tag',
+    name: '商跃固定资产',
+    category: '办公',
+    industry: '行业标识',
+    size: [40, 30],
+    kind: 'qr',
+    uses: 0,
+    badge: '原创',
+    blurb: '原创竖条资产 + 序列号 + 盘点二维码',
+    accent: '#3A4F6B',
+    thumbSrc: 'assets/shangyue-thumbs/shangyue-asset-tag-v1.png',
+    thumbSha256: '3f3e10e414e8fe705e0f1b75a6bc0f522632bfe273842508923c60f64ae5644c',
+    origin: 'shangyue-original',
+    copyright: '© 2026 商跃',
+    approvedOriginal: true,
+    approvalStatus: 'approved',
+    publicCatalog: true,
+    batchCompatible: false
+  },
+  {
+    id: 'shangyue-biz-card',
+    name: '商跃商务名片',
+    category: '办公',
+    industry: '内容设计',
+    size: [40, 30],
+    kind: 'qr',
+    uses: 0,
+    badge: '原创',
+    blurb: '原创竖条名片 + 联系方式 + 电子名片码',
+    accent: '#1A334F',
+    thumbSrc: 'assets/shangyue-thumbs/shangyue-biz-card-v1.png',
+    thumbSha256: 'fe5a30fa5d6a113614b60206818d0bd6e7c3d8fdf36a00464bba3b421333fc18',
+    origin: 'shangyue-original',
+    copyright: '© 2026 商跃',
+    approvedOriginal: true,
+    approvalStatus: 'approved',
+    publicCatalog: true,
+    batchCompatible: false
+  },
+  {
+    id: 'shangyue-kitchen-date',
+    name: '商跃餐饮效期',
+    category: '生活',
+    industry: '行业标识',
+    size: [40, 30],
+    kind: 'accent',
+    uses: 0,
+    badge: '授权改编',
+    blurb: '双时间窗格 + 批次复核清单',
+    accent: '#C45C3A',
+    thumbSrc: 'assets/shangyue-thumbs/shangyue-kitchen-date-v1.png',
+    thumbSha256: 'f36ba52bdf09de0ef6c951b49c53bf24a993cef35f6ddcf81bdfc8187f1fed5a',
+    origin: 'shangyue-authorized-redesign',
+    authorship: 'shangyue-independent-redesign',
+    authorizationStatus: 'operator-confirmed-document-reference-pending',
+    authorizedRedesign: true,
+    copyright: '精诚授权改编 · 商跃重设计',
+    approvedOriginal: false,
+    approvalStatus: 'authorized',
+    publicCatalog: true,
+    batchCompatible: false
+  },
+  {
+    id: 'shangyue-med-label',
+    name: '商跃药品签',
+    category: '生活',
+    industry: '实用功能',
+    size: [40, 20],
+    kind: 'accent',
+    uses: 0,
+    badge: '原创',
+    blurb: '原创用药顶栏 + 规格用法 + 有效期',
+    accent: '#9B2D30',
+    thumbSrc: 'assets/shangyue-thumbs/shangyue-med-label-v1.png',
+    thumbSha256: '1d01806924229c303bded5bab592ab7a7d2063ef4ecad8fd515f40ac3698c078',
+    origin: 'shangyue-original',
+    copyright: '© 2026 商跃',
+    approvedOriginal: true,
+    approvalStatus: 'approved',
+    publicCatalog: true,
+    batchCompatible: false
+  },
+  {
+    id: 'shangyue-seat-card',
+    name: '商跃席卡',
+    category: '生活',
+    industry: '内容设计',
+    size: [40, 30],
+    kind: 'accent',
+    uses: 0,
+    badge: '原创',
+    blurb: '原创留白席卡 + 新人姓名 + 桌号',
+    accent: '#B07A7A',
+    thumbSrc: 'assets/shangyue-thumbs/shangyue-seat-card-v1.png',
+    thumbSha256: '7391f3f8c71de2f3ce3a014faf15076475a8aa555c007bc422eefdbe1e3f32b0',
+    origin: 'shangyue-original',
+    copyright: '© 2026 商跃',
+    approvedOriginal: true,
+    approvalStatus: 'approved',
+    publicCatalog: true,
+    batchCompatible: false
+  },
+  {
+    id: 'shangyue-bakery-tag',
+    name: '商跃烘焙价签',
+    category: '零售',
+    industry: '内容设计',
+    size: [40, 30],
+    kind: 'barcode',
+    uses: 0,
+    badge: '原创',
+    blurb: '原创烘焙顶栏 + 口味规格 + EAN-13',
+    accent: '#B06A4A',
+    thumbSrc: 'assets/shangyue-thumbs/shangyue-bakery-tag-v1.png',
+    thumbSha256: '7e5123676b50fb7da0e6ff36ef4ddd63a773f3f2296622b6527dab6c5ae52ccf',
+    origin: 'shangyue-original',
+    copyright: '© 2026 商跃',
+    approvedOriginal: true,
+    approvalStatus: 'approved',
+    publicCatalog: true,
+    batchCompatible: false
+  },
+  {
+    id: 'shangyue-plant-tag',
+    name: '商跃植物签',
+    category: '生活',
+    industry: '内容设计',
+    size: [40, 30],
+    kind: 'accent',
+    uses: 0,
+    badge: '授权改编',
+    blurb: '光水温三栏照护仪表',
+    accent: '#2F6B4A',
+    thumbSrc: 'assets/shangyue-thumbs/shangyue-plant-tag-v1.png',
+    thumbSha256: '68ee5309e64827b2eb61fdc61bc618f663c2952c18794af24a690a6ec279742c',
+    origin: 'shangyue-authorized-redesign',
+    authorship: 'shangyue-independent-redesign',
+    authorizationStatus: 'operator-confirmed-document-reference-pending',
+    authorizedRedesign: true,
+    copyright: '精诚授权改编 · 商跃重设计',
+    approvedOriginal: false,
+    approvalStatus: 'authorized',
+    publicCatalog: true,
+    batchCompatible: false
+  },
+  {
+    id: 'shangyue-desk-plate',
+    name: '商跃工位牌',
+    category: '办公',
+    industry: '内容设计',
+    size: [40, 30],
+    kind: 'qr',
+    uses: 0,
+    badge: '原创',
+    blurb: '原创工位竖条 + 分机 + 企业码',
+    accent: '#1A4332',
+    thumbSrc: 'assets/shangyue-thumbs/shangyue-desk-plate-v1.png',
+    thumbSha256: '3645442a4efd72d06e858854d1b483aea5209ccb931ac818ca9e58c392dc6188',
+    origin: 'shangyue-original',
+    copyright: '© 2026 商跃',
+    approvedOriginal: true,
+    approvalStatus: 'approved',
+    publicCatalog: true,
+    batchCompatible: false
+  },
+  {
+    id: 'shangyue-lab-tag',
+    name: '商跃样品签',
+    category: '行业',
+    industry: '行业标识',
+    size: [40, 20],
+    kind: 'barcode',
+    uses: 0,
+    badge: '原创',
+    blurb: '原创样品编号 + 日期 + 条码',
+    accent: '#2C6BC9',
+    thumbSrc: 'assets/shangyue-thumbs/shangyue-lab-tag-v1.png',
+    thumbSha256: 'cbe19be684d95be7950796843b9929f82e0ed1f68f1b93f1e689c8aa1ed9cf4e',
+    origin: 'shangyue-original',
+    copyright: '© 2026 商跃',
+    approvedOriginal: true,
+    approvalStatus: 'approved',
+    publicCatalog: true,
+    batchCompatible: false
+  },
+  {
+    id: 'shangyue-care-tag',
+    name: '商跃洗涤说明',
+    category: '零售',
+    industry: '内容设计',
+    size: [40, 30],
+    kind: 'accent',
+    uses: 0,
+    badge: '授权改编',
+    blurb: '面料侧栏 + 四格洗护参数',
+    accent: '#5A5560',
+    thumbSrc: 'assets/shangyue-thumbs/shangyue-care-tag-v1.png',
+    thumbSha256: 'ca14692e899f3ccd803acf52eb967d0cce207cd2dc82744c9479ed90fb058e87',
+    origin: 'shangyue-authorized-redesign',
+    authorship: 'shangyue-independent-redesign',
+    authorizationStatus: 'operator-confirmed-document-reference-pending',
+    authorizedRedesign: true,
+    copyright: '精诚授权改编 · 商跃重设计',
+    approvedOriginal: false,
+    approvalStatus: 'authorized',
+    publicCatalog: true,
+    batchCompatible: false
+  },
+  {
+    id: 'shangyue-serial-cable',
+    name: '商跃线号序列',
+    category: '办公',
+    industry: '行业标识',
+    size: [30, 12],
+    kind: 'barcode',
+    uses: 0,
+    badge: '原创',
+    blurb: '原创窄条递增线号 + Code128',
+    accent: '#0A5E66',
+    thumbSrc: 'assets/shangyue-thumbs/shangyue-serial-cable-v1.png',
+    thumbSha256: '019627fdc20b101092b9c1938e3b6d9a5afeba4ade5e94cb52e5193d904d8fd2',
+    origin: 'shangyue-original',
+    copyright: '© 2026 商跃',
+    approvedOriginal: true,
+    approvalStatus: 'approved',
+    publicCatalog: true,
+    batchCompatible: false
+  },
+  {
     id: 'catering-date',
     name: '餐饮效期标签',
     category: '生活',
@@ -177,14 +629,14 @@ const baseTemplates = [
   },
   {
     id: 'state-grid',
-    name: '国网电力标识',
+    name: '电力计量标识',
     category: '行业',
     industry: '行业标识',
     size: [50, 30],
     kind: 'qr',
     uses: 76,
     badge: null,
-    blurb: '计量箱信息 + 表号条码 + 95598 扫码',
+    blurb: '计量箱信息 + 表号条码 + 用电信息码',
     accent: '#0077B6'
   },
   {
@@ -393,50 +845,125 @@ const baseTemplates = [
   }
 ];
 
-const importedMeta = IMPORTED_TEMPLATES.map((item) => ({
-  id: item.id,
-  name: item.name,
-  category: item.category,
-  industry: item.industry,
-  size: item.size,
-  kind: item.kind,
-  uses: item.uses,
-  badge: item.badge,
-  blurb: item.blurb,
-  accent: item.accent,
-  source: item.source
-}));
+// Public authorship and batch eligibility are explicit allowlists. A missing
+// third-party source is not evidence that a template is approved Shangyue work.
+const APPROVED_ORIGINAL_TEMPLATE_IDS = Object.freeze([
+  'shangyue-wish-card',
+  'shangyue-price-tag',
+  'shangyue-bin-label',
+  'shangyue-name-sticker',
+  'shangyue-fresh-date',
+  'shangyue-jewelry-tag',
+  'shangyue-garment-tag',
+  'shangyue-ship-label',
+  'shangyue-cable-tag',
+  'shangyue-asset-tag',
+  'shangyue-biz-card',
+  'shangyue-med-label',
+  'shangyue-seat-card',
+  'shangyue-bakery-tag',
+  'shangyue-desk-plate',
+  'shangyue-lab-tag',
+  'shangyue-serial-cable'
+]);
 
-const onlineMeta = ONLINE_TEMPLATES.map((item) => ({
-  id: item.id,
-  name: item.name,
-  category: item.category,
-  industry: item.industry,
-  size: item.size,
-  kind: item.kind,
-  uses: item.uses,
-  badge: item.badge,
-  blurb: item.blurb,
-  accent: item.accent,
-  source: item.source,
-  thumbSrc: item.thumbSrc || ''
-}));
+const APPROVED_AUTHORIZED_REDESIGN_TEMPLATE_IDS = Object.freeze([
+  'shangyue-wifi-card',
+  'shangyue-promo-tag',
+  'shangyue-kitchen-date',
+  'shangyue-plant-tag',
+  'shangyue-care-tag'
+]);
 
-const templates = baseTemplates.concat(importedMeta, onlineMeta);
+const BATCH_TEMPLATE_IDS = Object.freeze([
+  'product-simple',
+  'promo-price',
+  'jewelry-price',
+  'clothing-tag',
+  'storage-code',
+  'shipping-bin',
+  'cable-name',
+  'serial-cable',
+  'asset-card',
+  'business-card',
+  'wifi-code',
+  'home-date',
+  'catering-date',
+  'medicine-box',
+  'state-grid',
+  'wedding-invite',
+  'bakery-tag',
+  'fresh-cut',
+  'name-tag',
+  'retail-shelf',
+  'pharma-shelf',
+  'warehouse-bin',
+  'express-waybill',
+  'cable-pair',
+  'expiry-batch',
+  'promo-burst',
+  'jewelry-mini',
+  'garment-care',
+  'med-storage',
+  'office-desk',
+  'lab-sample',
+  'plant-care'
+]);
 
-const categories = ['全部', '零售', '仓储', '办公', '生活', '行业', '线上'];
+const approvedOriginalIds = new Set(APPROVED_ORIGINAL_TEMPLATE_IDS);
+const approvedAuthorizedRedesignIds = new Set(APPROVED_AUTHORIZED_REDESIGN_TEMPLATE_IDS);
+const batchTemplateIds = new Set(BATCH_TEMPLATE_IDS);
+const classifiedBaseTemplates = baseTemplates.map((item) => {
+  const approvedOriginal = approvedOriginalIds.has(item.id);
+  const authorizedRedesign = approvedAuthorizedRedesignIds.has(item.id);
+  const publicApproved = approvedOriginal || authorizedRedesign;
+  return Object.assign({}, item, {
+    source: approvedOriginal
+      ? 'shangyue-original'
+      : authorizedRedesign ? 'shangyue-authorized-redesign' : 'builtin-base',
+    origin: publicApproved ? item.origin : 'builtin-base',
+    approvedOriginal,
+    authorizedRedesign,
+    approvalStatus: approvedOriginal ? 'approved' : authorizedRedesign ? 'authorized' : 'pending-review',
+    publicCatalog: publicApproved,
+    releaseApproved: publicApproved,
+    batchCompatible: batchTemplateIds.has(item.id)
+  });
+});
 
-const industries = ['全部', '行业标识', '内容设计', '实用功能', '行业模板'];
+const APPROVED_ORIGINAL_TEMPLATES = Object.freeze(
+  classifiedBaseTemplates.filter((item) => approvedOriginalIds.has(item.id))
+);
+const APPROVED_AUTHORIZED_REDESIGN_TEMPLATES = Object.freeze(
+  classifiedBaseTemplates.filter((item) => approvedAuthorizedRedesignIds.has(item.id))
+);
+const PUBLIC_TEMPLATES = Object.freeze(
+  classifiedBaseTemplates.filter((item) => item.publicCatalog === true && item.releaseApproved === true)
+);
+const BUILTIN_BASE_TEMPLATES = Object.freeze(
+  classifiedBaseTemplates.filter((item) => item.publicCatalog !== true)
+);
+const BATCH_TEMPLATES = Object.freeze(
+  BATCH_TEMPLATE_IDS.map((id) => classifiedBaseTemplates.find((item) => item.id === id)).filter(Boolean)
+);
+
+const templates = PUBLIC_TEMPLATES;
+
+const categories = ['全部', '零售', '仓储', '办公', '生活', '行业'];
+
+const industries = ['全部', '行业标识', '内容设计', '实用功能'];
 
 const homeQuickActions = [
   { id: 'industry', label: '行业模板', action: 'open-industry', icon: 'template', tone: 'red' },
-  { id: 'card', label: '名片', action: 'preview-template', templateId: 'business-card', icon: 'user', tone: 'blue' },
-  { id: 'clothing', label: '服装款式', action: 'preview-template', templateId: 'clothing-tag', icon: 'stamp', tone: 'orange' },
-  { id: 'date', label: '效期标签', action: 'preview-template', templateId: 'home-date', icon: 'calendar', tone: 'yellow' }
+  { id: 'card', label: '名片', action: 'preview-template', templateId: 'shangyue-biz-card', icon: 'user', tone: 'blue' },
+  { id: 'clothing', label: '服装款式', action: 'preview-template', templateId: 'shangyue-garment-tag', icon: 'stamp', tone: 'orange' },
+  { id: 'date', label: '效期标签', action: 'preview-template', templateId: 'shangyue-fresh-date', icon: 'calendar', tone: 'yellow' }
 ];
 
 function getTemplate(id) {
-  return templates.find((item) => item.id === id) || null;
+  return templates.find((item) => item.id === id)
+    || BUILTIN_BASE_TEMPLATES.find((item) => item.id === id)
+    || null;
 }
 
 function templatesByCategory(category) {
@@ -450,6 +977,14 @@ function templatesByIndustry(industry) {
 }
 
 module.exports = {
+  APPROVED_AUTHORIZED_REDESIGN_TEMPLATE_IDS,
+  APPROVED_AUTHORIZED_REDESIGN_TEMPLATES,
+  APPROVED_ORIGINAL_TEMPLATE_IDS,
+  APPROVED_ORIGINAL_TEMPLATES,
+  BATCH_TEMPLATE_IDS,
+  BATCH_TEMPLATES,
+  BUILTIN_BASE_TEMPLATES,
+  PUBLIC_TEMPLATES,
   categories,
   industries,
   templates,

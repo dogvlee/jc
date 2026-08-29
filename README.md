@@ -4,6 +4,8 @@ This repository is the parent workspace for the label printing projects.
 
 ## Projects
 
+- `niim-label-app`: **精臣标签** standalone app — industry templates, editor,
+  BLE print. Run with `cd niim-label-app && npm install && npm run dev`.
 - `label-printer-app`: Capacitor Android/Web label editor, linked as a Git
   submodule to `dogvlee/label-printer-app`.
 - `label-printer-miniapp`: WeChat Mini Program implementation of the label

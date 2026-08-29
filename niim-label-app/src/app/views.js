@@ -1,12 +1,33 @@
-const { PROFILES } = require('../core/profiles');
+const { PROFILES, evaluatePrintability } = require('../core/profiles');
 const { formatDateChip, formatTimeChip } = require('../core/renderer');
-const { categories, homeQuickActions, industries, templates } = require('./catalog');
+const { BATCH_TEMPLATES, categories, homeQuickActions, industries, templates } = require('./catalog');
+const {
+  SCENE_DEFINITIONS,
+  countTemplatesByScene,
+  sceneForId,
+  sceneIdsForTemplate,
+  templateMatchesScene
+} = require('./scenes');
 const { icon, sprite } = require('./icons');
 const { STOCK_PRESETS } = require('./stock-presets');
 const { buildTemplateDocument } = require('./template-layouts');
-const { DEFAULT_MATERIAL_CHIP, MATERIAL_CATALOG, MATERIAL_CHIPS, materialCategories, materialsForChip } = require('../core/materials');
-const { BORDER_CATALOG, BORDER_CHIPS, bordersForChip, borderById } = require('../core/borders');
+const {
+  buildLibraryDocument,
+  catalogMeta,
+  getLibraryEntry,
+  librarySceneChips,
+  librarySizeChips,
+  libraryStats,
+  queryLibraryMeta
+} = require('../../../label-printer-miniapp/miniprogram/app/shangyue-library/pack');
+const LIBRARY_SCENES = librarySceneChips();
+const LIBRARY_SIZES = librarySizeChips();
+const LIBRARY_TOTAL = libraryStats().total;
+const { DEFAULT_MATERIAL_CHIP, MATERIAL_CATALOG, MATERIAL_CHIPS } = require('../core/materials');
+const { BORDER_CATALOG, BORDER_CHIPS } = require('../core/borders');
 const { TEXT_MODE_OPTIONS, clampTextArcAngle, normalizeTextMode } = require('../core/text-direction');
+const { isBatchCompatibleTemplate, resolveBatchCompatibleTemplate } = require('./data-bind');
+const { FONT_CATEGORIES, fontFallbackInfo, listFontCatalog } = require('../core/font-family');
 
 const DATE_EXPIRE_PRESETS = [
   { label: '2小时', hours: 2 },
@@ -35,7 +56,11 @@ function escapeHtml(value) {
 const EDITOR_ASSET_BASE = 'assets/niimbot-editor';
 
 function editorAsset(path, className) {
-  return `<img class="editor-native-icon${className ? ` ${className}` : ''}" src="${EDITOR_ASSET_BASE}/${path}" alt="" aria-hidden="true">`;
+  return `<img class="editor-native-icon${className ? ` ${className}` : ''}" src="${EDITOR_ASSET_BASE}/${path}" width="24" height="24" alt="" aria-hidden="true" decoding="async" draggable="false">`;
+}
+
+function controlIcon(name) {
+  return icon(name, 'icon-control');
 }
 
 function formatDate(value) {
@@ -185,7 +210,7 @@ function labelThumb(kind, size, accent, thumbMeta) {
     const Qs = String.fromCharCode(34);
     const st = accent ? (" style=" + Qs + "--thumb-accent:" + escapeHtml(accent) + Qs) : "";
     const attrs = [meta.id ? ("data-thumb-id=" + Qs + escapeHtml(meta.id) + Qs) : "", meta.source ? ("data-thumb-source=" + Qs + escapeHtml(meta.source) + Qs) : "", "data-role=" + Qs + "template-thumb" + Qs, "data-thumb-static=" + Qs + "1" + Qs].filter(Boolean).join(" ");
-    return "<div class=" + Qs + "label-thumbnail thumb-v2 has-thumb" + Qs + " aria-hidden=" + Qs + "true" + Qs + st + " " + attrs + "><img class=" + Qs + "thumb-image" + Qs + " src=" + Qs + escapeHtml(meta.thumbSrc) + Qs + " alt=" + Qs + Qs + " style=" + Qs + "display:block;width:100%;height:100%;object-fit:contain;background:#fff" + Qs + "></div>";
+    return "<div class=" + Qs + "label-thumbnail thumb-v2 has-thumb" + Qs + " aria-hidden=" + Qs + "true" + Qs + st + " " + attrs + "><img class=" + Qs + "thumb-image" + Qs + " src=" + Qs + escapeHtml(meta.thumbSrc) + Qs + " alt=" + Qs + Qs + " loading=" + Qs + "lazy" + Qs + " decoding=" + Qs + "async" + Qs + " style=" + Qs + "display:block;width:100%;height:100%;object-fit:contain;background:#fff" + Qs + "></div>";
   }
 
   const motif = templateMotif(meta, kind);
@@ -206,15 +231,32 @@ function templateBadge(badge) {
   return `<span class="template-badge">${escapeHtml(badge)}</span>`;
 }
 
+function templateOriginLabel(template) {
+  if (!template || template.userTemplate) return '';
+  if (template.source === 'shangyue-library') return '商跃生成';
+  if (template.approvedOriginal === true && template.origin === 'shangyue-original') return '商跃原创';
+  if (template.authorizedRedesign === true && template.origin === 'shangyue-authorized-redesign') return '精诚授权改编';
+  if (!template.source || template.source === 'builtin-base') return '内置基础 · 权属待审';
+  return /niim/i.test(String(template.source)) ? '精臣来源' : '第三方来源';
+}
+
+function templateSourceBadge(template) {
+  const label = templateOriginLabel(template);
+  if (!label || label === '商跃原创') return '';
+  return `<span class="template-source-badge">${label}</span>`;
+}
+
 function templateCard(template, options) {
   const action = (options && options.action) || 'preview-template';
   const thumbSource = template.userTemplate ? 'user' : 'catalog';
+  const primaryScene = sceneForId(sceneIdsForTemplate(template)[0]);
   return `<button class="template-card" data-action="${action}" data-id="${escapeHtml(template.id)}">
     ${templateBadge(template.badge)}
+    ${templateSourceBadge(template)}
     ${labelThumb(template.kind, template.size, template.accent, { id: template.id, source: thumbSource, name: template.name, category: template.category, motif: template.motif, thumbSrc: template.thumbSrc || '' })}
     <div class="card-body">
       <p class="card-title">${escapeHtml(template.name)}</p>
-      <div class="card-meta">${template.size[0]}×${template.size[1]} mm · ${escapeHtml(template.category)}</div>
+      <div class="card-meta">${template.size[0]}×${template.size[1]} mm · ${escapeHtml(template.category)}${primaryScene ? ` · ${escapeHtml(primaryScene.label)}` : ''}</div>
       ${template.blurb ? `<div class="card-blurb">${escapeHtml(template.blurb)}</div>` : ''}
     </div>
   </button>`;
@@ -239,12 +281,13 @@ function myTemplateCard(project) {
 }
 
 function userTemplateManageCard(card) {
+  const folder = card.folder || '未分类';
   return `<div class="my-template-card-wrap">
     <button class="template-card" data-action="preview-template" data-id="${escapeHtml(card.id)}">
       ${labelThumb(card.kind, card.size, '', { id: card.id, source: 'user' })}
       <div class="card-body">
         <p class="card-title">${escapeHtml(card.name)}</p>
-        <div class="card-meta">${card.size[0]}×${card.size[1]} mm · 我的</div>
+        <div class="card-meta">${card.size[0]}×${card.size[1]} mm · ${escapeHtml(folder)}</div>
       </div>
     </button>
     <button class="card-overflow" data-action="manage-user-template" data-id="${escapeHtml(card.id)}" title="管理模板" aria-label="管理 ${escapeHtml(card.name)}">${icon('settings', 'icon-sm')}</button>
@@ -262,9 +305,14 @@ function userTemplateCard(template) {
     uses: template.uses || 0,
     document: documentValue,
     userTemplate: true,
+    folder: template.folder || '未分类',
     thumbSrc: template.thumbSrc || '',
     accent: template.accent
   };
+}
+
+function genuineUserTemplates(state) {
+  return (state.userTemplates || []).filter((template) => !template.source || template.source === 'user');
 }
 
 function projectKind(project) {
@@ -286,19 +334,36 @@ function projectCard(project) {
 }
 
 function homeView(state) {
-  const myTemplates = state.projects.slice(0, 24);
-  const featured = templates.filter((item) => item.badge || item.uses > 180).slice(0, 4);
-  const stock = state.settings.installedStock || 'T50×30 230 空白标签';
+  const seededSources = new Set(['catalog-seed', 'niim-import', 'online-niim']);
+  const myTemplates = state.projects
+    .filter((project) => !seededSources.has(project.source))
+    .slice(0, 4);
+  const featuredPool = templates
+    .filter((item) => item.publicCatalog === true && item.releaseApproved === true);
+  const featured = [];
+  SCENE_DEFINITIONS.forEach((scene) => {
+    const representative = featuredPool.find((item) => (
+      sceneIdsForTemplate(item)[0] === scene.id && !featured.some((entry) => entry.id === item.id)
+    )) || featuredPool.find((item) => (
+      templateMatchesScene(item, scene.id) && !featured.some((entry) => entry.id === item.id)
+    ));
+    if (representative) featured.push(representative);
+  });
+  featuredPool.forEach((item) => {
+    if (featured.length < 6 && !featured.some((entry) => entry.id === item.id)) featured.push(item);
+  });
+  const stock = state.settings.installedStock || 'T40×12 203 空白标签';
+  const sceneCounts = countTemplatesByScene(templates);
   return `${sprite()}
     <header class="home-hero">
       <div class="home-hero-top">
         <div class="brand-lockup">
-          <span class="brand-mark">N</span>
-          <div><h1>精臣标签</h1><div class="topbar-subtitle">模板 · 编辑 · 蓝牙打印</div></div>
+          <span class="brand-mark">S</span>
+          <div><h1>商跃标签</h1><div class="topbar-subtitle">模板 · 编辑 · 蓝牙打印</div></div>
         </div>
         <div class="topbar-actions">
           <button class="icon-button ghost" data-action="help" title="帮助">${icon('help')}</button>
-          <button class="device-chip" data-action="open-devices" title="打印机">
+          <button class="device-chip${state.device ? ' connected' : ''}" data-action="open-devices" title="打印机">
             ${icon(state.device ? 'printer' : 'bluetooth', 'icon-sm')}
             <span>${state.device ? escapeHtml(state.device.name) : '未连接'}</span>
           </button>
@@ -317,108 +382,278 @@ function homeView(state) {
       </div>
     </header>
     <main class="page home-page">
-      <section class="promo-banner" data-action="preview-template" data-id="wifi-code" role="button" tabindex="0">
-        <div>
-          <strong>设计师太贵？</strong>
-          <p>一个二维码搞定展示与连网 — 试试 Wi-Fi 码模板</p>
+      <section class="section home-scene-section">
+        <div class="section-heading">
+          <span class="ux-head-ico">${icon('template', 'icon-sm')}</span>
+          <div><h2>按经营场景开始</h2><p class="section-subtitle">先选用途，再挑能直接改字打印的模板</p></div>
+          <button type="button" class="section-link" data-action="navigate" data-route="templates">全部${icon('chevronRight', 'icon-sm')}</button>
         </div>
-        <span class="promo-cta">立即使用</span>
+        <div class="scene-card-grid">
+          ${SCENE_DEFINITIONS.map((scene) => `<button type="button" class="scene-card tone-${escapeHtml(scene.tone)}" data-action="open-scene" data-scene="${escapeHtml(scene.id)}" aria-label="打开${escapeHtml(scene.label)}模板，共 ${sceneCounts[scene.id] || 0} 张">
+            <span class="scene-card-icon">${icon(scene.icon)}</span>
+            <span class="scene-card-copy"><strong>${escapeHtml(scene.label)}</strong><small>${escapeHtml(scene.description)}</small></span>
+            <span class="scene-card-count">${sceneCounts[scene.id] || 0}</span>
+          </button>`).join('')}
+        </div>
       </section>
+
+      <button type="button" class="promo-banner" data-action="preview-template" data-id="shangyue-wifi-card">
+        <span class="ux-promo-icon">${icon('wifi')}</span>
+        <div>
+          <strong>打开 Wi-Fi 标签模板</strong>
+          <p>进入编辑器后填写网络名称、密码和二维码内容</p>
+        </div>
+        <span class="promo-cta">打开模板</span>
+      </button>
 
       <section class="section">
         <div class="stock-card">
-          <div class="stock-thumb">${labelThumb('accent', [50, 30], '#F2B84B')}</div>
+          <div class="stock-thumb">${labelThumb('accent', [40, 12], '#F2B84B')}</div>
           <div class="stock-body">
-            <div class="stock-label">已安装标签</div>
-            <p class="device-name">${escapeHtml(stock)}</p>
-            <div class="device-meta"><span>点击编辑可改尺寸与名称</span></div>
+            <div class="ux-stock-head">
+              <div class="stock-label">已安装标签</div>
+              <p class="device-name">${escapeHtml(stock)}</p>
+            </div>
+            <div class="device-meta"><span>新建标签将默认使用此尺寸</span></div>
           </div>
           <div class="stock-actions">
-            <button class="button-secondary compact" data-action="open-stock-sheet">换纸</button>
-            <button class="button compact" data-action="create-label">新建</button>
+            <button type="button" class="button-secondary compact" data-action="open-stock-sheet">换纸</button>
+            <button type="button" class="button compact" data-action="create-label">新建</button>
           </div>
         </div>
       </section>
 
       <section class="section">
         <div class="section-heading">
-          <h2>我的模板</h2>
+          <span class="ux-head-ico">${icon('sheet', 'icon-sm')}</span>
+          <h2>最近编辑</h2>
           <div class="heading-actions">
-            <button class="section-link" data-action="print-history">${icon('history', 'icon-sm')}打印历史</button>
-            <button class="section-link" data-action="all-projects">全部${icon('chevronRight', 'icon-sm')}</button>
+            <button type="button" class="section-link" data-action="print-history">${icon('history', 'icon-sm')}打印历史</button>
+            <button type="button" class="section-link" data-action="all-projects">全部${icon('chevronRight', 'icon-sm')}</button>
           </div>
         </div>
         ${myTemplates.length
           ? `<div class="my-template-grid">${myTemplates.map(myTemplateCard).join('')}</div>`
-          : `<div class="empty-state soft">还没有我的模板<br><button class="button" data-action="navigate" data-route="templates">去模板库挑选</button></div>`}
+          : `<div class="empty-state soft"><span class="empty-state-icon">${icon('template')}</span><div>还没有我的模板</div><button type="button" class="button" data-action="navigate" data-route="templates">去模板库挑选</button></div>`}
       </section>
+
+      ${state.recentPrints && state.recentPrints.length ? `<section class="section">
+        <div class="section-heading">
+          <span class="ux-head-ico">${icon('history', 'icon-sm')}</span>
+          <h2>最近打印</h2>
+          <button type="button" class="section-link" data-action="print-history">打印历史${icon('chevronRight', 'icon-sm')}</button>
+        </div>
+        <div class="recent-prints-row" aria-label="最近打印的标签">
+          ${state.recentPrints.slice(0, 6).map(renderRecentPrint).join('')}
+        </div>
+      </section>` : ''}
 
       <section class="section">
         <div class="section-heading">
+          <span class="ux-head-ico">${icon('template', 'icon-sm')}</span>
           <h2>推荐模板</h2>
-          <button class="section-link" data-action="navigate" data-route="templates">更多${icon('chevronRight', 'icon-sm')}</button>
+          <button type="button" class="section-link" data-action="navigate" data-route="templates">更多${icon('chevronRight', 'icon-sm')}</button>
         </div>
         <div class="template-grid home-template-grid">${featured.map((item) => templateCard(item)).join('')}</div>
       </section>
 
       <section class="section">
-        <div class="section-heading"><h2>快捷创建</h2></div>
+        <div class="section-heading"><span class="ux-head-ico">${icon('plus', 'icon-sm')}</span><h2>快捷创建</h2></div>
         <div class="quick-grid secondary-quick">
-          <button class="quick-action" data-action="create-label"><span class="quick-icon">${icon('plus')}</span><span>空白标签</span></button>
-          <button class="quick-action" data-action="navigate" data-route="data"><span class="quick-icon">${icon('sheet')}</span><span>批量打印</span></button>
-          <button class="quick-action" data-action="import-project"><span class="quick-icon">${icon('folder')}</span><span>导入项目</span></button>
-          <button class="quick-action" data-action="open-devices"><span class="quick-icon">${icon('bluetooth')}</span><span>连接设备</span></button>
+          <button type="button" class="quick-action" data-action="create-label"><span class="quick-icon">${icon('plus')}</span><span>空白标签</span></button>
+          <button type="button" class="quick-action" data-action="navigate" data-route="data"><span class="quick-icon">${icon('sheet')}</span><span>批量打印</span></button>
+          <button type="button" class="quick-action" data-action="import-project"><span class="quick-icon">${icon('folder')}</span><span>导入项目</span></button>
+          <button type="button" class="quick-action" data-action="open-devices"><span class="quick-icon">${icon('bluetooth')}</span><span>连接设备</span></button>
         </div>
       </section>
     </main>
     ${bottomNav('home')}`;
 }
 
-function templatesView(state) {
-  const query = state.templateQuery.trim().toLowerCase();
-  const available = templateLibraryPool(state);
-  const filtered = available.filter((item) => {
-    const categoryMatch = state.templateCategory === '全部' || item.category === state.templateCategory;
-    const industryMatch = !state.templateIndustry || state.templateIndustry === '全部' || item.industry === state.templateIndustry || item.userTemplate;
-    const queryMatch = !query || `${item.name} ${item.category} ${item.blurb || ''} ${item.industry || ''}`.toLowerCase().includes(query);
-    return categoryMatch && industryMatch && queryMatch;
+function renderRecentPrint(item) {
+  const record = item || {};
+  return `<button type="button" class="recent-print" data-action="reprint-history" data-id="${escapeHtml(record.projectId || record.id || '')}" data-kind="${escapeHtml(record.kind || 'accent')}" aria-label="重新打印 ${escapeHtml(record.name || '未命名标签')}">
+    ${labelThumb(record.kind || 'accent', [(record.widthMm || 40), (record.heightMm || 30)])}
+    <span class="recent-print-name">${escapeHtml(record.name || '未命名标签')}</span>
+    <span class="recent-print-meta">${escapeHtml(record.sizeText || '')}</span>
+  </button>`;
+}
+
+function onboardingStepMarkup(state) {
+  const step = state.onboardingStep || 1;
+  const steps = [
+    { icon: 'bluetooth', title: '连接打印机', text: '开机后在蓝牙列表里找到你的标签机，点击即可连接' },
+    { icon: 'template', title: '挑选模板', text: `${templates.length} 个通过权属门禁的场景模板，也可以从空白开始编辑` },
+    { icon: 'printer', title: '编辑并打印', text: '改文字、调大小，点打印就出纸' }
+  ];
+  const current = steps[step - 1] || steps[0];
+  return `<span class="onboarding-step-icon">${icon(current.icon)}</span>
+    <h2>${current.title}</h2>
+    <p>${current.text}</p>`;
+}
+
+function projectsView(state) {
+  const queryValue = state.projectQuery || '';
+  const query = queryValue.trim().toLowerCase();
+  const filtered = state.projects.filter((project) => {
+    const documentValue = project.document || {};
+    const haystack = `${documentValue.name || ''} ${documentValue.widthMm || ''}×${documentValue.heightMm || ''}`.toLowerCase();
+    return !query || haystack.includes(query);
   });
-  const total = available.length;
+  const visibleCount = Math.max(24, Number(state.projectVisibleCount) || 24);
+  const visible = filtered.slice(0, visibleCount);
+  const remaining = Math.max(0, filtered.length - visible.length);
+  return `${sprite()}
+    <header class="topbar brand-topbar">
+      <button type="button" class="icon-button" data-action="navigate" data-route="home" title="返回首页" aria-label="返回首页">${icon('back')}</button>
+      <div class="topbar-title"><h1>我的标签</h1><div class="topbar-subtitle">显示 ${visible.length} / ${filtered.length} 个</div></div>
+      <button type="button" class="icon-button" data-action="create-label" title="新建标签" aria-label="新建标签">${icon('plus')}</button>
+    </header>
+    <main class="page projects-page">
+      <div class="search-row">${icon('search')}<input class="search-input" type="search" data-action="project-search" value="${escapeHtml(queryValue)}" placeholder="搜索标签名称或尺寸" aria-label="搜索我的标签"></div>
+      ${visible.length
+        ? `<div class="my-template-grid projects-grid">${visible.map(myTemplateCard).join('')}</div>
+           ${remaining ? `<div class="load-more-row"><button type="button" class="button-secondary load-more-button" data-action="load-more-projects">显示更多（剩余 ${remaining}）</button></div>` : ''}`
+        : `<div class="empty-state"><span class="empty-state-icon">${icon(query ? 'search' : 'sheet')}</span><div>${query ? `没有找到“${escapeHtml(queryValue.trim())}”` : '还没有标签'}</div>${query ? `<button type="button" class="button-secondary" data-action="clear-project-search">清除搜索</button>` : `<button type="button" class="button" data-action="create-label">新建空白标签</button>`}</div>`}
+    </main>
+    ${bottomNav('home')}`;
+}
+
+function templatesView(state) {
+  const userTemplates = genuineUserTemplates(state);
+  const userFolders = ['全部', ...Array.from(new Set(userTemplates.map((item) => item.folder || '未分类')))];
+  const query = state.templateQuery.trim().toLowerCase();
+  const approvedBundled = templates.filter((item) => item.approvedOriginal === true && item.origin === 'shangyue-original').length;
+  const authorizedBundled = templates.filter((item) => item.authorizedRedesign === true && item.origin === 'shangyue-authorized-redesign').length;
+  const cleanroomBundled = templates.filter((item) => item.packVersion && item.taskLabel).length;
+  const visibleCount = Math.max(24, Number(state.templateVisibleCount) || 24);
+  const selectedScene = sceneForId(state.templateScene);
+  const selectedTask = state.templateTask || '全部';
+  const selectedSize = state.templateSize || '全部尺寸';
+  const libraryMode = state.templateIndustry === '行业库';
+  const available = libraryMode ? [] : templateLibraryPool(state);
+  const taskOptions = ['全部', ...Array.from(new Set(available
+    .filter((item) => !selectedScene || templateMatchesScene(item, selectedScene.id))
+    .map((item) => item.taskLabel)
+    .filter(Boolean)))];
+  const sizeOptions = ['全部尺寸', ...Array.from(new Set(available
+    .filter((item) => !selectedScene || templateMatchesScene(item, selectedScene.id))
+    .filter((item) => selectedTask === '全部' || item.taskLabel === selectedTask)
+    .filter((item) => Array.isArray(item.size) && item.size.length >= 2)
+    .map((item) => `${item.size[0]}×${item.size[1]}`)))];
+  const filtered = libraryMode
+    ? queryLibraryMeta({
+      sceneLabel: state.libraryScene,
+      size: state.librarySize,
+      query,
+      limit: visibleCount
+    }).items
+    : available.filter((item) => {
+      const categoryMatch = state.templateCategory === '全部' || item.category === state.templateCategory;
+      const folderMatch = state.templateCategory !== '我的'
+        || !state.templateFolder
+        || state.templateFolder === '全部'
+        || item.folder === state.templateFolder;
+      const industryMatch = !state.templateIndustry || state.templateIndustry === '全部' || item.industry === state.templateIndustry || item.userTemplate;
+      const sceneMatch = templateMatchesScene(item, state.templateScene);
+      const taskMatch = !state.templateTask || state.templateTask === '全部' || item.taskLabel === state.templateTask;
+      const sizeMatch = selectedSize === '全部尺寸' || (Array.isArray(item.size) && `${item.size[0]}×${item.size[1]}` === selectedSize);
+      const queryMatch = !query || `${item.name} ${item.category} ${item.folder || ''} ${item.blurb || ''} ${item.industry || ''} ${item.sceneLabel || ''} ${item.taskLabel || ''} ${item.seriesGroup || ''}`.toLowerCase().includes(query);
+      return categoryMatch && folderMatch && industryMatch && sceneMatch && taskMatch && sizeMatch && queryMatch;
+    });
+  const filteredTotal = libraryMode
+    ? queryLibraryMeta({ sceneLabel: state.libraryScene, size: state.librarySize, query, limit: 1 }).total
+    : filtered.length;
+  const total = libraryMode ? LIBRARY_TOTAL : available.length;
+  const visible = libraryMode ? filtered : filtered.slice(0, visibleCount);
+  const remaining = Math.max(0, filteredTotal - visible.length);
+  const loadMoreHtml = remaining
+    ? `<div class="load-more-row"><button type="button" class="button-secondary load-more-button" data-action="load-more-templates">显示更多（当前已载入还剩 ${remaining}）</button></div>`
+    : '';
   const activeFilters = [
     state.templateCategory !== '全部' ? state.templateCategory : '',
+    state.templateCategory === '我的' && state.templateFolder !== '全部' ? state.templateFolder : '',
     (state.templateIndustry && state.templateIndustry !== '全部') ? state.templateIndustry : '',
+    selectedScene ? selectedScene.label : '',
+    (state.templateTask && state.templateTask !== '全部') ? state.templateTask : '',
+    selectedSize !== '全部尺寸' ? `${selectedSize} mm` : '',
     query ? `“${state.templateQuery.trim()}”` : ''
   ].filter(Boolean);
   return `${sprite()}
     <header class="topbar brand-topbar">
-      <div class="topbar-title"><h1>行业模板</h1><div class="topbar-subtitle">${activeFilters.length
-        ? `筛选出 ${filtered.length} / ${total} 个`
-        : `${total} 个可用 · 点卡片预览版式`}</div></div>
-      ${activeFilters.length ? `<button class="section-link" data-action="reset-template-filters">清除筛选</button>` : ''}
-      <button class="icon-button" data-action="import-template" title="导入模板">${icon('upload')}</button>
+      <div class="topbar-title"><h1>模板库</h1><div class="topbar-subtitle">${activeFilters.length
+        ? `筛选出 ${filteredTotal} / ${total} 个 · 显示 ${visible.length}`
+        : `${total} 个可用（已载入） · 当前显示 ${visible.length}`}</div></div>
+      ${activeFilters.length ? `<button type="button" class="section-link" data-action="reset-template-filters">清除筛选</button>` : ''}
+      <button type="button" class="icon-button" data-action="import-project" title="导入项目" aria-label="导入项目">${icon('upload')}</button>
     </header>
     <main class="page templates-page">
       <div class="search-row">${icon('search')}<input class="search-input" type="search" data-action="template-search" value="${escapeHtml(state.templateQuery)}" placeholder="搜索模板名称、行业、用途"></div>
-      <div class="industry-chips" role="tablist" aria-label="行业分类">
-        ${industries.map((industry) => `<button class="industry-chip${(state.templateIndustry || '全部') === industry ? ' active' : ''}" data-action="template-industry" data-industry="${escapeHtml(industry)}" role="tab">${escapeHtml(industry)}</button>`).join('')}
+      <div class="scene-filter-strip" role="tablist" aria-label="经营场景">
+        <button type="button" class="scene-filter${!selectedScene ? ' active' : ''}" data-action="template-scene" data-scene="全部" role="tab" aria-label="全部场景" aria-selected="${!selectedScene}"><span>${icon('template', 'icon-sm')}</span>全部场景</button>
+        ${SCENE_DEFINITIONS.map((scene) => `<button type="button" class="scene-filter${state.templateScene === scene.id ? ' active' : ''}" data-action="template-scene" data-scene="${escapeHtml(scene.id)}" role="tab" aria-label="${escapeHtml(scene.label)}" aria-selected="${state.templateScene === scene.id}"><span>${icon(scene.icon, 'icon-sm')}</span>${escapeHtml(scene.label)}</button>`).join('')}
       </div>
-      <div class="segmented" role="tablist">${[...categories, ...(state.userTemplates.length ? ['我的'] : [])].map((category) => `<button class="segment${state.templateCategory === category ? ' active' : ''}" data-action="template-category" data-category="${category}" role="tab">${category}</button>`).join('')}</div>
+      ${!libraryMode && taskOptions.length > 1 ? `<section class="template-task-row" aria-label="原创任务系列">
+        <strong>热门任务</strong>
+        <div class="template-task-strip" role="tablist" aria-label="按打印任务筛选">
+          ${taskOptions.map((task) => { const active = (state.templateTask || '全部') === task; return `<button type="button" class="template-task-chip${active ? ' active' : ''}" data-action="template-task" data-task="${escapeHtml(task)}" role="tab" aria-selected="${active}">${escapeHtml(task === '全部' ? '全部任务' : task)}</button>`; }).join('')}
+        </div>
+      </section>` : ''}
+      ${!libraryMode && sizeOptions.length > 2 ? `<section class="template-task-row template-size-row" aria-label="按纸张尺寸筛选">
+        <strong>纸张尺寸</strong>
+        <div class="template-task-strip template-size-strip" role="tablist" aria-label="模板纸张尺寸">
+          ${sizeOptions.map((size) => { const active = selectedSize === size; return `<button type="button" class="template-task-chip template-size-chip${active ? ' active' : ''}" data-action="template-size" data-size="${escapeHtml(size)}" role="tab" aria-selected="${active}">${escapeHtml(size === '全部尺寸' ? size : `${size} mm`)}</button>`; }).join('')}
+        </div>
+      </section>` : ''}
+      <div class="industry-chips" role="tablist" aria-label="模板类型">
+        ${[...industries, '行业库'].map((industry) => { const active = (state.templateIndustry || '全部') === industry; return `<button class="industry-chip${active ? ' active' : ''}" data-action="template-industry" data-industry="${escapeHtml(industry)}" role="tab" aria-selected="${active}" tabindex="${active ? '0' : '-1'}">${escapeHtml(industry)}</button>`; }).join('')}
+      </div>
+      ${state.templateIndustry === '行业库' ? `<div class="industry-chips" role="tablist" aria-label="纸张尺寸（宽×高）">${LIBRARY_SIZES.map((size) => {
+          const active = (state.librarySize || '全部') === size;
+          return `<button class="industry-chip${active ? ' active' : ''}" data-action="library-size" data-size="${escapeHtml(size)}" role="tab" aria-selected="${active}">${escapeHtml(size === '全部' ? size : `${size} mm`)}</button>`;
+        }).join('')}</div>` : ''}
+      <div class="segmented" role="tablist" aria-label="${state.templateIndustry === '行业库' ? '行业场景' : '应用行业'}">${(state.templateIndustry === '行业库' ? LIBRARY_SCENES : [...categories, ...(userTemplates.length ? ['我的'] : [])]).map((category) => {
+          const active = state.templateIndustry === '行业库'
+            ? (state.libraryScene || '全部') === category
+            : state.templateCategory === category;
+          const action = state.templateIndustry === '行业库' ? 'library-scene' : 'template-category';
+          const dataAttr = state.templateIndustry === '行业库' ? `data-scene="${escapeHtml(category)}"` : `data-category="${category}"`;
+          return `<button class="segment${active ? ' active' : ''}" data-action="${action}" ${dataAttr} role="tab" aria-selected="${active}" tabindex="${active ? '0' : '-1'}">${escapeHtml(category)}</button>`;
+        }).join('')}</div>
+      ${state.templateCategory === '我的' && userFolders.length > 1 ? `<div class="industry-chips template-folder-chips" role="tablist" aria-label="我的模板文件夹">${userFolders.map((folder) => {
+        const active = (state.templateFolder || '全部') === folder;
+        return `<button type="button" class="industry-chip${active ? ' active' : ''}" data-action="template-folder" data-folder="${escapeHtml(folder)}" role="tab" aria-selected="${active}">${escapeHtml(folder)}</button>`;
+      }).join('')}</div>` : ''}
+      <div class="device-meta catalog-sync-meta" role="status" aria-live="polite">
+        <span>商跃原创 ${approvedBundled}${authorizedBundled ? ` · 已获书面授权改编 ${authorizedBundled}` : ' · 待授权内容不公开'}</span>
+        <span>原创任务系列 ${cleanroomBundled} · 场景预设 ${LIBRARY_TOTAL}</span>
+      </div>
       ${filtered.length
-        ? `<div class="template-grid rich">${filtered.map((item) => (
+        ? `<div class="template-grid rich">${visible.map((item) => (
           item.userTemplate ? userTemplateManageCard(item) : templateCard(item)
         )).join('')}</div>`
-        : `<div class="empty-state">${icon('search', 'icon-lg')}<div>${activeFilters.length
+        : `<div class="empty-state"><span class="empty-state-icon">${icon('search')}</span><div>${activeFilters.length
           ? `「${escapeHtml(activeFilters.join(' · '))}」下没有模板`
-          : '没有匹配的模板'}</div><button class="button-secondary" data-action="reset-template-filters">清除全部筛选</button></div>`}
+          : '没有匹配的模板'}</div><button type="button" class="button-secondary" data-action="reset-template-filters">清除全部筛选</button></div>`}
+      ${loadMoreHtml}
     </main>
     ${bottomNav('templates')}`;
 }
 
 function templateLibraryPool(state) {
-  const userCards = state.userTemplates.map(userTemplateCard);
+  const userCards = genuineUserTemplates(state).map(userTemplateCard);
   if (state.templateCategory === '我的') return userCards;
-  const catalogIds = new Set(templates.map((item) => item.id));
-  return [...templates, ...userCards.filter((item) => !catalogIds.has(item.id))];
+  if (state.route === 'templates' && state.templateIndustry === '行业库') {
+    return queryLibraryMeta({
+      sceneLabel: state.libraryScene,
+      size: state.librarySize,
+      query: state.templateQuery,
+      limit: Math.max(24, Number(state.templateVisibleCount) || 24)
+    }).items;
+  }
+  const bundled = templates.filter((item) => item.publicCatalog === true && item.releaseApproved === true);
+  const catalogIds = new Set(bundled.map((item) => item.id));
+  return [...bundled, ...userCards.filter((item) => !catalogIds.has(item.id))];
 }
 
 function dataView(state) {
@@ -426,27 +661,36 @@ function dataView(state) {
   const labels = { name: '名称', code: '条码', price: '价格', date: '日期' };
   return `${sprite()}
     <header class="topbar">
+      ${state.dataReturnToEditor && state.document ? `<button type="button" class="icon-button" data-action="return-to-editor" title="返回编辑器" aria-label="返回编辑器">${icon('back')}</button>` : ''}
       <div class="topbar-title"><h1>批量数据</h1><div class="topbar-subtitle">${state.dataRows.length} 条记录</div></div>
       <span class="meta-chip" data-role="data-save-status" aria-live="polite">已保存</span>
     </header>
     <main class="page">
-      <div class="data-toolbar">
-        <button class="button" data-action="add-data-row">${icon('plus', 'icon-sm')}添加行</button>
-        <button class="button-secondary" data-action="import-csv">${icon('upload', 'icon-sm')}导入 CSV</button>
-        <button class="button-secondary" data-action="export-csv">${icon('download', 'icon-sm')}导出 CSV</button>
-        <button class="button" data-action="open-batch-sheet">${icon('template', 'icon-sm')}生成标签</button>
-      </div>
-      <p class="data-hint">将 CSV 行套用到行业模板：名称→标题文字，条码→一维码/二维码，价格/日期→对应字段</p>
-      <div class="data-table-wrap">
+      <section class="section">
+        <div class="section-heading">
+          <span class="ux-head-ico">${icon('sheet', 'icon-sm')}</span>
+          <h2>数据明细</h2>
+          <div class="heading-actions">
+            <button type="button" class="button" data-action="add-data-row">${icon('plus', 'icon-sm')}添加行</button>
+            <button type="button" class="button-secondary" data-action="import-csv">${icon('upload', 'icon-sm')}导入 CSV</button>
+            <button type="button" class="button-secondary" data-action="export-csv">${icon('download', 'icon-sm')}导出 CSV</button>
+            <button type="button" class="button" data-action="open-batch-sheet">${icon('template', 'icon-sm')}生成标签</button>
+          </div>
+        </div>
+        <p class="data-hint">将 CSV 行套用到行业模板：名称→标题文字，条码→一维码/二维码，价格/日期→对应字段</p>
+        ${state.dataRows.length
+          ? `<div class="data-table-wrap">
         <table class="data-table">
           <thead><tr><th class="row-number">#</th>${columns.map((column) => `<th>${labels[column]}</th>`).join('')}<th>操作</th></tr></thead>
           <tbody>${state.dataRows.map((row, rowIndex) => `<tr>
             <td class="row-number">${rowIndex + 1}</td>
             ${columns.map((column) => `<td><input data-action="update-data-cell" data-row="${rowIndex}" data-field="${column}" value="${escapeHtml(row[column])}"></td>`).join('')}
-            <td><button class="icon-button" data-action="remove-data-row" data-row="${rowIndex}" title="删除">${icon('trash', 'icon-sm')}</button></td>
+            <td><button type="button" class="icon-button" data-action="remove-data-row" data-row="${rowIndex}" title="删除" aria-label="删除第 ${rowIndex + 1} 行">${icon('trash', 'icon-sm')}</button></td>
           </tr>`).join('')}</tbody>
         </table>
-      </div>
+      </div>`
+          : `<div class="empty-state"><span class="empty-state-icon">${icon('sheet')}</span><div>还没有数据行</div><button type="button" class="button" data-action="add-data-row">添加第一行</button></div>`}
+      </section>
     </main>
     ${bottomNav('data')}`;
 }
@@ -458,29 +702,28 @@ function profileView(state) {
       <section class="profile-header">
         <div class="avatar">标</div>
         <div><p class="profile-name">本地用户</p><div class="profile-id">数据保存在当前设备</div></div>
-        <button class="button-secondary" data-action="account-login">${icon('logIn', 'icon-sm')}登录</button>
+        <span class="meta-chip">本地模式</span>
       </section>
       <section class="stats-band">
-        <div class="stat"><strong>${state.projects.length}</strong><span>标签</span></div>
-        <div class="stat"><strong>${state.userTemplates.length}</strong><span>模板</span></div>
-        <div class="stat"><strong>${state.dataRows.length}</strong><span>数据行</span></div>
+        <div class="stat"><span class="ux-stat-ico">${icon('sheet', 'icon-sm')}</span><strong>${state.projects.length}</strong><span>标签</span></div>
+        <div class="stat"><span class="ux-stat-ico">${icon('template', 'icon-sm')}</span><strong>${genuineUserTemplates(state).length}</strong><span>模板</span></div>
+        <div class="stat"><span class="ux-stat-ico">${icon('database', 'icon-sm')}</span><strong>${state.dataRows.length}</strong><span>数据行</span></div>
       </section>
       <section class="section">
-        <div class="section-heading"><h2>设备与数据</h2></div>
+        <div class="section-heading"><span class="ux-head-ico">${icon('database', 'icon-sm')}</span><h2>设备与数据</h2></div>
         <div class="settings-list">
           ${settingsRow('printer', '打印机管理', state.device ? state.device.name : '未连接', 'open-devices')}
-          ${settingsRow('cloud', '云端同步', state.settings.cloudSync ? '已开启' : '未开启', 'toggle-cloud')}
+          ${settingsRow('cloud', '数据存储', '仅保存在本机', 'cloud-info')}
           ${settingsRow('database', '备份与恢复', `${state.projects.length} 个本地项目`, 'backup-data')}
           ${settingsRow('history', '打印记录', '本机记录', 'print-history')}
         </div>
       </section>
       <section class="section">
-        <div class="section-heading"><h2>偏好设置</h2></div>
+        <div class="section-heading"><span class="ux-head-ico">${icon('settings', 'icon-sm')}</span><h2>偏好设置</h2></div>
         <div class="settings-list">
           ${settingsRow('settings', '默认打印参数', `${state.settings.density} 档浓度 · ${state.settings.copies} 份`, 'default-print-settings')}
-          ${settingsRow('palette', '编辑器设置', state.settings.units, 'editor-settings')}
-          ${settingsRow('bell', '消息通知', '系统设置', 'notification-settings')}
-          ${settingsRow('help', '帮助与反馈', '', 'help')}
+          ${settingsRow('palette', '尺寸单位', '毫米（mm）', 'unit-info')}
+          ${settingsRow('help', '使用帮助', '', 'help')}
           ${settingsRow('info', '关于应用', `v${__APP_VERSION__}`, 'open-about')}
         </div>
       </section>
@@ -489,7 +732,7 @@ function profileView(state) {
 }
 
 function settingsRow(iconName, title, detail, action) {
-  return `<button class="settings-row" data-action="${action}">
+  return `<button type="button" class="settings-row" data-action="${action}">
     <span class="setting-icon">${icon(iconName, 'icon-sm')}</span>
     <span><span class="setting-title">${escapeHtml(title)}</span>${detail ? `<span class="setting-detail">${escapeHtml(detail)}</span>` : ''}</span>
     ${icon('chevronRight', 'icon-sm')}
@@ -540,7 +783,7 @@ function elementIconName(type) {
 
 function attributeToggle(label, field, checked, wide) {
   return `<div class="attribute-toggle${wide ? ' wide' : ''}">
-    <label><input type="checkbox" data-action="toggle-element" data-field="${field}" ${checked ? 'checked' : ''}><span class="attribute-check">${checked ? '✓' : ''}</span><span>${label}</span></label>
+    <label><input type="checkbox" data-action="toggle-element" data-field="${field}" ${checked ? 'checked' : ''}><span class="attribute-check">${checked ? icon('check', 'icon-xs') : ''}</span><span>${label}</span></label>
   </div>`;
 }
 
@@ -597,17 +840,44 @@ function isPlaceholderElement(element) {
   if (!element) return false;
   if (element.type === 'text') {
     const t = String(element.text || '').trim();
-    return !t || t === '双击编辑';
+    return element.requiresInput === true || !t || t === '双击编辑'
+      || t === '双击文本框编辑' || t === '点击后编辑文字';
   }
   if (element.type === 'barcode') {
+    if (element.unsupportedCodeType === true || element.invalidCode === true) return false;
     const v = String(element.value || '').trim();
-    return !v || v === '0';
+    return element.requiresInput === true || !v || v === '0';
   }
   if (element.type === 'qrcode') {
     const v = String(element.value || '').trim();
-    return !v || v === 'https://example.com';
+    return element.requiresInput === true || !v || v === 'https://example.com';
   }
   return false;
+}
+
+function templateAttentionMessage(documentValue) {
+  const meta = documentValue && documentValue.templateMeta;
+  if (!meta) return '';
+  const elements = Array.isArray(documentValue.elements) ? documentValue.elements : [];
+  const liveUnsupported = elements.filter((element) => element.unsupportedCodeType === true).length;
+  const liveInvalid = elements.filter((element) => element.invalidCode === true).length;
+  const liveRequired = elements.filter((element) => element.requiresInput === true).length;
+  const messages = [];
+  if (Number(meta.missingImageCount) > 0) {
+    messages.push(`源模板有 ${Number(meta.missingImageCount)} 张图片缺失，已跳过，请补图`);
+  }
+  if (meta.sizeClamped) {
+    messages.push(`源尺寸 ${meta.sourceWidthMm}×${meta.sourceHeightMm} mm 超出编辑上限，当前副本为 ${documentValue.widthMm}×${documentValue.heightMm} mm`);
+  }
+  if (liveUnsupported > 0) {
+    messages.push(`有 ${liveUnsupported} 个条码码制待确认`);
+  }
+  if (liveInvalid > 0) {
+    messages.push(`有 ${liveInvalid} 个条码内容不符合声明码制`);
+  }
+  const otherRequired = Math.max(0, liveRequired - liveUnsupported - liveInvalid);
+  if (otherRequired > 0) messages.push(`有 ${otherRequired} 个内容需要填写或确认`);
+  return messages.join('；');
 }
 
 function labelId(documentValue) {
@@ -630,12 +900,14 @@ function contextActions(state) {
   }
   if (selected.length > 1 || state.multiSelect) {
     const n = selected.length;
+    const editableCount = selected.filter((item) => !item.locked).length;
+    const lockedCount = n - editableCount;
     return `<div class="niim-float-multi niim-float-fixed" role="toolbar" aria-label="多选排版">
-      <span class="niim-multi-count">已选 ${n}</span>
-      <button type="button" data-action="open-align-menu" ${n < 1 ? 'disabled' : ''}>对齐</button>
-      <button type="button" data-action="space-selection" data-delta="-0.6" ${n < 2 ? 'disabled' : ''}>更紧凑</button>
-      <button type="button" data-action="space-selection" data-delta="0.6" ${n < 2 ? 'disabled' : ''}>更宽松</button>
-      <button type="button" data-action="delete-selected">删除</button>
+      <span class="niim-multi-count">已选 ${n}${lockedCount ? ` · ${lockedCount} 锁定` : ''}</span>
+      <button type="button" data-action="open-align-menu" ${editableCount < 1 ? 'disabled' : ''}>对齐</button>
+      <button type="button" data-action="space-selection" data-delta="-0.6" ${editableCount < 2 ? 'disabled' : ''}>更紧凑</button>
+      <button type="button" data-action="space-selection" data-delta="0.6" ${editableCount < 2 ? 'disabled' : ''}>更宽松</button>
+      <button type="button" data-action="delete-selected" ${editableCount ? '' : 'disabled'}>删除</button>
       <button type="button" data-action="toggle-multi-select">完成</button>
     </div>`;
   }
@@ -644,9 +916,8 @@ function contextActions(state) {
   const locked = !!element.locked;
   if (locked) {
     return `<div class="niim-float-bar niim-float-fixed niim-float-locked" role="toolbar" aria-label="元素操作">
-      <button type="button" class="niim-float-btn" data-action="edit-element" title="编辑">${fs('floating_shortcut_edit.svg')}</button>
-      <button type="button" class="niim-float-btn" data-action="delete-element" title="删除">${fs('floating_shortcut_remove.svg')}</button>
       <button type="button" class="niim-float-btn" data-action="duplicate-element" title="复制">${fs('floating_shortcut_copy.svg')}</button>
+      <button type="button" class="niim-float-btn" data-action="toggle-lock" title="解锁">${fs('floating_shortcut_lock.svg')}</button>
     </div>`;
   }
   return `<div class="niim-float-bar niim-float-fixed" role="toolbar" aria-label="元素操作">
@@ -661,13 +932,21 @@ function contextActions(state) {
 
 function layerList(state) {
   const elements = state.document ? state.document.elements.slice().reverse() : [];
-  if (!elements.length) return '<div class="layer-empty">还没有元素</div>';
+  if (!elements.length) return `<div class="layer-empty"><span class="empty-state-icon">${icon('layers', 'icon-sm')}</span><div>还没有元素</div></div>`;
   return `<div class="layer-list">${elements.map((element, index) => {
     const active = Array.isArray(state.selectedIds) && state.selectedIds.includes(element.id);
     const label = element.type === 'text' ? (element.text || '空文字') : element.type === 'barcode' ? (element.value || '条码') : element.advanced && element.type === 'qrcode' ? '高级二维码' : elementName(element.type);
-    return `<button class="layer-item${active ? ' active' : ''}" data-action="select-element" data-id="${escapeHtml(element.id)}">
-      <span class="layer-index">${elements.length - index}</span><span class="layer-icon">${icon(elementIconName(element.type), 'icon-sm')}</span><span class="layer-label">${escapeHtml(label)}</span>${element.locked ? icon('lock', 'icon-sm') : ''}
-    </button>`;
+    const canRaise = !element.locked && index > 0;
+    const canLower = !element.locked && index < elements.length - 1;
+    return `<div class="layer-item${active ? ' active' : ''}">
+      <button type="button" class="layer-select" data-action="select-element" data-id="${escapeHtml(element.id)}">
+        <span class="layer-index">${elements.length - index}</span><span class="layer-icon">${icon(elementIconName(element.type), 'icon-sm')}</span><span class="layer-label">${escapeHtml(label)}</span>${element.locked ? icon('lock', 'icon-sm') : ''}
+      </button>
+      <span class="layer-actions">
+        <button type="button" data-action="select-and-move-layer" data-id="${escapeHtml(element.id)}" data-delta="1" title="${element.locked ? '解锁后可调整层级' : canRaise ? '上移一层' : '已经在最上层'}" aria-label="${escapeHtml(label)}上移一层" ${canRaise ? '' : 'disabled'}>↑</button>
+        <button type="button" data-action="select-and-move-layer" data-id="${escapeHtml(element.id)}" data-delta="-1" title="${element.locked ? '解锁后可调整层级' : canLower ? '下移一层' : '已经在最下层'}" aria-label="${escapeHtml(label)}下移一层" ${canLower ? '' : 'disabled'}>↓</button>
+      </span>
+    </div>`;
   }).join('')}</div>`;
 }
 
@@ -689,28 +968,64 @@ function materialBrowserHtml(state, activeSymbol, options) {
   const chip = state.materialChip || DEFAULT_MATERIAL_CHIP;
   const query = state.materialQuery || '';
   const searchOpen = !!state.materialSearchOpen || chip === '搜索';
-  const items = materialsForChip(searchOpen ? '搜索' : chip, query);
+  const remote = Array.isArray(state.remoteMaterials) ? state.remoteMaterials : [];
+  const seen = new Set(MATERIAL_CATALOG.map((item) => item.id));
+  const library = MATERIAL_CATALOG.concat(remote.filter((item) => item && item.id && !seen.has(item.id)));
+  const activeChip = searchOpen ? '搜索' : chip;
+  const q = String(query || '').trim().toLowerCase();
+  const items = library.filter((item) => {
+    const chipMatch = !activeChip || activeChip === '搜索' || activeChip === '全部'
+      || item.category === activeChip
+      || (item.asset && item.source === 'authorized-niim' && activeChip === DEFAULT_MATERIAL_CHIP)
+      || (Array.isArray(item.tags) && item.tags.includes(activeChip));
+    if (!chipMatch) return false;
+    if (!q) return true;
+    return [item.id, item.label, item.category, ...(item.tags || [])].join(' ').toLowerCase().includes(q);
+  });
   const chipsHtml = MATERIAL_CHIPS.map(function(name) {
     const active = (!searchOpen && chip === name) ? ' active' : '';
-    const sel = (!searchOpen && chip === name) ? 'aria-selected="true"' : '';
-    return '<button type="button" class="niim-mat-chip' + active + '" data-action="material-chip" data-chip="' + escapeHtml(name) + '" role="tab" ' + sel + '>' + escapeHtml(name) + '</button>';
+    const sel = (!searchOpen && chip === name) ? 'true' : 'false';
+    return '<button type="button" class="niim-mat-chip' + active + '" data-action="material-chip" data-chip="' + escapeHtml(name) + '" role="tab" aria-selected="' + sel + '" aria-label="筛选' + escapeHtml(name) + '素材">' + escapeHtml(name) + '</button>';
   }).join('');
+  const ownedCount = items.filter((item) => Array.isArray(item.tags) && item.tags.includes('商跃')).length;
   const tiles = items.map(function(item) {
     const active = (activeSymbol || 'check') === item.id ? ' active' : '';
     const thumbnail = item.asset
-      ? '<span class="niim-material-thumb" data-material-thumb="' + item.id + '" data-material-asset="' + escapeHtml(item.asset) + '"><img src="' + escapeHtml(item.asset) + '" alt="" loading="lazy" decoding="async"></span>'
-      : '<span class="niim-material-thumb" data-material-thumb="' + item.id + '"><canvas width="56" height="56"></canvas></span>';
-    return '<button type="button" class="niim-mat-tile' + active + '" data-action="pick-material" data-symbol="' + item.id + '" title="' + escapeHtml(item.label) + '">' + thumbnail + '</button>';
+      ? '<span class="niim-material-thumb" data-material-thumb="' + item.id + '" data-material-asset="' + escapeHtml(item.asset) + '"><img src="' + escapeHtml(item.asset) + '" alt="" crossorigin="anonymous" loading="lazy" decoding="async"></span>'
+      : '<span class="niim-material-thumb" data-material-thumb="' + item.id + '"><canvas width="56" height="56" aria-hidden="true"></canvas></span>';
+    return '<button type="button" class="niim-mat-tile' + active + '" data-action="pick-material" data-symbol="' + item.id + '" title="' + escapeHtml(item.label) + '" aria-label="素材 ' + escapeHtml(item.label) + '">' + thumbnail + '<span class="niim-mat-name">' + escapeHtml(item.label) + '</span></button>';
   }).join('');
   const searchInput = searchOpen ? ('<input class="niim-mat-search" data-action="material-search" placeholder="搜索素材" value="' + escapeHtml(query) + '">') : '';
   return '<section class="niim-mat-browser' + (opts.embedded ? ' embedded' : '') + '">' +
     '<div class="niim-mat-chips" role="tablist">' +
-      '<button type="button" class="niim-mat-chip search' + (searchOpen ? ' active' : '') + '" data-action="material-chip" data-chip="搜索" role="tab">🔍 搜索</button>' +
+      '<button type="button" class="niim-mat-chip search' + (searchOpen ? ' active' : '') + '" data-action="material-chip" data-chip="搜索" role="tab" aria-selected="' + searchOpen + '" aria-label="搜索素材">' + icon('search', 'icon-xs') + '<span>搜索</span></button>' +
       chipsHtml +
     '</div>' +
     searchInput +
+    '<div class="niim-mat-summary" role="status" aria-live="polite"><strong>' + escapeHtml(searchOpen ? '搜索结果' : activeChip + '素材') + '</strong><span>' + items.length + ' 个' + (ownedCount ? ' · 商跃原创 ' + ownedCount : '') + '</span></div>' +
     '<div class="niim-mat-grid">' + (tiles || '<p class="niim-hint">暂无素材</p>') + '</div>' +
+    (!opts.embedded ? authorizedAssetPager(state, 'material') : '') +
   '</section>';
+}
+
+function authorizedAssetPager(state, kind) {
+  const isBorder = kind === 'border';
+  const list = isBorder ? (state.remoteBorders || []) : (state.remoteMaterials || []);
+  const total = Math.max(0, Number(isBorder ? state.remoteBorderTotal : state.remoteMaterialTotal) || 0);
+  const page = Math.max(0, Number(isBorder ? state.remoteBorderPage : state.remoteMaterialPage) || 0);
+  const loading = !!(isBorder ? state.remoteBorderLoading : state.remoteMaterialLoading);
+  const error = String((isBorder ? state.remoteBorderError : state.remoteMaterialError) || '');
+  const action = isBorder ? 'load-more-online-borders' : 'load-more-online-materials';
+  const label = isBorder ? '边框' : '素材';
+  const loaded = list.length;
+  const explicitHasMore = isBorder ? state.remoteBorderHasMore : state.remoteMaterialHasMore;
+  const hasMore = explicitHasMore !== false && (page === 0 || loaded < total);
+  if (!loading && !error && !hasMore && loaded === 0 && total === 0) return '';
+  return '<div class="load-more-row authorized-asset-pager" role="status" aria-live="polite">' +
+    '<span class="meta-chip">' + label + ' ' + (total ? (loaded + ' / ' + total) : (loading ? '读取中' : '待载入')) + '</span>' +
+    (error ? '<span class="niim-hint">' + escapeHtml(error) + '</span>' : '') +
+    (loading ? '<span class="niim-hint">正在读取…</span>' : (hasMore ? '<button type="button" class="button-secondary compact" data-action="' + action + '">' + (error ? '重试' : '加载更多') + '</button>' : '')) +
+  '</div>';
 }
 
 function materialGridHtml(activeSymbol, compact) {
@@ -724,8 +1039,8 @@ function materialSheet(state) {
     '<section class="bottom-sheet workbench-sheet niim-material-sheet" role="dialog" aria-modal="true" aria-labelledby="material-sheet-title">' +
       '<div class="sheet-handle"></div>' +
       '<div class="sheet-header">' +
-        '<div><h2 id="material-sheet-title">素材</h2><div class="topbar-subtitle">黑白矢量图标 · 点击插入标签</div></div>' +
-        '<button class="icon-button" data-action="close-modal" title="关闭">' + icon('close') + '</button>' +
+        '<div><h2 id="material-sheet-title">' + icon('stamp', 'icon-sm') + '素材</h2><div class="topbar-subtitle">商跃内置矢量符号</div></div>' +
+        '<button type="button" class="icon-button" data-action="close-modal" title="关闭" aria-label="关闭">' + icon('close') + '</button>' +
       '</div>' +
       '<div class="niim-material-sheet-body">' +
         materialBrowserHtml(state, active, { embedded: false }) +
@@ -738,7 +1053,20 @@ function borderBrowserHtml(state, activeId, options) {
   const chip = state.borderChip || "最新";
   const query = state.borderQuery || "";
   const searchOpen = !!state.borderSearchOpen || chip === "搜索";
-  const items = bordersForChip(searchOpen ? "搜索" : chip, query);
+  const remote = Array.isArray(state.remoteBorders) ? state.remoteBorders : [];
+  const seen = new Set(BORDER_CATALOG.map((item) => item.id));
+  const library = BORDER_CATALOG.concat(remote.filter((item) => item && item.id && !seen.has(item.id)));
+  const activeChip = searchOpen ? '搜索' : chip;
+  const q = String(query || '').trim().toLowerCase();
+  const items = library.filter((item) => {
+    const chipMatch = !activeChip || activeChip === '搜索' || activeChip === '全部'
+      || item.chip === activeChip
+      || item.category === activeChip
+      || (item.asset && activeChip === '最新')
+      || (Array.isArray(item.tags) && item.tags.includes(activeChip));
+    if (!chipMatch) return false;
+    return !q || [item.id, item.label, item.category, ...(item.tags || [])].join(' ').toLowerCase().includes(q);
+  });
   const chipsHtml = BORDER_CHIPS.map(function(name) {
     const active = (!searchOpen && chip === name) ? " active" : "";
     return "<button type=\"button\" class=\"niim-mat-chip" + active + "\" data-action=\"border-chip\" data-chip=\"" + escapeHtml(name) + "\" role=\"tab\">" + escapeHtml(name) + "</button>";
@@ -746,7 +1074,9 @@ function borderBrowserHtml(state, activeId, options) {
   const tiles = items.map(function(item) {
     const active = (activeId || "") === item.id ? " active" : "";
     return "<button type=\"button\" class=\"niim-mat-tile niim-border-tile" + active + "\" data-action=\"pick-border\" data-border=\"" + item.id + "\" title=\"" + escapeHtml(item.label) + "\">" +
-      "<span class=\"niim-border-thumb\" data-border-thumb=\"" + item.id + "\"><canvas width=\"72\" height=\"48\"></canvas></span>" +
+      (item.asset
+        ? "<span class=\"niim-border-thumb\"><img src=\"" + escapeHtml(item.asset) + "\" alt=\"\" crossorigin=\"anonymous\" loading=\"lazy\" decoding=\"async\"></span>"
+        : "<span class=\"niim-border-thumb\" data-border-thumb=\"" + item.id + "\"><canvas width=\"72\" height=\"48\" aria-hidden=\"true\"></canvas></span>") +
       "<span class=\"niim-border-label\">" + escapeHtml(item.label) + "</span></button>";
   }).join("");
   const searchInput = searchOpen ? ("<input class=\"niim-mat-search\" data-action=\"border-search\" placeholder=\"搜索边框\" value=\"" + escapeHtml(query) + "\">") : "";
@@ -757,18 +1087,21 @@ function borderBrowserHtml(state, activeId, options) {
     "</div>" +
     searchInput +
     "<div class=\"niim-mat-grid niim-border-grid\">" + (tiles || "<p class=\"niim-hint\">暂无边框</p>") + "</div>" +
+    (!opts.embedded ? authorizedAssetPager(state, 'border') : '') +
   "</section>";
 }
 
 function borderSheet(state) {
   const selected = selectedElement(state);
-  const active = selected && selected.type === "rect" && selected.borderStyle ? selected.borderStyle : "";
+  const active = selected && selected.type === 'image' && selected.remoteBorderId
+    ? selected.remoteBorderId
+    : (selected && selected.type === "rect" && selected.borderStyle ? selected.borderStyle : "");
   return "<div class=\"sheet-backdrop\" data-action=\"close-modal\"></div>" +
-    "<section class=\"bottom-sheet workbench-sheet niim-material-sheet niim-border-sheet\" role=\"dialog\" aria-modal=\"true\">" +
+    "<section class=\"bottom-sheet workbench-sheet niim-material-sheet niim-border-sheet\" role=\"dialog\" aria-modal=\"true\" aria-labelledby=\"border-sheet-title\">" +
       "<div class=\"sheet-handle\"></div>" +
       "<div class=\"sheet-header\">" +
-        "<div><h2>边框</h2><div class=\"topbar-subtitle\">选择边框样式</div></div>" +
-        "<button class=\"icon-button\" data-action=\"close-modal\">" + icon("close") + "</button>" +
+        "<div><h2 id=\"border-sheet-title\">" + icon("square", "icon-sm") + "边框</h2><div class=\"topbar-subtitle\">商跃程序化线框</div></div>" +
+        "<button type=\"button\" class=\"icon-button\" data-action=\"close-modal\" title=\"关闭\" aria-label=\"关闭\">" + icon("close") + "</button>" +
       "</div>" +
       "<div class=\"niim-material-sheet-body\">" +
         borderBrowserHtml(state, active, { embedded: false }) +
@@ -780,7 +1113,7 @@ function elementPicker(state) {
   const pages = [
     [
       ['text', 'element_icon_text.svg', '文本', 'add-element'],
-      ['image', 'element_icon_photoPrint.svg', '随拍随打', 'add-photo', null, true],
+      ['image', 'element_icon_photoPrint.svg', '拍照打印', 'add-photo'],
       ['image', 'element_icon_image.svg', '图片', 'add-image'],
       ['material', 'element_icon_material.svg', '素材', 'open-material-sheet'],
       ['date', 'element_icon_date.svg', '时间', 'add-element'],
@@ -808,13 +1141,13 @@ function elementPicker(state) {
       </div>`).join('')}
     </div>
     <div class="niim-page-dots" role="tablist" aria-label="元素分页">
-      ${pages.map((_, index) => `<button type="button" class="element-page-dot${index === 0 ? ' active' : ''}" data-action="set-element-page" data-page="${index}" ${index === 0 ? 'aria-selected="true"' : ''}></button>`).join('')}
+      ${pages.map((_, index) => `<button type="button" class="element-page-dot${index === 0 ? ' active' : ''}" data-action="set-element-page" data-page="${index}" role="tab" aria-label="元素第 ${index + 1} 页" aria-selected="${index === 0}"></button>`).join('')}
     </div>
   </div>`;
 }
 
 function editorTemplatePanel(state) {
-  const all = [...templates, ...state.userTemplates.map(userTemplateCard)];
+  const all = templateLibraryPool({ ...state, templateCategory: '全部' });
   const sizeFilter = state.editorTplSize || "\u5168\u90e8\u5c3a\u5bf8";
   const industryFilter = state.editorTplIndustry || "\u5168\u90e8";
   const query = String(state.editorTplQuery || "").trim().toLowerCase();
@@ -858,8 +1191,12 @@ function editorTemplatePanel(state) {
 }
 
 function editorDataPanel(state) {
-  const rows = state.dataRows.slice(0, 4);
-  return `<div class="editor-data-panel"><div class="editor-data-list">${rows.map((row, index) => `<div class="editor-data-row"><span>${index + 1}</span><strong>${escapeHtml(row.name || row.code || `数据 ${index + 1}`)}</strong><small>${escapeHtml(row.code || row.date || '')}</small></div>`).join('')}</div><button class="native-wide-command" data-action="navigate" data-route="data">${icon('sheet', 'icon-sm')}<span>管理数据源</span>${icon('chevronRight', 'icon-sm')}</button></div>`;
+  const rows = state.dataRows || [];
+  return `<div class="editor-data-panel">
+    <p class="niim-hint">点选一行即可把名称、价格、条码和日期套用到当前标签；该操作可撤销。</p>
+    <div class="editor-data-list">${rows.length ? rows.map((row, index) => `<button type="button" class="editor-data-row${state.editorDataRowIndex === index ? ' active' : ''}" data-action="apply-editor-data-row" data-row="${index}"><span>${index + 1}</span><strong>${escapeHtml(row.name || row.code || `数据 ${index + 1}`)}</strong><small>${escapeHtml([row.code, row.price, row.date].filter(Boolean).join(' · '))}</small><i>${state.editorDataRowIndex === index ? icon('check', 'icon-sm') : icon('chevronRight', 'icon-sm')}</i></button>`).join('') : '<div class="empty-state soft">暂无数据行</div>'}</div>
+    <button type="button" class="native-wide-command" data-action="manage-editor-data">${icon('sheet', 'icon-sm')}<span>编辑 / 导入数据表</span>${icon('chevronRight', 'icon-sm')}</button>
+  </div>`;
 }
 
 function contentValue(element) {
@@ -885,12 +1222,23 @@ function contentField(element) {
 function elementTimePanel(element) {
   if (!element || element.type !== 'date') return '';
   const role = element.dateRole || 'made';
-  const label = element.label || (role === 'expire' ? '保质期至' : '制作日期');
+  const label = element.label == null ? (role === 'expire' ? '保质期至' : '制作日期') : String(element.label);
+  const presetLabels = ['生产日期', '上架日期', '制作日期', '开封时间', '保质期至', '打印时间'];
+  const customLabel = !!label && !presetLabels.includes(label);
   const dateChip = formatDateChip(element);
   const timeChip = formatTimeChip(element);
   const offsetDays = Number(element.offsetDays) || 0;
   const preset = Number(element.expirePresetHours) || 24;
   const expireMode = element.expireMode || 'preset';
+  const formatValue = String(element.format || 'YYYY年MM月DD日 HH:mm');
+  const dateFormats = [
+    ['YYYY年MM月DD日 HH:mm', '2026年08月18日 14:30'],
+    ['YYYY-MM-DD HH:mm', '2026-08-18 14:30'],
+    ['YYYY/MM/DD HH:mm', '2026/08/18 14:30'],
+    ['YYYY-MM-DD', '2026-08-18'],
+    ['YYYY/MM/DD', '2026/08/18']
+  ];
+  const knownFormat = dateFormats.some(([value]) => value === formatValue);
   // A companion is still part of the relationship when it is selected on its
   // own; exposing another "add linked date" button there would create a chain.
   const linked = !!element.linkedExpire || !!element.linkedFrom;
@@ -911,16 +1259,16 @@ function elementTimePanel(element) {
     </div>
     <div class="niim-time-primary">
       <select class="niim-time-label" data-action="set-date-label">
-        <option value="无前缀" ${label === '无前缀' ? 'selected' : ''}>无前缀</option>
+        <option value="" ${label === '' ? 'selected' : ''}>无前缀</option>
         <option value="生产日期" ${label === '生产日期' ? 'selected' : ''}>生产日期</option>
         <option value="上架日期" ${label === '上架日期' ? 'selected' : ''}>上架日期</option>
         <option value="制作日期" ${label === '制作日期' ? 'selected' : ''}>制作日期</option>
         <option value="开封时间" ${label === '开封时间' ? 'selected' : ''}>开封时间</option>
         <option value="保质期至" ${label === '保质期至' ? 'selected' : ''}>保质期至</option>
         <option value="打印时间" ${label === '打印时间' ? 'selected' : ''}>打印时间</option>
-        <option value="自定义" ${label === '自定义' ? 'selected' : ''}>自定义</option>
+        <option value="__custom__" ${customLabel ? 'selected' : ''}>自定义</option>
       </select>
-      <span class="niim-time-colon">:</span>
+      ${label ? '<span class="niim-time-colon">:</span>' : ''}
       <label class="niim-time-chip date">
         <span>${escapeHtml(dateChip)}</span>
         <input type="datetime-local" class="niim-time-native" data-action="set-date-base" value="${escapeHtml(baseLocal)}" title="选择日期时间">
@@ -930,12 +1278,17 @@ function elementTimePanel(element) {
         <input type="datetime-local" class="niim-time-native" data-action="set-date-base" value="${escapeHtml(baseLocal)}" title="选择时间">
       </label>
     </div>
+    ${customLabel ? `<div class="niim-form-row"><label for="date-custom-label">自定义前缀</label><input id="date-custom-label" class="niim-text-input" data-action="update-date-custom-label" value="${escapeHtml(label)}" maxlength="16" placeholder="例如：入库日期"></div>` : ''}
+    <div class="niim-form-row"><label for="date-format-select">日期格式</label><select id="date-format-select" class="niim-select compact" data-action="set-date-format">
+      ${!knownFormat ? `<option value="${escapeHtml(formatValue)}" selected>自定义 · ${escapeHtml(formatValue)}</option>` : ''}
+      ${dateFormats.map(([value, text]) => `<option value="${value}" ${formatValue === value ? 'selected' : ''}>${text}</option>`).join('')}
+    </select></div>
     <div class="niim-form-row niim-time-offset">
       <label>时间偏移</label>
       <div class="niim-pm wide">
-        <button type="button" data-action="nudge-date-offset" data-delta="-1">−</button>
+        <button type="button" data-action="nudge-date-offset" data-delta="-1" aria-label="减少时间偏移">${controlIcon('minus')}</button>
         <em>+ ${offsetDays}天</em>
-        <button type="button" data-action="nudge-date-offset" data-delta="1">+</button>
+        <button type="button" data-action="nudge-date-offset" data-delta="1" aria-label="增加时间偏移">${controlIcon('plus')}</button>
       </div>
     </div>
     ${!linked ? `<button type="button" class="niim-add-linked" data-action="add-linked-date">+ 添加关联时间</button>` : ''}
@@ -952,9 +1305,9 @@ function elementTimePanel(element) {
         <div class="niim-form-row">
           <label>小时</label>
           <div class="niim-pm wide">
-            <button type="button" data-action="nudge-expire-hours" data-delta="-1">−</button>
+            <button type="button" data-action="nudge-expire-hours" data-delta="-1" aria-label="减少小时">${controlIcon('minus')}</button>
             <em>${preset}小时</em>
-            <button type="button" data-action="nudge-expire-hours" data-delta="1">+</button>
+            <button type="button" data-action="nudge-expire-hours" data-delta="1" aria-label="增加小时">${controlIcon('plus')}</button>
           </div>
         </div>` : `
         <div class="niim-expire-grid">
@@ -965,7 +1318,7 @@ function elementTimePanel(element) {
       ${linked ? `<button type="button" class="niim-link-btn" data-action="remove-linked-date">移除关联时间</button>` : ''}
     </div>` : ''}
     <button type="button" class="niim-mirror-row" data-action="toggle-element" data-field="showTime">
-      <span>显示时分秒</span>
+      <span>显示时间</span>
       <span class="niim-switch${element.showTime !== false ? ' on' : ''}"><i></i></span>
     </button>
   </section>`;
@@ -981,15 +1334,21 @@ function elementContentPanel(element, state) {
     const hasValue = String(value || '').length > 0;
     const inputId = element.type === 'text' ? 'element-text' : element.type === 'barcode' ? 'barcode-value' : 'qr-value';
     const scannable = element.type === 'barcode' || element.type === 'qrcode';
-    return `<section class="niim-content-edit">
-      <div class="niim-content-bar">
-        <input id="${inputId}" class="niim-content-line" type="text" inputmode="text" enterkeyhint="done"
+    const editorControl = element.type === 'text'
+      ? `<textarea id="${inputId}" class="niim-content-line" rows="2" inputmode="text" enterkeyhint="enter"
+          data-action="update-element" data-field="${field}" aria-label="文本内容"
+          placeholder="请输入内容" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">${escapeHtml(value)}</textarea>`
+      : `<input id="${inputId}" class="niim-content-line" type="text" inputmode="text" enterkeyhint="done"
           data-action="update-element" data-field="${field}" value="${escapeHtml(value)}"
-          placeholder="请输入内容" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+          placeholder="请输入内容" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">`;
+    return `<section class="niim-content-edit">
+      <div class="niim-content-bar${element.type === 'text' ? ' multiline' : ''}">
+        ${editorControl}
         ${hasValue ? `<button type="button" class="niim-content-clear" data-action="clear-content" title="清除" tabindex="-1">×</button>` : ''}
         ${scannable ? `<button type="button" class="niim-content-scan" data-action="scan-code" title="扫码" tabindex="-1">${editorAsset('element/attribute/barcode_scan.svg')}</button>` : ''}
         <button type="button" class="niim-content-done" data-action="content-done" tabindex="-1">完成</button>
       </div>
+      ${element.type === 'qrcode' && element.advanced ? `<button type="button" class="niim-content-advanced" data-action="edit-advanced-qr">${icon('edit', 'icon-sm')}结构化编辑 ${escapeHtml(element.advancedType || '')}</button>` : ''}
     </section>`;
   }
   if (element.type === 'serial') {
@@ -1016,17 +1375,17 @@ function elementContentPanel(element, state) {
       <div class="niim-form-row">
         <label>递增值</label>
         <div class="niim-pm wide">
-          <button type="button" data-action="nudge-serial" data-field="step" data-delta="-1">−</button>
+          <button type="button" data-action="nudge-serial" data-field="step" data-delta="-1" aria-label="减少递增值">${controlIcon('minus')}</button>
           <em>${escapeHtml(step)}</em>
-          <button type="button" data-action="nudge-serial" data-field="step" data-delta="1">+</button>
+          <button type="button" data-action="nudge-serial" data-field="step" data-delta="1" aria-label="增加递增值">${controlIcon('plus')}</button>
         </div>
       </div>
       <div class="niim-form-row">
         <label>位数</label>
         <div class="niim-pm wide">
-          <button type="button" data-action="nudge-serial" data-field="digits" data-delta="-1">−</button>
+          <button type="button" data-action="nudge-serial" data-field="digits" data-delta="-1" aria-label="减少位数">${controlIcon('minus')}</button>
           <em>${escapeHtml(digits)}</em>
-          <button type="button" data-action="nudge-serial" data-field="digits" data-delta="1">+</button>
+          <button type="button" data-action="nudge-serial" data-field="digits" data-delta="1" aria-label="增加位数">${controlIcon('plus')}</button>
         </div>
       </div>
       <p class="niim-serial-preview">预览示例:${escapeHtml(preview)}...</p>
@@ -1036,7 +1395,7 @@ function elementContentPanel(element, state) {
   if (element.type === 'image') {
     return `<section class="niim-content-panel">
       <button type="button" class="niim-row-command" data-action="replace-image"><span>替换图片</span></button>
-      <button type="button" class="niim-row-command" data-action="add-photo"><span>随拍随打</span></button>
+      <button type="button" class="niim-row-command" data-action="replace-photo"><span>拍照替换</span></button>
     </section>`;
   }
   if (element.type === 'table') {
@@ -1050,22 +1409,45 @@ function elementContentPanel(element, state) {
   return `<section class="niim-content-panel"><p class="niim-hint">切换到样式进行设置</p></section>`;
 }
 
+function fontCatalogMarkup(activeId, options) {
+  const compact = Boolean(options && options.compact);
+  const fonts = listFontCatalog();
+  return FONT_CATEGORIES.map((category) => {
+    const items = fonts.filter((font) => font.category === category.id);
+    if (!items.length) return '';
+    const chips = items.map((font) => (
+      `<button type="button" class="niim-font-chip${activeId === font.id ? ' active' : ''}" data-action="set-font" data-value="${font.id}" style="font-family:${font.cssFamily}" title="${escapeHtml(`${font.label} · ${font.coverage} · ${font.license}`)}">${escapeHtml(font.shortLabel)}</button>`
+    )).join('');
+    return `<div class="niim-font-group"><span class="niim-font-cat">${escapeHtml(category.label)}</span><div class="niim-font-list${compact ? ' compact' : ''}">${chips}</div></div>`;
+  }).join('');
+}
+
+function fontCatalogSummary() {
+  const catalog = listFontCatalog();
+  const remoteCount = catalog.filter((font) => font.remote).length;
+  return `${catalog.length} 款字体 · ${remoteCount} 款 OFL 开源字体按需加载`;
+}
+
+function fontSelectOptions(activeId) {
+  return listFontCatalog().map((font) => (
+    `<option value="${font.id}" ${activeId === font.id ? 'selected' : ''}>${escapeHtml(font.label)}</option>`
+  )).join('');
+}
+
 function elementFontPanel(element) {
   if (!element || !['text', 'date', 'serial', 'table'].includes(element.type)) {
     return `<section class="niim-font-panel"><p class="niim-hint">当前元素无字体设置</p></section>`;
   }
+  const fontInfo = fontFallbackInfo(element.fontFamily, element.sourceFontFamily);
+  const fontFamily = fontInfo.renderFamily;
   return `<section class="niim-font-panel">
     <label class="niim-field-label">字体</label>
     <select class="niim-select" data-action="update-element" data-field="fontFamily">
-      <option value="sans-serif" ${!element.fontFamily || element.fontFamily === 'sans-serif' ? 'selected' : ''}>系统黑体</option>
-      <option value="serif" ${element.fontFamily === 'serif' ? 'selected' : ''}>系统宋体</option>
-      <option value="monospace" ${element.fontFamily === 'monospace' ? 'selected' : ''}>等宽</option>
+      ${fontSelectOptions(fontFamily)}
     </select>
-    <div class="niim-font-list">
-      <button type="button" class="niim-font-chip${!element.fontFamily || element.fontFamily === 'sans-serif' ? ' active' : ''}" data-action="set-font" data-value="sans-serif">黑体</button>
-      <button type="button" class="niim-font-chip${element.fontFamily === 'serif' ? ' active' : ''}" data-action="set-font" data-value="serif">宋体</button>
-      <button type="button" class="niim-font-chip${element.fontFamily === 'monospace' ? ' active' : ''}" data-action="set-font" data-value="monospace">等宽</button>
-    </div>
+    <p class="niim-hint">${fontCatalogSummary()}</p>
+    <div class="niim-font-catalog">${fontCatalogMarkup(fontFamily)}</div>
+    ${fontInfo.fallback ? `<p class="niim-hint niim-font-fallback">源字体“${escapeHtml(fontInfo.requested)}”未随模板提供，已用开源「${escapeHtml(fontInfo.label)}」稳定替代。选择上方字体可确认替换。</p>` : ''}
   </section>`;
 }
 
@@ -1075,10 +1457,16 @@ function barcodeStylePanel(element) {
   const color = (element.color || '#000000').toUpperCase();
   return `<section class="niim-style-panel niim-barcode-style">
     <div class="niim-form-row linkish">
-      <label>编码格式 <button type="button" class="niim-q" data-action="toast-feature" data-msg="Code128 支持数字与字母；EAN-13 需 12/13 位数字">?</button></label>
+      <label>编码格式 <button type="button" class="niim-q" data-action="toast-feature" data-msg="Code128 自动适配；A 支持控制字符，B 支持常用 ASCII，C 需偶数位数字；EAN-13 和 UPC-A 会校验位数与校验码" aria-label="编码格式说明">${icon('help', 'icon-xs')}</button></label>
       <select class="niim-select compact" data-action="update-barcode-format">
-        <option value="code128" ${element.format !== 'ean13' ? 'selected' : ''}>Code128</option>
+        ${element.requiresFormatConfirmation ? `<option value="" selected disabled>待确认：${escapeHtml(element.declaredFormat || element.sourceCodeType || '未知码制')}</option>` : ''}
+        <option value="code128" ${element.format === 'code128' ? 'selected' : ''}>Code128 自动</option>
+        <option value="code128a" ${element.format === 'code128a' ? 'selected' : ''}>Code128-A</option>
+        <option value="code128b" ${element.format === 'code128b' ? 'selected' : ''}>Code128-B</option>
+        <option value="code128c" ${element.format === 'code128c' ? 'selected' : ''}>Code128-C</option>
         <option value="ean13" ${element.format === 'ean13' ? 'selected' : ''}>EAN-13</option>
+        <option value="upca" ${element.format === 'upca' ? 'selected' : ''}>UPC-A</option>
+        <option value="upce" ${element.format === 'upce' ? 'selected' : ''}>UPC-E</option>
       </select>
     </div>
     <div class="niim-form-row">
@@ -1098,13 +1486,13 @@ function barcodeStylePanel(element) {
     <div class="niim-form-row">
       <label>字号</label>
       <div class="niim-pm wide">
-        <button type="button" data-action="nudge-font" data-delta="-0.5">−</button>
-        <em>${fontSize.toFixed(1)}</em>
-        <button type="button" data-action="nudge-font" data-delta="0.5">+</button>
+        <button type="button" data-action="nudge-font" data-delta="-0.5" aria-label="减小字号">${controlIcon('minus')}</button>
+        <em class="niim-size-readout">${fontSize.toFixed(1)}</em>
+        <button type="button" data-action="nudge-font" data-delta="0.5" aria-label="增大字号">${controlIcon('plus')}</button>
       </div>
     </div>
     <div class="niim-form-row">
-      <label>颜色 <button type="button" class="niim-q" data-action="toast-feature" data-msg="仅限双色/彩色标签纸使用该功能，实际打印的颜色和标签纸有关。">?</button></label>
+      <label>颜色 <button type="button" class="niim-q" data-action="toast-feature" data-msg="仅限双色/彩色标签纸使用该功能，实际打印的颜色和标签纸有关。" aria-label="颜色说明">${icon('help', 'icon-xs')}</button></label>
       <span class="niim-color-dots">
         <button type="button" class="niim-color-dot${color === '#000000' || !element.color ? ' active' : ''}" data-action="set-color" data-value="#000000" data-reverse="0" style="--dot:#000"></button>
         <button type="button" class="niim-color-dot${color === '#E53935' ? ' active' : ''}" data-action="set-color" data-value="#E53935" data-reverse="0" style="--dot:#E53935"></button>
@@ -1121,7 +1509,7 @@ function qrStylePanel(element) {
       <span class="niim-static-val">QR_CODE</span>
     </div>
     <div class="niim-form-row">
-      <label>颜色 <button type="button" class="niim-q" data-action="dual-color-tip">?</button></label>
+      <label>颜色 <button type="button" class="niim-q" data-action="dual-color-tip" aria-label="颜色说明">${icon('help', 'icon-xs')}</button></label>
       <span class="niim-color-dots">
         <button type="button" class="niim-color-dot${color === '#000000' || !element.color ? ' active' : ''}" data-action="set-color" data-value="#000000" data-reverse="0" style="--dot:#000"></button>
         <button type="button" class="niim-color-dot${color === '#E53935' ? ' active' : ''}" data-action="set-color" data-value="#E53935" data-reverse="0" style="--dot:#E53935"></button>
@@ -1135,15 +1523,15 @@ function shapeStylePanel(element) {
   const color = (element.color || '#000000').toUpperCase();
   const lw = round(element.lineWidth || 0.4);
   const kinds = [
-    ['line', '／'],
-    ['rounded', '▢'],
-    ['rect', '□'],
-    ['ellipse', '⬭'],
-    ['circle', '○']
+    ['line', 'shapeLine', '线条'],
+    ['rounded', 'shapeRounded', '圆角矩形'],
+    ['rect', 'shapeRect', '矩形'],
+    ['ellipse', 'shapeEllipse', '椭圆'],
+    ['circle', 'shapeCircle', '圆形']
   ];
   return `<section class="niim-style-panel niim-shape-style">
     <div class="niim-shape-kinds">
-      ${kinds.map(([k, glyph]) => `<button type="button" class="niim-shape-kind${kind === k ? ' active' : ''}" data-action="set-shape-kind" data-value="${k}">${glyph}</button>`).join('')}
+      ${kinds.map(([k, iconName, label]) => `<button type="button" class="niim-shape-kind${kind === k ? ' active' : ''}" data-action="set-shape-kind" data-value="${k}" title="${label}" aria-label="${label}">${icon(iconName, 'icon-shape')}</button>`).join('')}
     </div>
     <div class="niim-form-row">
       <label>样式</label>
@@ -1152,16 +1540,17 @@ function shapeStylePanel(element) {
         <button type="button" class="niim-dash-btn${element.dashed ? ' active' : ''}" data-action="set-dashed" data-value="1"><i class="dash"></i></button>
       </div>
     </div>
+    ${kind !== 'line' ? `<button type="button" class="niim-mirror-row" data-action="toggle-element" data-field="filled"><span>填充形状</span><span class="niim-switch${element.filled ? ' on' : ''}"><i></i></span></button>` : ''}
     <div class="niim-form-row">
       <label>线粗</label>
       <div class="niim-pm wide">
-        <button type="button" data-action="nudge-line-width" data-delta="-0.1">−</button>
+        <button type="button" data-action="nudge-line-width" data-delta="-0.1" aria-label="减小线粗">${controlIcon('minus')}</button>
         <em>${lw.toFixed(1)}</em>
-        <button type="button" data-action="nudge-line-width" data-delta="0.1">+</button>
+        <button type="button" data-action="nudge-line-width" data-delta="0.1" aria-label="增大线粗">${controlIcon('plus')}</button>
       </div>
     </div>
     <div class="niim-form-row">
-      <label>颜色 <button type="button" class="niim-q" data-action="dual-color-tip">?</button></label>
+      <label>颜色 <button type="button" class="niim-q" data-action="dual-color-tip" aria-label="颜色说明">${icon('help', 'icon-xs')}</button></label>
       <span class="niim-color-dots">
         <button type="button" class="niim-color-dot${color === '#000000' || !element.color ? ' active' : ''}" data-action="set-color" data-value="#000000" data-reverse="0" style="--dot:#000"></button>
         <button type="button" class="niim-color-dot${color === '#E53935' ? ' active' : ''}" data-action="set-color" data-value="#E53935" data-reverse="0" style="--dot:#E53935"></button>
@@ -1180,13 +1569,13 @@ function tableStylePanel(element) {
   const strokeColor = (element.strokeColor || element.color || "#000000").toUpperCase();
   return `<section class="niim-style-panel niim-table-style">` +
     `<div class="niim-form-row"><label>行数</label><div class="niim-pm wide">` +
-    `<button type="button" data-action="nudge-table" data-field="rows" data-delta="-1">−</button>` +
+    `<button type="button" data-action="nudge-table" data-field="rows" data-delta="-1" aria-label="减少行数">${controlIcon('minus')}</button>` +
     `<em>${rows}</em>` +
-    `<button type="button" data-action="nudge-table" data-field="rows" data-delta="1">+</button></div></div>` +
+    `<button type="button" data-action="nudge-table" data-field="rows" data-delta="1" aria-label="增加行数">${controlIcon('plus')}</button></div></div>` +
     `<div class="niim-form-row"><label>列数</label><div class="niim-pm wide">` +
-    `<button type="button" data-action="nudge-table" data-field="columns" data-delta="-1">−</button>` +
+    `<button type="button" data-action="nudge-table" data-field="columns" data-delta="-1" aria-label="减少列数">${controlIcon('minus')}</button>` +
     `<em>${cols}</em>` +
-    `<button type="button" data-action="nudge-table" data-field="columns" data-delta="1">+</button></div></div>` +
+    `<button type="button" data-action="nudge-table" data-field="columns" data-delta="1" aria-label="增加列数">${controlIcon('plus')}</button></div></div>` +
     `<div class="niim-form-row"><label>行高</label>` +
     `<input class="niim-size-slider" type="range" min="2" max="20" step="0.1" value="${rowH}" data-action="set-table-dim" data-field="rowH">` +
     `<em>${rowH.toFixed(1)}</em></div>` +
@@ -1194,9 +1583,9 @@ function tableStylePanel(element) {
     `<input class="niim-size-slider" type="range" min="4" max="40" step="0.1" value="${colW}" data-action="set-table-dim" data-field="colW">` +
     `<em>${colW.toFixed(1)}</em></div>` +
     `<div class="niim-form-row"><label>线粗</label><div class="niim-pm wide">` +
-    `<button type="button" data-action="nudge-line-width" data-delta="-0.1">−</button>` +
+    `<button type="button" data-action="nudge-line-width" data-delta="-0.1" aria-label="减小线粗">${controlIcon('minus')}</button>` +
     `<em>${lw.toFixed(1)}</em>` +
-    `<button type="button" data-action="nudge-line-width" data-delta="0.1">+</button></div></div>` +
+    `<button type="button" data-action="nudge-line-width" data-delta="0.1" aria-label="增大线粗">${controlIcon('plus')}</button></div></div>` +
     `<div class="niim-form-row"><label>文本颜色</label><span class="niim-color-dots">` +
     `<button type="button" class="niim-color-dot${textColor === "#000000" ? " active" : ""}" data-action="set-table-color" data-field="textColor" data-value="#000000" style="--dot:#000"></button>` +
     `<button type="button" class="niim-color-dot${textColor === "#E53935" ? " active" : ""}" data-action="set-table-color" data-field="textColor" data-value="#E53935" style="--dot:#E53935"></button>` +
@@ -1223,8 +1612,8 @@ function tableTextPanel(element) {
     '<button type="button" class="niim-tbtn' + (element.italic ? ' active' : '') + '" data-action="toggle-element" data-field="italic"><i>I</i></button></div>' +
     '<div class="niim-size-row"><span class="niim-aa">A<span>A</span></span>' +
     '<input class="niim-size-slider" type="range" min="1" max="20" step="0.1" value="' + size + '" data-action="update-element" data-field="fontSize">' +
-    '<button type="button" class="niim-size-btn" data-action="nudge-font" data-delta="-0.2">-</button>' +
-    '<button type="button" class="niim-size-btn" data-action="nudge-font" data-delta="0.2">+</button></div>' +
+    '<button type="button" class="niim-size-btn" data-action="nudge-font" data-delta="-0.2" aria-label="减小字号">' + controlIcon('minus') + '</button>' +
+    '<button type="button" class="niim-size-btn" data-action="nudge-font" data-delta="0.2" aria-label="增大字号">' + controlIcon('plus') + '</button></div>' +
     '<div class="niim-size-readout">' + size.toFixed(1) + '</div>' +
     '<div class="niim-align-text-row">' +
     '<button type="button" class="niim-align-t' + (align === 'left' ? ' active' : '') + '" data-action="set-align" data-value="left">左</button>' +
@@ -1234,11 +1623,11 @@ function tableTextPanel(element) {
     '<button type="button" class="niim-align-t' + (vAlign === 'middle' ? ' active' : '') + '" data-action="set-vertical-align" data-value="middle">中</button>' +
     '<button type="button" class="niim-align-t' + (vAlign === 'bottom' ? ' active' : '') + '" data-action="set-vertical-align" data-value="bottom">底</button></div>' +
     '<div class="niim-spacing-pair"><div class="niim-spacing-item"><span>字距</span><div class="niim-pm">' +
-    '<button type="button" data-action="nudge-letter" data-delta="-0.1">-</button><em>' + round(element.letterSpacing || 0).toFixed(1) + '</em>' +
-    '<button type="button" data-action="nudge-letter" data-delta="0.1">+</button></div></div>' +
+    '<button type="button" data-action="nudge-letter" data-delta="-0.1" aria-label="减小字距">' + controlIcon('minus') + '</button><em>' + round(element.letterSpacing || 0).toFixed(1) + '</em>' +
+    '<button type="button" data-action="nudge-letter" data-delta="0.1" aria-label="增大字距">' + controlIcon('plus') + '</button></div></div>' +
     '<div class="niim-spacing-item"><span>行距</span><div class="niim-pm">' +
-    '<button type="button" data-action="nudge-line" data-delta="-0.05">-</button><em>' + round((element.lineSpacing != null ? element.lineSpacing : 0)).toFixed(1) + '</em>' +
-    '<button type="button" data-action="nudge-line" data-delta="0.05">+</button></div></div></div>' +
+    '<button type="button" data-action="nudge-line" data-delta="-0.05" aria-label="减小行距">' + controlIcon('minus') + '</button><em>' + round((element.lineSpacing != null ? element.lineSpacing : 0)).toFixed(1) + '</em>' +
+    '<button type="button" data-action="nudge-line" data-delta="0.05" aria-label="增大行距">' + controlIcon('plus') + '</button></div></div></div>' +
     '<button type="button" class="niim-mirror-row" data-action="toggle-element" data-field="wordWrap">' +
     '<span>按单词换行</span><span class="niim-switch' + (element.wordWrap ? ' on' : '') + '"><i></i></span></button>' +
     '<div class="table-cell-editor">' + cellsHtml + '</div></section>';
@@ -1264,12 +1653,26 @@ function elementStylePanel(element, state) {
       <div class="niim-form-row">
         <label>线粗</label>
         <div class="niim-pm wide">
-          <button type="button" data-action="nudge-line-width" data-delta="-0.1">−</button>
+          <button type="button" data-action="nudge-line-width" data-delta="-0.1" aria-label="减小线粗">${controlIcon('minus')}</button>
           <em>${lw.toFixed(1)}</em>
-          <button type="button" data-action="nudge-line-width" data-delta="0.1">+</button>
+          <button type="button" data-action="nudge-line-width" data-delta="0.1" aria-label="增大线粗">${controlIcon('plus')}</button>
         </div>
       </div>
       <button type="button" class="niim-row-command" data-action="open-material-sheet"><span>更换素材</span></button>
+    </section>`;
+  }
+  if (element.type === 'image') {
+    const fit = element.imageFit || 'stretch';
+    const threshold = Math.max(1, Math.min(254, Number(element.threshold) || 180));
+    return `<section class="niim-style-panel niim-image-style">
+      <div class="niim-form-row"><label>图片适配</label><div class="niim-seg image-fit-seg">
+        <button type="button" class="niim-seg-btn${fit === 'contain' ? ' active' : ''}" data-action="set-image-fit" data-value="contain">完整显示</button>
+        <button type="button" class="niim-seg-btn${fit === 'cover' ? ' active' : ''}" data-action="set-image-fit" data-value="cover">铺满裁切</button>
+        <button type="button" class="niim-seg-btn${fit === 'stretch' ? ' active' : ''}" data-action="set-image-fit" data-value="stretch">拉伸</button>
+      </div></div>
+      <div class="niim-form-row"><label>黑白阈值 <strong>${threshold}</strong></label><input class="niim-size-slider" type="range" min="1" max="254" value="${threshold}" data-action="update-element" data-field="threshold"></div>
+      <div class="property-grid">${commonProperties(element)}</div>
+      <button type="button" class="niim-row-command" data-action="replace-image"><span>替换图片</span></button>
     </section>`;
   }
   if (!['text', 'date', 'serial'].includes(element.type)) {
@@ -1286,7 +1689,8 @@ function elementStylePanel(element, state) {
   ];
   const align = element.align || 'left';
   const vAlign = element.verticalAlign || 'middle';
-  const fontFamily = element.fontFamily || 'sans-serif';
+  const fontInfo = fontFallbackInfo(element.fontFamily, element.sourceFontFamily);
+  const fontFamily = fontInfo.renderFamily;
   const textMode = normalizeTextMode(element);
   const directionOpen = !!(state && state.textDirectionOpen);
   const arcAngle = clampTextArcAngle(element.textArcAngle);
@@ -1302,7 +1706,7 @@ function elementStylePanel(element, state) {
       <span>0°</span>
       <input class="niim-text-arc-slider" type="range" min="0" max="180" step="1" value="${arcAngle}" data-action="update-element" data-field="textArcAngle" aria-label="弧形角度" ${textMode === 'arc' ? '' : 'disabled'}>
       <output class="niim-text-arc-readout">${Math.round(arcAngle)}°</output>
-      <button type="button" class="niim-text-arc-reset" data-action="reset-text-arc-angle" title="重置为180度">↺</button>
+      <button type="button" class="niim-text-arc-reset" data-action="reset-text-arc-angle" title="重置为180度" aria-label="重置为180度">${icon('refresh', 'icon-sm')}</button>
     </div>
   </div>` : '';
   return `<section class="niim-style-panel">
@@ -1318,21 +1722,19 @@ function elementStylePanel(element, state) {
       <span class="niim-color-dots">
         ${colors.map(({ c, star, reverse, name }) => {
           const active = color === c.toUpperCase() && !!element.reverse === reverse;
-          return `<button type="button" class="niim-color-dot${active ? ' active' : ''}${star ? ' star' : ''}" data-action="set-color" data-value="${c}" data-reverse="${reverse ? '1' : '0'}" style="--dot:${c}" title="${escapeHtml(name)}"><span class="niim-color-name">${escapeHtml(name)}</span></button>`;
+          return `<button type="button" class="niim-color-dot${active ? ' active' : ''}${star ? ' star' : ''}" data-action="set-color" data-value="${c}" data-reverse="${reverse ? '1' : '0'}" style="--dot:${c}" title="${escapeHtml(name)}">${star ? icon('star', 'icon-star') : ''}<span class="niim-color-name">${escapeHtml(name)}</span></button>`;
         }).join('')}
       </span>
       <button type="button" class="niim-tbtn niim-clear-style" data-action="clear-text-style" title="清除文字样式">清</button>
     </div>
-    <div class="niim-font-list compact">
-      <button type="button" class="niim-font-chip${!element.fontFamily || fontFamily === 'sans-serif' ? ' active' : ''}" data-action="set-font" data-value="sans-serif">黑体</button>
-      <button type="button" class="niim-font-chip${fontFamily === 'serif' ? ' active' : ''}" data-action="set-font" data-value="serif">宋体</button>
-      <button type="button" class="niim-font-chip${fontFamily === 'monospace' ? ' active' : ''}" data-action="set-font" data-value="monospace">等宽</button>
-    </div>
+    <p class="niim-hint">${fontCatalogSummary()}</p>
+    <div class="niim-font-catalog compact">${fontCatalogMarkup(fontFamily, { compact: true })}</div>
+    ${fontInfo.fallback ? `<p class="niim-hint niim-font-fallback">源字体“${escapeHtml(fontInfo.requested)}”未随模板提供，已用开源「${escapeHtml(fontInfo.label)}」稳定替代。</p>` : ''}
     <div class="niim-size-row">
       <span class="niim-aa">A<span>A</span></span>
-      <input class="niim-size-slider" type="range" min="1" max="40" step="0.5" value="${size}" data-action="update-element" data-field="fontSize">
-      <button type="button" class="niim-size-btn" data-action="nudge-font" data-delta="-0.5">−</button>
-      <button type="button" class="niim-size-btn" data-action="nudge-font" data-delta="0.5">+</button>
+      <input class="niim-size-slider" type="range" min="1" max="40" step="0.5" value="${size}" data-action="update-element" data-field="fontSize" aria-label="字号">
+      <button type="button" class="niim-size-btn" data-action="nudge-font" data-delta="-0.5" aria-label="减小字号">${controlIcon('minus')}</button>
+      <button type="button" class="niim-size-btn" data-action="nudge-font" data-delta="0.5" aria-label="增大字号">${controlIcon('plus')}</button>
     </div>
     <div class="niim-size-readout">${size.toFixed(1)}</div>
     <div class="niim-align-text-row">
@@ -1348,17 +1750,17 @@ function elementStylePanel(element, state) {
       <div class="niim-spacing-item">
         <span>字距</span>
         <div class="niim-pm">
-          <button type="button" data-action="nudge-letter" data-delta="-0.1">−</button>
+          <button type="button" data-action="nudge-letter" data-delta="-0.1" aria-label="减小字距">${controlIcon('minus')}</button>
           <em>${round(element.letterSpacing || 0).toFixed(1)}</em>
-          <button type="button" data-action="nudge-letter" data-delta="0.1">+</button>
+          <button type="button" data-action="nudge-letter" data-delta="0.1" aria-label="增大字距">${controlIcon('plus')}</button>
         </div>
       </div>
       <div class="niim-spacing-item">
         <span>行距</span>
         <div class="niim-pm">
-          <button type="button" data-action="nudge-line" data-delta="-0.05">−</button>
+          <button type="button" data-action="nudge-line" data-delta="-0.05" aria-label="减小行距">${controlIcon('minus')}</button>
           <em>${round((element.lineSpacing != null ? element.lineSpacing : 0)).toFixed(1)}</em>
-          <button type="button" data-action="nudge-line" data-delta="0.05">+</button>
+          <button type="button" data-action="nudge-line" data-delta="0.05" aria-label="增大行距">${controlIcon('plus')}</button>
         </div>
       </div>
     </div>
@@ -1371,47 +1773,60 @@ function elementStylePanel(element, state) {
 
 /** Align tab: 6 align + D-pad + vertical/horizontal spacing + mirror */
 function arrangementPanel(state, element) {
-  const mirrorOn = !!(element && (element.mirrorX || element.mirrorY));
-  const multi = selectedElements(state).length > 1;
+  const selected = selectedElements(state);
+  const editable = selected.filter((item) => !item.locked);
+  const controlElement = editable.find((item) => item.id === state.selectedId) || editable[editable.length - 1] || element;
+  const mirrorX = !!(controlElement && controlElement.mirrorX);
+  const mirrorY = !!(controlElement && controlElement.mirrorY);
+  const editableCount = editable.length;
+  const lockedCount = selected.length - editableCount;
+  const multi = editableCount > 1;
+  const canEdit = editableCount > 0;
+  const canDistribute = editableCount >= 3;
   const alignHint = multi ? '相对元素对齐' : '相对标签纸对齐';
   return `<section class="niim-arrange-panel">
-    <p class="niim-align-hint">${alignHint}</p>
+    <p class="niim-align-hint">${alignHint}${lockedCount ? ` · ${lockedCount} 个锁定元素不参与` : ''}</p>
     <div class="niim-arrange-row">
       <div class="niim-align-grid" role="group" aria-label="对齐">
-        <button type="button" data-action="align-selection" data-value="left" title="左对齐">${editorAsset('element/attribute/align_left.svg')}</button>
-        <button type="button" data-action="align-selection" data-value="centerH" title="水平居中">${editorAsset('element/attribute/align_center_h.svg')}</button>
-        <button type="button" data-action="align-selection" data-value="right" title="右对齐">${editorAsset('element/attribute/align_right.svg')}</button>
-        <button type="button" data-action="align-selection" data-value="top" title="顶部对齐">${editorAsset('element/attribute/align_top.svg')}</button>
-        <button type="button" data-action="align-selection" data-value="centerV" title="垂直居中">${editorAsset('element/attribute/align_center_v.svg')}</button>
-        <button type="button" data-action="align-selection" data-value="bottom" title="底部对齐">${editorAsset('element/attribute/align_bottom.svg')}</button>
+        <button type="button" data-action="align-selection" data-value="left" title="左对齐" ${canEdit ? '' : 'disabled'}>${editorAsset('element/attribute/align_left.svg')}</button>
+        <button type="button" data-action="align-selection" data-value="centerH" title="水平居中" ${canEdit ? '' : 'disabled'}>${editorAsset('element/attribute/align_center_h.svg')}</button>
+        <button type="button" data-action="align-selection" data-value="right" title="右对齐" ${canEdit ? '' : 'disabled'}>${editorAsset('element/attribute/align_right.svg')}</button>
+        <button type="button" data-action="align-selection" data-value="top" title="顶部对齐" ${canEdit ? '' : 'disabled'}>${editorAsset('element/attribute/align_top.svg')}</button>
+        <button type="button" data-action="align-selection" data-value="centerV" title="垂直居中" ${canEdit ? '' : 'disabled'}>${editorAsset('element/attribute/align_center_v.svg')}</button>
+        <button type="button" data-action="align-selection" data-value="bottom" title="底部对齐" ${canEdit ? '' : 'disabled'}>${editorAsset('element/attribute/align_bottom.svg')}</button>
       </div>
       <div class="niim-nudge-pad" role="group" aria-label="微调">
-        <button type="button" class="nudge-up" data-action="nudge-element" data-x="0" data-y="-0.5">${editorAsset('element/attribute/align_move_top.svg')}</button>
-        <button type="button" class="nudge-left" data-action="nudge-element" data-x="-0.5" data-y="0">${editorAsset('element/attribute/align_move_left.svg')}</button>
-        <button type="button" class="nudge-right" data-action="nudge-element" data-x="0.5" data-y="0">${editorAsset('element/attribute/align_move_right.svg')}</button>
-        <button type="button" class="nudge-down" data-action="nudge-element" data-x="0" data-y="0.5">${editorAsset('element/attribute/align_move_bottom.svg')}</button>
+        <button type="button" class="nudge-up" data-action="nudge-element" data-x="0" data-y="-0.5" ${canEdit ? '' : 'disabled'}>${editorAsset('element/attribute/align_move_top.svg')}</button>
+        <button type="button" class="nudge-left" data-action="nudge-element" data-x="-0.5" data-y="0" ${canEdit ? '' : 'disabled'}>${editorAsset('element/attribute/align_move_left.svg')}</button>
+        <button type="button" class="nudge-right" data-action="nudge-element" data-x="0.5" data-y="0" ${canEdit ? '' : 'disabled'}>${editorAsset('element/attribute/align_move_right.svg')}</button>
+        <button type="button" class="nudge-down" data-action="nudge-element" data-x="0" data-y="0.5" ${canEdit ? '' : 'disabled'}>${editorAsset('element/attribute/align_move_bottom.svg')}</button>
       </div>
     </div>
     <div class="niim-gap-row${multi ? '' : ' disabled'}">
       <span>垂直间距</span>
       <div class="niim-pm">
         <i class="niim-gap-ico">${editorAsset('element/attribute/align_uniform_v.svg')}</i>
-        <button type="button" data-action="gap-selection" data-axis="v" data-delta="-0.5" ${multi ? '' : 'disabled'}>−</button>
-        <button type="button" data-action="gap-selection" data-axis="v" data-delta="0.5" ${multi ? '' : 'disabled'}>+</button>
+        <button type="button" data-action="gap-selection" data-axis="v" data-delta="-0.5" aria-label="减小纵向间距" ${multi ? '' : 'disabled'}>${controlIcon('minus')}</button>
+        <button type="button" data-action="gap-selection" data-axis="v" data-delta="0.5" aria-label="增大纵向间距" ${multi ? '' : 'disabled'}>${controlIcon('plus')}</button>
       </div>
     </div>
     <div class="niim-gap-row${multi ? '' : ' disabled'}">
       <span>水平间距</span>
       <div class="niim-pm">
         <i class="niim-gap-ico">${editorAsset('element/attribute/align_uniform_h.svg')}</i>
-        <button type="button" data-action="gap-selection" data-axis="h" data-delta="-0.5" ${multi ? '' : 'disabled'}>−</button>
-        <button type="button" data-action="gap-selection" data-axis="h" data-delta="0.5" ${multi ? '' : 'disabled'}>+</button>
+        <button type="button" data-action="gap-selection" data-axis="h" data-delta="-0.5" aria-label="减小横向间距" ${multi ? '' : 'disabled'}>${controlIcon('minus')}</button>
+        <button type="button" data-action="gap-selection" data-axis="h" data-delta="0.5" aria-label="增大横向间距" ${multi ? '' : 'disabled'}>${controlIcon('plus')}</button>
       </div>
     </div>
-    <button type="button" class="niim-mirror-row" data-action="mirror-element" data-axis="x">
-      <span>镜像</span>
-      <span class="niim-switch${mirrorOn ? ' on' : ''}"><i></i></span>
-    </button>
+    <div class="niim-distribute-row${canDistribute ? '' : ' disabled'}">
+      <span>等距分布</span>
+      <div class="niim-distribute-actions">
+        <button type="button" class="button-secondary compact" data-action="distribute-selection" data-value="horizontal" ${canDistribute ? '' : 'disabled'}>水平等距</button>
+        <button type="button" class="button-secondary compact" data-action="distribute-selection" data-value="vertical" ${canDistribute ? '' : 'disabled'}>垂直等距</button>
+      </div>
+    </div>
+    <button type="button" class="niim-mirror-row" data-action="mirror-element" data-axis="x" ${canEdit ? '' : 'disabled'}><span>水平镜像</span><span class="niim-switch${mirrorX ? ' on' : ''}"><i></i></span></button>
+    <button type="button" class="niim-mirror-row" data-action="mirror-element" data-axis="y" ${canEdit ? '' : 'disabled'}><span>垂直镜像</span><span class="niim-switch${mirrorY ? ' on' : ''}"><i></i></span></button>
   </section>`;
 }
 
@@ -1429,9 +1844,12 @@ function labelPanel(state) {
 function propertyPanel(state) {
   const element = selectedElement(state);
   const selection = selectedElements(state);
+  const lockedSingle = !!(element && element.locked && selection.length === 1 && state.editorPanelTab !== 'layers');
   let tabs;
   // Screenshots: 内容 | 样式 | 字体 | 对齐/镜像 (selected); 添加元素 | 模板 | 数据源 (idle)
-  if (state.editorPanelTab === 'layers') {
+  if (lockedSingle) {
+    tabs = [['locked', '元素已锁定']];
+  } else if (state.editorPanelTab === 'layers') {
     tabs = [['layers', '图层']];
   } else if (selection.length > 1) {
     tabs = [['arrange', '对齐/镜像']];
@@ -1469,22 +1887,23 @@ function propertyPanel(state) {
   else if (active === 'content') body = elementContentPanel(element, state);
   else if (active === 'font') body = elementFontPanel(element);
   else if (active === 'style') body = elementStylePanel(element, state);
+  else if (active === 'locked') body = `<section class="niim-locked-panel">
+    <span class="niim-locked-icon">${icon('lock')}</span>
+    <div><strong>这个元素已锁定</strong><p>解锁后才能修改内容、样式、位置和层级。</p></div>
+    <div class="niim-locked-actions"><button type="button" class="button" data-action="toggle-lock">解锁并编辑</button><button type="button" class="button-secondary" data-action="duplicate-element">复制为可编辑元素</button></div>
+  </section>`;
   else body = arrangementPanel(state, element);
 
   // Text/barcode content: system keyboard bar, hide footer. Date「时间」keeps 保存/打印.
   const contentMode = active === 'content' && element && ['text', 'barcode', 'qrcode'].includes(element.type);
-  const unlockCommand = element && element.locked && selection.length === 1
-    ? `<button type="button" class="niim-unlock-command" data-action="toggle-lock">
-      ${editorAsset('floating_shortcut/floating_shortcut_unlock.svg')}<span>解锁元素</span>
-    </button>`
-    : '';
+  const unlockCommand = '';
   // Equal-width fixed tabs when editing an element (内容|样式|字体|对齐)
   const equalTabs = !!(element || selection.length > 1) && state.editorPanelTab !== 'layers';
 
   return `<div class="niim-panel-head">
       <div class="niim-panel-tabs${equalTabs ? ' equal' : ''}" role="tablist" data-tab-count="${tabs.length}">
         <i class="niim-tab-indicator" aria-hidden="true"></i>
-        ${tabs.map(([value, label]) => `<button type="button" class="niim-panel-tab${active === value ? ' active' : ''}" data-action="set-editor-panel-tab" data-tab="${value}" role="tab" ${active === value ? 'aria-selected="true"' : ''}><span>${escapeHtml(label)}</span></button>`).join('')}
+        ${tabs.map(([value, label]) => `<button type="button" class="niim-panel-tab${active === value ? ' active' : ''}" data-action="set-editor-panel-tab" data-tab="${value}" role="tab" aria-selected="${active === value}" tabindex="${active === value ? '0' : '-1'}"><span>${escapeHtml(label)}</span></button>`).join('')}
       </div>
       <button type="button" class="niim-panel-fold" data-action="toggle-property-panel" title="${state.panelCollapsed ? '展开' : '收起'}">${editorAsset('common/attributeDown.svg')}</button>
     </div>
@@ -1508,6 +1927,7 @@ function editorView(state) {
   const profile = PROFILES.find((item) => item.id === state.settings.defaultProfileId) || PROFILES[0];
   const code = stockCode(document, profile.dpi);
   const realLabelId = document.labelId || "";
+  const attentionMessage = templateAttentionMessage(document);
   const contentMode = selection.length === 1 && state.editorPanelTab === 'content'
     && activeElement && ['text', 'barcode', 'qrcode'].includes(activeElement.type);
   return `${sprite()}
@@ -1521,7 +1941,7 @@ function editorView(state) {
           <button type="button" class="niim-top-btn" data-action="open-layers" title="图层">${icon('layers')}</button>
           <button type="button" class="niim-top-btn${state.editorMenu === 'clear' ? ' active' : ''}" data-action="editor-clear-menu" title="清空">${editorAsset('app_bar/app_bar_clear.svg')}</button>
           <button type="button" class="niim-top-btn${state.editorMenu === 'settings' ? ' active' : ''}" data-action="editor-more" title="设置">${editorAsset('app_bar/app_bar_setting.svg')}</button>
-          <button type="button" class="niim-top-btn niim-top-im" data-action="help" title="客服">${editorAsset('app_bar/app_bar_im.png')}</button>
+          <button type="button" class="niim-top-btn niim-top-im" data-action="help" title="使用帮助" aria-label="使用帮助">${icon('help')}</button>
         </div>
       </header>
       <div class="niim-stock-row">
@@ -1532,9 +1952,11 @@ function editorView(state) {
         ${realLabelId ? `<button type="button" class="niim-label-id" data-action="open-stock-sheet" title="标签 ID">
           ${icon('info', 'icon-sm')}<span>ID:${escapeHtml(realLabelId)}</span>
         </button>` : ''}
-        ${state.draftSavedAt ? '<span class="niim-save-chip">已保存</span>' : ''}
+        ${state.draftSavedAt ? '<span class="niim-save-chip">草稿已自动保存</span>' : ''}
       </div>
+      ${attentionMessage ? `<div class="niim-template-attention" role="alert">${icon('info', 'icon-sm')}<span>${escapeHtml(attentionMessage)}</span></div>` : ''}
       ${state.editorMenu === 'settings' ? `<div class="editor-more-menu niim-menu" role="menu">
+        <button data-action="rename-document">重命名标签</button>
         <button data-action="save-as-template">保存为模板</button>
         <button data-action="open-stock-sheet">标签纸设置</button>
         <button data-action="set-editor-panel-tab" data-tab="data-source">数据源</button>
@@ -1553,8 +1975,8 @@ function editorView(state) {
           <div class="canvas-fit-frame" style="--label-ratio:${ratio}">
             <div class="canvas-zoom-frame" style="width:${state.zoom}%">
               <div id="canvas-viewport" class="canvas-viewport niim-viewport" style="--label-ratio:${ratio}">
-                <canvas id="label-canvas"></canvas>
-                <canvas id="selection-canvas" class="selection-canvas"></canvas>
+                <canvas id="label-canvas" aria-hidden="true"></canvas>
+                <canvas id="selection-canvas" class="selection-canvas" tabindex="0" aria-label="标签画布，${document.widthMm}×${document.heightMm} 毫米，共 ${document.elements.length} 个元素${selection.length ? `，已选中 ${selection.length} 个` : ''}。可用方向键微调选中元素"></canvas>
               </div>
             </div>
           </div>
@@ -1567,20 +1989,24 @@ function editorView(state) {
 function devicesSheet(state) {
   return `<div class="sheet-backdrop" data-action="close-modal"></div><section class="bottom-sheet" role="dialog" aria-modal="true" aria-labelledby="devices-title">
     <div class="sheet-handle"></div>
-    <div class="sheet-header"><div><h2 id="devices-title">打印机</h2><div class="topbar-subtitle">蓝牙设备</div></div><div class="row-actions">${state.scanning ? '<span class="loading-spinner" aria-label="扫描中"></span>' : `<button class="icon-button" data-action="scan-devices" title="重新扫描">${icon('refresh')}</button>`}<button class="icon-button" data-action="close-modal" title="关闭">${icon('close')}</button></div></div>
-    ${state.device ? `<div class="device-banner"><div class="device-visual">${icon('printer')}</div><div><p class="device-name">${escapeHtml(state.device.name)}</p><div class="device-meta"><span><i class="status-dot online"></i>已连接</span><span>MTU ${state.device.mtu || '-'}</span></div></div><button class="button-danger" data-action="disconnect-device">断开</button></div><div style="height:12px"></div>` : ''}
-    <div class="device-list">${state.devices.length ? state.devices.map((device) => `<button class="device-item" data-action="connect-device" data-id="${escapeHtml(device.deviceId)}" ${state.connecting ? 'disabled' : ''}><span class="device-visual">${icon('bluetooth')}</span><span><span class="device-name">${escapeHtml(device.displayName || device.name || 'BLE 打印机')}</span><span class="device-meta">${escapeHtml(device.deviceId)} · RSSI ${device.RSSI == null ? '-' : device.RSSI}</span></span><span class="signal-bars" aria-label="信号"><i></i><i></i><i></i><i></i></span></button>`).join('') : `<div class="empty-state">${state.scanning ? '正在搜索附近设备' : '未发现打印机'}</div>`}</div>
+    <div class="sheet-header"><div><h2 id="devices-title">${icon('bluetooth', 'icon-sm')}打印机</h2><div class="topbar-subtitle">蓝牙设备</div></div><div class="row-actions">${state.scanning ? '<span class="loading-spinner" aria-label="扫描中"></span>' : `<button type="button" class="icon-button" data-action="scan-devices" title="重新扫描" aria-label="重新扫描">${icon('refresh')}</button>`}<button type="button" class="icon-button" data-action="close-modal" title="关闭" aria-label="关闭">${icon('close')}</button></div></div>
+    ${state.device ? `<div class="device-banner ux-device-connected"><div class="device-visual">${icon('printer')}</div><div><p class="device-name">${escapeHtml(state.device.name)}</p><div class="device-meta"><span><i class="status-dot online"></i>已连接</span><span>${state.device.mtu ? '传输通道就绪' : '基础通道'}</span></div></div><button type="button" class="button-danger" data-action="disconnect-device">断开</button></div><div style="height:12px"></div>` : ''}
+    <div class="device-list">${state.devices.length ? state.devices.map((device) => `<button type="button" class="device-item" data-action="connect-device" data-id="${escapeHtml(device.deviceId)}" ${state.connecting ? 'disabled' : ''}><span class="device-visual">${icon('bluetooth')}</span><span><span class="device-name">${escapeHtml(device.displayName || device.name || '蓝牙打印机')}</span><span class="device-meta">编号 ${escapeHtml(String(device.deviceId || '').slice(-8) || '-')}${device.RSSI == null ? '' : ` · 信号${device.RSSI >= -60 ? '强' : device.RSSI >= -75 ? '中' : '弱'}`}</span></span><span class="signal-bars" aria-label="信号"><i></i><i></i><i></i><i></i></span></button>`).join('') : `<div class="empty-state"><span class="empty-state-icon">${icon(state.scanning ? 'search' : 'bluetooth')}</span><div>${state.scanning ? '正在搜索附近设备…' : '未发现打印机'}</div>${state.scanning ? '' : '<button type="button" class="button" data-action="scan-devices">重新扫描</button>'}</div>`}</div>
   </section>`;
 }
 
 function printSheet(state) {
   const settings = state.settings;
-  const profile = PROFILES.find((item) => item.id === settings.defaultProfileId) || PROFILES[0];
+  const profileId = state.device && state.device.profileId || settings.defaultProfileId;
+  const profile = PROFILES.find((item) => item.id === profileId) || PROFILES[0];
   const densityMax = profile.densityMax || 5;
   const densityMin = profile.densityMin || 1;
   const density = Math.max(densityMin, Math.min(densityMax, Number(settings.density) || profile.densityDefault || 3));
   const doc = state.document;
+  const batchCount = Array.isArray(state.pendingBatchDocuments) ? state.pendingBatchDocuments.length : 0;
+  const batchIndex = Math.max(0, Number(state.pendingBatchIndex) || 0);
   const block = state.printBlock;
+  const printabilityNotice = doc ? (evaluatePrintability(doc, profile).notice || '') : '';
   // With a printer connected the model is a fact, not a preference — offering
   // another model would promise something a menu cannot deliver.
   const suggested = block && block.suggestProfileId && !state.device
@@ -1591,14 +2017,21 @@ function printSheet(state) {
     <div class="sheet-handle"></div>
     <div class="sheet-header">
       <div>
-        <h2 id="print-title">打印标签</h2>
-        <div class="topbar-subtitle">${doc ? `${escapeHtml(doc.name)} · ${doc.widthMm}×${doc.heightMm} mm` : '打印预览'}</div>
+        <h2 id="print-title">${icon('printer', 'icon-sm')}打印标签</h2>
+        <div class="topbar-subtitle">${batchCount
+          ? `批量任务 ${Math.min(batchIndex + 1, batchCount)} / ${batchCount} · 每行 ${settings.copies} 份`
+          : doc ? `${escapeHtml(doc.name)} · ${doc.widthMm}×${doc.heightMm} mm` : '打印预览'}</div>
       </div>
-      <button class="icon-button" data-action="close-modal" title="关闭" ${state.printing ? 'disabled' : ''}>${icon('close')}</button>
+      <button type="button" class="icon-button" data-action="close-modal" title="关闭" aria-label="关闭" ${state.printing ? 'disabled' : ''}>${icon('close')}</button>
     </div>
     ${block ? `<div class="print-notice blocked" role="alert">
+      <span class="ux-notice-ico">${icon('info')}</span>
       <strong>${block.kind === 'placeholder'
         ? '还有默认内容未改'
+        : block.kind === 'empty'
+          ? '画布还是空的'
+        : block.kind === 'element' && /^CODE_|^INVALID_CODE/.test(block.errorCode || '')
+          ? '条码或二维码需要调整'
         : block.kind !== 'size'
           ? '内容装不下，暂时无法打印'
           : state.device
@@ -1606,55 +2039,94 @@ function printSheet(state) {
             : '这张标签超出当前机型的可打印范围'}</strong>
       <p>${escapeHtml(block.message)}${block.kind === 'size' && doc ? ` · 当前标签 ${doc.widthMm}×${doc.heightMm} mm` : ''}</p>
       <div class="print-notice-actions">
-        ${block.kind === 'placeholder' && block.elementId
-          ? `<button class="button compact" data-action="focus-placeholder" data-id="${escapeHtml(block.elementId)}">去修改</button>
-             <button class="button-secondary compact" data-action="close-modal">返回编辑</button>`
-          : `${suggested ? `<button class="button compact" data-action="apply-suggested-profile" data-id="${escapeHtml(suggested.id)}">换成 ${escapeHtml(suggested.name)}</button>` : ''}
-             <button class="button-secondary compact" data-action="open-stock-sheet">更换标签纸</button>`}
+        ${block.kind === 'empty'
+          ? '<button type="button" class="button compact" data-action="close-modal">返回编辑</button>'
+          : (block.kind === 'placeholder' || block.kind === 'element') && block.elementId
+          ? `${block.errorCode === 'CODE_MODULE_DENSITY_LOW' ? `<button type="button" class="button compact" data-action="fix-code-size" data-id="${escapeHtml(block.elementId)}">按最小清晰度放大</button>` : ''}
+             ${block.canConfirmOriginal ? `<button type="button" class="button compact" data-action="confirm-placeholder-value" data-id="${escapeHtml(block.elementId)}">确认使用当前编码</button>` : ''}
+             <button type="button" class="button-secondary compact" data-action="focus-placeholder" data-id="${escapeHtml(block.elementId)}">定位并修改</button>
+             <button type="button" class="button-secondary compact" data-action="close-modal">返回编辑</button>`
+          : `${suggested ? `<button type="button" class="button compact" data-action="apply-suggested-profile" data-id="${escapeHtml(suggested.id)}">换成 ${escapeHtml(suggested.name)}</button>` : ''}
+             <button type="button" class="button-secondary compact" data-action="open-stock-sheet">更换标签纸</button>`}
       </div>
     </div>` : ''}
+    ${!block && printabilityNotice ? `<div class="print-notice advisory">
+      <span class="ux-notice-ico">${icon('info')}</span>
+      <strong>将居中裁切打印</strong>
+      <p>${escapeHtml(printabilityNotice)}</p>
+    </div>` : ''}
     ${state.printError ? `<div class="print-notice failed" role="alert">
+      <span class="ux-notice-ico">${icon('info')}</span>
       <strong>打印失败</strong>
       <p>${escapeHtml(state.printError.message)}</p>
       <div class="print-notice-actions">
-        <button class="button compact" data-action="retry-print">重试打印</button>
-        <button class="button-secondary compact" data-action="open-devices">重新连接</button>
+        <button type="button" class="button compact" data-action="retry-print">重试打印</button>
+        <button type="button" class="button-secondary compact" data-action="open-devices">重新连接</button>
       </div>
     </div>` : ''}
-    <button class="print-device-row" data-action="open-devices">
+    <button type="button" class="print-device-row" data-action="open-devices">
       <span class="device-visual">${icon(state.device ? 'printer' : 'bluetooth')}</span>
       <span class="print-device-meta">
         <strong>${state.device ? escapeHtml(state.device.name) : '未连接打印机'}</strong>
-        <small>${state.device ? `已连接 · MTU ${state.device.mtu || '-'}` : '点击连接蓝牙打印机'}</small>
+        <small>${state.device ? '已连接 · 传输通道就绪' : '点击连接热敏打印机'}</small>
       </span>
       <span class="section-link">${state.device ? '切换' : '连接'}${icon('chevronRight', 'icon-sm')}</span>
     </button>
     <div class="print-preview"><canvas id="print-preview-canvas" aria-label="打印预览"></canvas></div>
     <div class="print-options">
-      <div class="field"><label for="print-profile">打印机型号 / 协议</label><select id="print-profile" data-action="update-setting" data-field="defaultProfileId">${PROFILES.map((item) => `<option value="${item.id}" ${item.id === settings.defaultProfileId ? 'selected' : ''}>${escapeHtml(item.name)}</option>`).join('')}</select></div>
+      <div class="field"><label for="print-profile">打印机型号 / 协议</label><select id="print-profile" data-action="update-setting" data-field="defaultProfileId" ${state.device ? 'disabled aria-describedby="connected-profile-hint"' : ''}>${PROFILES.map((item) => `<option value="${item.id}" ${item.id === profileId ? 'selected' : ''}>${escapeHtml(item.name)}</option>`).join('')}</select>${state.device ? '<small id="connected-profile-hint">已按当前连接设备自动识别</small>' : ''}</div>
       <div class="field"><label for="print-label-type">纸张类型</label><select id="print-label-type" data-action="update-setting" data-field="labelType">
         <option value="1" ${Number(settings.labelType) === 1 ? 'selected' : ''}>间隙纸</option>
         <option value="2" ${Number(settings.labelType) === 2 ? 'selected' : ''}>黑标纸</option>
         <option value="3" ${Number(settings.labelType) === 3 ? 'selected' : ''}>连续纸</option>
         <option value="4" ${Number(settings.labelType) === 4 ? 'selected' : ''}>定孔纸</option>
       </select></div>
-      <div class="field"><label for="print-copies">份数</label><div class="stepper"><button data-action="change-copies" data-delta="-1" ${state.printing ? 'disabled' : ''}>-</button><input id="print-copies" value="${settings.copies}" readonly><button data-action="change-copies" data-delta="1" ${state.printing ? 'disabled' : ''}>+</button></div></div>
+      <div class="field"><label for="print-copies">份数</label><div class="stepper"><button type="button" data-action="change-copies" data-delta="-1" aria-label="减少份数" ${state.printing ? 'disabled' : ''}>${controlIcon('minus')}</button><input id="print-copies" value="${settings.copies}" readonly><button type="button" data-action="change-copies" data-delta="1" aria-label="增加份数" ${state.printing ? 'disabled' : ''}>${controlIcon('plus')}</button></div></div>
       <div class="field"><label for="print-density">浓度 <strong>${density}</strong> / ${densityMax}</label><input id="print-density" type="range" min="${densityMin}" max="${densityMax}" value="${density}" data-action="update-setting" data-field="density" ${state.printing ? 'disabled' : ''}></div>
       <div class="field"><label for="print-threshold">黑白阈值 <strong>${settings.threshold}</strong></label><input id="print-threshold" type="range" min="1" max="254" value="${settings.threshold}" data-action="update-setting" data-field="threshold" ${state.printing ? 'disabled' : ''}></div>
     </div>
-    ${state.printing ? `<div class="progress-track"><div class="progress-fill" style="width:${state.printProgress}%"></div></div><div class="device-meta">${escapeHtml(state.printMessage)}</div>` : ''}
+    ${state.printing ? `<div class="progress-track" role="progressbar" aria-label="打印进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${state.printProgress}"><div class="progress-fill" style="width:${state.printProgress}%"></div></div><div class="device-meta" role="status">${escapeHtml(state.printMessage)}</div>` : ''}
     <div class="print-sheet-actions sticky-sheet-actions">
       ${state.printing
-        ? `<button class="button-danger" data-action="cancel-print">停止打印</button>
-           <button class="button print-submit" disabled>正在打印…</button>`
-        : `<button class="button-secondary" data-action="close-modal">返回编辑</button>
-           <button class="button print-submit" data-action="start-print" ${block ? 'disabled' : ''}>${block ? '请先解决上方问题' : state.device ? '开始打印' : '连接并打印'}</button>`}
+        ? `<button type="button" class="button-danger" data-action="cancel-print">停止打印</button>
+           <button type="button" class="button print-submit" disabled>正在打印…</button>`
+        : `<button type="button" class="button-secondary" data-action="${batchCount ? 'cancel-batch-print' : 'close-modal'}">${batchCount ? '取消批量任务' : '返回编辑'}</button>
+           <button type="button" class="button print-submit" data-action="start-print" ${block ? 'disabled' : ''}>${block ? '请先解决上方问题' : state.device ? (batchCount ? `开始连续打印 ${batchCount} 张` : '开始打印') : '连接并打印'}</button>`}
     </div>
   </section>`;
 }
 
 function infoSheet(title, body, actionLabel) {
-  return `<div class="sheet-backdrop" data-action="close-modal"></div><section class="bottom-sheet" role="dialog" aria-modal="true"><div class="sheet-handle"></div><div class="sheet-header"><h2>${escapeHtml(title)}</h2><button class="icon-button" data-action="close-modal" title="关闭">${icon('close')}</button></div><div style="color:var(--muted);line-height:1.7">${body}</div>${actionLabel ? `<button class="button print-submit" data-action="close-modal">${escapeHtml(actionLabel)}</button>` : ''}</section>`;
+  return `<div class="sheet-backdrop" data-action="close-modal"></div><section class="bottom-sheet" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}"><div class="sheet-handle"></div><div class="sheet-header"><h2>${icon('info', 'icon-sm')}${escapeHtml(title)}</h2><button type="button" class="icon-button" data-action="close-modal" title="关闭" aria-label="关闭">${icon('close')}</button></div><div style="color:var(--muted);line-height:1.7">${body}</div>${actionLabel ? `<button type="button" class="button print-submit" data-action="close-modal">${escapeHtml(actionLabel)}</button>` : ''}</section>`;
+}
+
+function defaultPrintSettingsSheet(state) {
+  const settings = state.settings;
+  const profile = PROFILES.find((item) => item.id === settings.defaultProfileId) || PROFILES[0];
+  const densityMin = profile.densityMin || 1;
+  const densityMax = profile.densityMax || 5;
+  const density = Math.max(densityMin, Math.min(densityMax, Number(settings.density) || profile.densityDefault || 3));
+  return `<div class="sheet-backdrop" data-action="close-modal"></div>
+    <section class="bottom-sheet workbench-sheet" role="dialog" aria-modal="true" aria-labelledby="default-print-settings-title">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <div><h2 id="default-print-settings-title">${icon('settings', 'icon-sm')}默认打印参数</h2><div class="topbar-subtitle">新打印任务会优先使用这些设置</div></div>
+        <button type="button" class="icon-button" data-action="close-modal" title="关闭" aria-label="关闭">${icon('close')}</button>
+      </div>
+      <div class="print-options">
+        <div class="field wide"><label for="default-print-profile">打印机型号 / 协议</label><select id="default-print-profile" data-action="update-setting" data-field="defaultProfileId">${PROFILES.map((item) => `<option value="${item.id}" ${item.id === settings.defaultProfileId ? 'selected' : ''}>${escapeHtml(item.name)}</option>`).join('')}</select></div>
+        <div class="field"><label for="default-label-type">纸张类型</label><select id="default-label-type" data-action="update-setting" data-field="labelType">
+          <option value="1" ${Number(settings.labelType) === 1 ? 'selected' : ''}>间隙纸</option>
+          <option value="2" ${Number(settings.labelType) === 2 ? 'selected' : ''}>黑标纸</option>
+          <option value="3" ${Number(settings.labelType) === 3 ? 'selected' : ''}>连续纸</option>
+          <option value="4" ${Number(settings.labelType) === 4 ? 'selected' : ''}>定孔纸</option>
+        </select></div>
+          <div class="field"><label for="default-print-copies">默认份数</label><div class="stepper"><button type="button" data-action="change-copies" data-delta="-1" aria-label="减少份数">${controlIcon('minus')}</button><input id="default-print-copies" value="${settings.copies}" readonly><button type="button" data-action="change-copies" data-delta="1" aria-label="增加份数">${controlIcon('plus')}</button></div></div>
+        <div class="field"><label for="default-print-density">浓度 <strong>${density}</strong> / ${densityMax}</label><input id="default-print-density" type="range" min="${densityMin}" max="${densityMax}" value="${density}" data-action="update-setting" data-field="density"></div>
+        <div class="field"><label for="default-print-threshold">黑白阈值 <strong>${settings.threshold}</strong></label><input id="default-print-threshold" type="range" min="1" max="254" value="${settings.threshold}" data-action="update-setting" data-field="threshold"></div>
+      </div>
+      <button type="button" class="button print-submit" data-action="close-modal">完成</button>
+    </section>`;
 }
 
 function elementSummary(documentValue) {
@@ -1671,29 +2143,41 @@ function elementSummary(documentValue) {
 }
 
 function templatePreviewSheet(state) {
-  const template = templates.find((item) => item.id === state.templatePreviewId)
+  const libraryEntry = getLibraryEntry(state.templatePreviewId);
+  const libraryTemplate = libraryEntry
+    ? Object.assign(catalogMeta(libraryEntry), { document: buildLibraryDocument(libraryEntry.id) })
+    : null;
+  const template = libraryTemplate
+    || templates.find((item) => item.id === state.templatePreviewId)
+    || (state.remoteTemplates || []).find((item) => item.id === state.templatePreviewId)
     || state.userTemplates.map(userTemplateCard).find((item) => item.id === state.templatePreviewId);
   if (!template) {
     return `<div class="sheet-backdrop" data-action="close-modal"></div>
       <section class="bottom-sheet template-sheet" role="dialog" aria-modal="true">
         <div class="sheet-handle"></div>
-        <div class="sheet-header"><h2>模板不可用</h2><button class="icon-button" data-action="close-modal" title="关闭">${icon('close')}</button></div>
-        <div class="empty-state soft">找不到该模板，可能已被删除</div>
-        <button class="button print-submit" data-action="close-modal">关闭</button>
+        <div class="sheet-header"><h2>模板不可用</h2><button type="button" class="icon-button" data-action="close-modal" title="关闭" aria-label="关闭">${icon('close')}</button></div>
+        <div class="empty-state soft"><span class="empty-state-icon">${icon('help')}</span><div>找不到该模板，可能已被删除</div></div>
+        <button type="button" class="button print-submit" data-action="close-modal">关闭</button>
       </section>`;
   }
   const documentValue = template.document || buildTemplateDocument(template);
   const ratio = documentValue.widthMm / Math.max(0.1, documentValue.heightMm);
   const industry = template.industry || (template.userTemplate ? '我的模板' : '行业模板');
+  const sceneLabels = sceneIdsForTemplate(template)
+    .map((id) => sceneForId(id))
+    .filter(Boolean)
+    .map((scene) => scene.label);
+  const originLabel = templateOriginLabel(template);
+  const distinctBadge = template.badge && template.badge !== originLabel ? template.badge : '';
   return `<div class="sheet-backdrop" data-action="close-modal"></div>
     <section class="bottom-sheet template-sheet workbench-sheet" role="dialog" aria-modal="true" aria-labelledby="template-preview-title">
       <div class="sheet-handle"></div>
       <div class="sheet-header">
         <div>
-          <h2 id="template-preview-title">${escapeHtml(template.name)}</h2>
+          <h2 id="template-preview-title">${icon('template', 'icon-sm')}${escapeHtml(template.name)}</h2>
           <div class="topbar-subtitle">${template.size[0]}×${template.size[1]} mm · ${escapeHtml(template.category || '我的')} · ${escapeHtml(industry)}</div>
         </div>
-        <button class="icon-button" data-action="close-modal" title="关闭">${icon('close')}</button>
+        <button type="button" class="icon-button" data-action="close-modal" title="关闭" aria-label="关闭">${icon('close')}</button>
       </div>
       <div class="template-preview-stage">
         <div class="template-preview-frame" style="--label-ratio:${ratio}">
@@ -1702,17 +2186,21 @@ function templatePreviewSheet(state) {
         </div>
       </div>
       <div class="template-preview-meta">
-        ${template.badge ? `<span class="template-badge static">${escapeHtml(template.badge)}</span>` : ''}
+        ${distinctBadge ? `<span class="template-badge static">${escapeHtml(distinctBadge)}</span>` : ''}
+        ${originLabel ? `<span class="template-source-badge static">${escapeHtml(originLabel)}</span>` : ''}
         <p>${escapeHtml(template.blurb || '本地行业模板，打开后可自由改字、改尺寸并打印。')}</p>
         <div class="device-meta">
+          ${template.taskLabel ? `<span>任务 ${escapeHtml(template.taskLabel)}</span>` : ''}
+          ${template.variantLabel ? `<span>版式 ${escapeHtml(template.variantLabel)}</span>` : ''}
+          ${sceneLabels.length ? `<span>适用 ${escapeHtml(sceneLabels.join(' / '))}</span>` : ''}
           <span>${escapeHtml(elementSummary(documentValue))}</span>
           <span>${(documentValue.elements || []).length} 个元素</span>
           <span>纸张 ${documentValue.widthMm}×${documentValue.heightMm} mm</span>
         </div>
       </div>
       <div class="template-preview-actions sticky-sheet-actions">
-        <button class="button-secondary" data-action="close-modal">取消</button>
-        <button class="button" data-action="use-template" data-id="${escapeHtml(template.id)}">使用此模板</button>
+        <button type="button" class="button-secondary" data-action="close-modal">取消</button>
+        <button type="button" class="button" data-action="use-template" data-id="${escapeHtml(template.id)}">使用此模板</button>
       </div>
     </section>`;
 }
@@ -1723,13 +2211,14 @@ function printHistorySheet(state) {
     <section class="bottom-sheet workbench-sheet" role="dialog" aria-modal="true" aria-labelledby="print-history-title">
       <div class="sheet-handle"></div>
       <div class="sheet-header">
-        <div><h2 id="print-history-title">打印历史</h2><div class="topbar-subtitle">本机最近 ${history.length} 条 · 可重新打开或再打</div></div>
-        <button class="icon-button" data-action="close-modal" title="关闭">${icon('close')}</button>
+        <div><h2 id="print-history-title">${icon('history', 'icon-sm')}打印历史</h2><div class="topbar-subtitle">本机最近 ${history.length} 条 · 可重新打开或再打</div></div>
+        <button type="button" class="icon-button" data-action="close-modal" title="关闭" aria-label="关闭">${icon('close')}</button>
       </div>
       <div class="history-list">
         ${history.length ? history.slice(0, 30).map((item) => {
           const canReopen = !!(item.document || item.projectId);
           return `<div class="history-item">
+          <span class="ux-history-ico">${icon('printer', 'icon-sm')}</span>
           <div class="history-main">
             <strong>${escapeHtml(item.name || '未命名标签')}</strong>
             <span class="history-result ${item.result === 'success' ? 'ok' : item.result === 'cancelled' ? 'warn' : 'fail'}">${item.result === 'success' ? '成功' : item.result === 'cancelled' ? '已取消' : '失败'}</span>
@@ -1742,33 +2231,49 @@ function printHistorySheet(state) {
           </div>
           ${item.error ? `<div class="history-error">${escapeHtml(item.error)}</div>` : ''}
           <div class="history-actions">
-            <button class="button-secondary compact" data-action="history-open" data-id="${escapeHtml(item.id)}" ${canReopen ? '' : 'disabled'}>打开</button>
-            <button class="button compact" data-action="history-reprint" data-id="${escapeHtml(item.id)}" ${canReopen ? '' : 'disabled'}>再打印</button>
+            <button type="button" class="button-secondary compact" data-action="history-open" data-id="${escapeHtml(item.id)}" ${canReopen ? '' : 'disabled'}>打开</button>
+            <button type="button" class="button compact" data-action="history-reprint" data-id="${escapeHtml(item.id)}" ${canReopen ? '' : 'disabled'}>再打印</button>
           </div>
         </div>`;
-        }).join('') : '<div class="empty-state soft">还没有打印记录<br>完成一次打印后会出现在这里</div>'}
+        }).join('') : `<div class="empty-state soft"><span class="empty-state-icon">${icon('history')}</span><div>还没有打印记录，完成一次打印后会出现在这里</div></div>`}
       </div>
     </section>`;
 }
 
 function renderMain(state) {
   if (state.route === 'templates') return templatesView(state);
+  if (state.route === 'projects') return projectsView(state);
   if (state.route === 'data') return dataView(state);
   if (state.route === 'profile') return profileView(state);
   if (state.route === 'editor' && state.document) return editorView(state);
-  return homeView(state);
+  const homeMarkup = homeView(state);
+  if (state.route !== 'home') return homeMarkup;
+  const settings = state.settings || {};
+  if (settings.onboardingDone === true) return homeMarkup;
+  const step = state.onboardingStep || 1;
+  return `${homeMarkup}
+    <div class="onboarding-overlay" role="dialog" aria-modal="true" aria-label="新手引导">
+      <div class="onboarding-card">
+        <div class="onboarding-dots"><span class="onboarding-dot active"></span><span class="onboarding-dot"></span><span class="onboarding-dot"></span></div>
+        <div class="onboarding-step">${onboardingStepMarkup(state)}</div>
+        <div class="onboarding-actions">
+          <button type="button" class="button-secondary compact" data-action="onboarding-skip">跳过</button>
+          <button type="button" class="button compact" data-action="onboarding-next">${step < 3 ? '下一步' : '开始使用'}</button>
+        </div>
+      </div>
+    </div>`;
 }
 
 function stockSheet(state) {
-  const width = Number(state.stockWidthMm) || state.settings.defaultWidthMm || 50;
-  const height = Number(state.stockHeightMm) || state.settings.defaultHeightMm || 30;
+  const width = Number(state.stockWidthMm) || state.settings.defaultWidthMm || 40;
+  const height = Number(state.stockHeightMm) || state.settings.defaultHeightMm || 12;
   const inEditor = state.route === 'editor' && state.document;
   return `<div class="sheet-backdrop" data-action="close-modal"></div>
     <section class="bottom-sheet workbench-sheet" role="dialog" aria-modal="true" aria-labelledby="stock-title">
       <div class="sheet-handle"></div>
       <div class="sheet-header">
-        <div><h2 id="stock-title">标签纸</h2><div class="topbar-subtitle">选择常用尺寸或自定义毫米宽高</div></div>
-        <button class="icon-button" data-action="close-modal" title="关闭">${icon('close')}</button>
+        <div><h2 id="stock-title">${icon('template', 'icon-sm')}标签纸</h2><div class="topbar-subtitle">选择常用尺寸或自定义毫米宽高</div></div>
+        <button type="button" class="icon-button" data-action="close-modal" title="关闭" aria-label="关闭">${icon('close')}</button>
       </div>
       <div class="stock-preset-grid">
         ${STOCK_PRESETS.map((preset) => {
@@ -1782,11 +2287,15 @@ function stockSheet(state) {
       <div class="print-options">
         <div class="field"><label for="stock-width">宽度 (mm)</label><input id="stock-width" type="number" min="5" max="200" step="0.1" value="${width}" data-action="stock-field" data-field="stockWidthMm"></div>
         <div class="field"><label for="stock-height">高度 (mm)</label><input id="stock-height" type="number" min="5" max="200" step="0.1" value="${height}" data-action="stock-field" data-field="stockHeightMm"></div>
+        <div class="field wide"><label for="stock-label-type">纸张类型</label><select id="stock-label-type" data-action="stock-label-type">
+          <option value="1" ${Number(state.stockLabelType == null ? state.settings.labelType : state.stockLabelType) === 1 ? 'selected' : ''}>间隙纸</option><option value="2" ${Number(state.stockLabelType == null ? state.settings.labelType : state.stockLabelType) === 2 ? 'selected' : ''}>黑标纸</option><option value="3" ${Number(state.stockLabelType == null ? state.settings.labelType : state.stockLabelType) === 3 ? 'selected' : ''}>连续纸</option><option value="4" ${Number(state.stockLabelType == null ? state.settings.labelType : state.stockLabelType) === 4 ? 'selected' : ''}>定孔纸</option>
+        </select></div>
         ${inEditor ? `<div class="field wide"><label class="toggle-row"><span>同时应用到当前标签</span><input type="checkbox" data-action="stock-apply-current" ${state.stockApplyCurrent !== false ? 'checked' : ''}></label></div>` : ''}
+        ${inEditor ? `<button type="button" class="native-wide-command field wide" data-action="rotate-document">${icon('rotate', 'icon-sm')}<span>旋转标签方向（宽高互换）${state.stockRotationTurns ? ` · ${state.stockRotationTurns * 90}°` : ''}</span>${icon('chevronRight', 'icon-sm')}</button>` : ''}
       </div>
       <div class="template-preview-actions sticky-sheet-actions">
-        <button class="button-secondary" data-action="close-modal">取消</button>
-        <button class="button" data-action="apply-stock">确认标签纸</button>
+        <button type="button" class="button-secondary" data-action="close-modal">取消</button>
+        <button type="button" class="button" data-action="apply-stock">确认标签纸</button>
       </div>
     </section>`;
 }
@@ -1796,42 +2305,47 @@ function batchSheet(state) {
   const selected = Array.isArray(state.batchSelectedRows)
     ? state.batchSelectedRows
     : rows.map((_, index) => index);
-  const templateId = state.settings.batchTemplateId || 'product-simple';
-  const catalog = [...templates, ...state.userTemplates.map(userTemplateCard)];
+  const requestedTemplateId = state.settings.batchTemplateId || 'product-simple';
+  const catalog = BATCH_TEMPLATES.filter(isBatchCompatibleTemplate);
+  const selectedTemplate = resolveBatchCompatibleTemplate(catalog, requestedTemplateId, 'product-simple');
+  const templateId = selectedTemplate ? selectedTemplate.id : '';
   return `<div class="sheet-backdrop" data-action="close-modal"></div>
     <section class="bottom-sheet workbench-sheet batch-sheet" role="dialog" aria-modal="true" aria-labelledby="batch-title">
       <div class="sheet-handle"></div>
       <div class="sheet-header">
-        <div><h2 id="batch-title">批量生成标签</h2><div class="topbar-subtitle">${rows.length} 条数据 · 已选 ${selected.length} 行</div></div>
-        <button class="icon-button" data-action="close-modal" title="关闭">${icon('close')}</button>
+        <div><h2 id="batch-title">${icon('sheet', 'icon-sm')}批量生成标签</h2><div class="topbar-subtitle">${rows.length} 条数据 · 已选 ${selected.length} 行</div></div>
+        <button type="button" class="icon-button" data-action="close-modal" title="关闭" aria-label="关闭">${icon('close')}</button>
       </div>
       <div class="print-options">
         <div class="field wide"><label for="batch-template">套用模板</label>
           <select id="batch-template" data-action="batch-template">
-            ${catalog.map((item) => `<option value="${escapeHtml(item.id)}" ${item.id === templateId ? 'selected' : ''}>${escapeHtml(item.name)} (${item.size ? `${item.size[0]}×${item.size[1]}` : '自定义'})</option>`).join('')}
+            ${catalog.length
+              ? catalog.map((item) => `<option value="${escapeHtml(item.id)}" ${item.id === templateId ? 'selected' : ''}>${escapeHtml(item.name)} (${item.size ? `${item.size[0]}×${item.size[1]}` : '自定义'})</option>`).join('')
+              : '<option value="">暂无支持批量的数据模板</option>'}
           </select>
         </div>
         <div class="field wide"><label for="batch-mode">生成方式</label>
           <select id="batch-mode" data-action="batch-mode">
+            <option value="print" ${state.batchMode === 'print' ? 'selected' : ''}>连续打印全部选中行</option>
             <option value="open-first" ${state.batchMode === 'open-first' ? 'selected' : ''}>打开第一行到编辑器</option>
-            <option value="projects" ${state.batchMode === 'projects' ? 'selected' : ''}>全部生成到「我的模板」/最近项目</option>
+            <option value="projects" ${state.batchMode === 'projects' ? 'selected' : ''}>全部生成到「我的标签」</option>
           </select>
         </div>
       </div>
       <div class="batch-row-list">
         <div class="batch-row-toolbar">
-          <button class="button-secondary compact" data-action="batch-select-all">全选</button>
-          <button class="button-secondary compact" data-action="batch-select-none">清空</button>
+          <button type="button" class="button-secondary compact" data-action="batch-select-all">全选</button>
+          <button type="button" class="button-secondary compact" data-action="batch-select-none">清空</button>
         </div>
         ${rows.length ? rows.map((row, index) => `<label class="batch-row-item">
           <input type="checkbox" data-action="batch-toggle-row" data-row="${index}" ${selected.includes(index) ? 'checked' : ''}>
           <span class="batch-row-index">${index + 1}</span>
           <span class="batch-row-main"><strong>${escapeHtml(row.name || '未命名')}</strong><small>${escapeHtml(row.code || '')} · ${escapeHtml(row.price || '')} · ${escapeHtml(row.date || '')}</small></span>
-        </label>`).join('') : '<div class="empty-state soft">还没有批量数据，请先添加行或导入 CSV</div>'}
+        </label>`).join('') : `<div class="empty-state soft"><span class="empty-state-icon">${icon('sheet')}</span><div>还没有批量数据</div><button type="button" class="button-secondary compact" data-action="close-modal">去添加数据</button></div>`}
       </div>
       <div class="template-preview-actions sticky-sheet-actions">
-        <button class="button-secondary" data-action="close-modal">取消</button>
-        <button class="button" data-action="run-batch" ${!rows.length || !selected.length ? 'disabled' : ''}>生成标签</button>
+        <button type="button" class="button-secondary" data-action="close-modal">取消</button>
+        <button type="button" class="button" data-action="run-batch" ${!rows.length || !selected.length || !catalog.length ? 'disabled' : ''}>${state.batchMode === 'print' ? `打印 ${selected.length} 张` : '生成标签'}</button>
       </div>
     </section>`;
 }
@@ -1842,22 +2356,194 @@ function manageUserTemplateSheet(state) {
     return infoSheet('模板', '找不到该模板', '关闭');
   }
   const name = template.name || (template.document && template.document.name) || '我的模板';
+  const folder = template.folder || '未分类';
   return `<div class="sheet-backdrop" data-action="close-modal"></div>
-    <section class="bottom-sheet workbench-sheet" role="dialog" aria-modal="true">
+    <section class="bottom-sheet workbench-sheet" role="dialog" aria-modal="true" aria-label="管理模板">
       <div class="sheet-handle"></div>
       <div class="sheet-header">
-        <div><h2>管理模板</h2><div class="topbar-subtitle">${escapeHtml(name)}</div></div>
-        <button class="icon-button" data-action="close-modal" title="关闭">${icon('close')}</button>
+        <div><h2>${icon('settings', 'icon-sm')}管理模板</h2><div class="topbar-subtitle">${escapeHtml(name)}</div></div>
+        <button type="button" class="icon-button" data-action="close-modal" title="关闭" aria-label="关闭">${icon('close')}</button>
       </div>
       <div class="print-options">
         <div class="field wide"><label for="rename-template">名称</label>
           <input id="rename-template" data-action="rename-template-field" value="${escapeHtml(name)}">
         </div>
+        <div class="field wide"><label for="rename-template-folder">文件夹</label>
+          <input id="rename-template-folder" data-action="rename-template-folder-field" value="${escapeHtml(folder)}" placeholder="例如：门店常用" maxlength="24">
+        </div>
       </div>
       <div class="template-preview-actions sticky-sheet-actions" style="grid-template-columns:1fr 1fr 1.2fr">
-        <button class="button-danger" data-action="delete-user-template" data-id="${escapeHtml(template.id)}">删除</button>
-        <button class="button-secondary" data-action="preview-template" data-id="${escapeHtml(template.id)}">预览</button>
-        <button class="button" data-action="rename-user-template" data-id="${escapeHtml(template.id)}">保存名称</button>
+        <button type="button" class="button-danger" data-action="delete-user-template" data-id="${escapeHtml(template.id)}">删除</button>
+        <button type="button" class="button-secondary" data-action="preview-template" data-id="${escapeHtml(template.id)}">预览</button>
+        <button type="button" class="button" data-action="rename-user-template" data-id="${escapeHtml(template.id)}">保存修改</button>
+      </div>
+    </section>`;
+}
+
+function saveTemplateSheet(state) {
+  const folders = Array.from(new Set((state.userTemplates || []).map((item) => item.folder || '未分类')));
+  const name = state.saveTemplateName || (state.document && state.document.name) || '未命名模板';
+  const folder = state.saveTemplateFolder || '未分类';
+  return `<div class="sheet-backdrop" data-action="close-modal"></div>
+    <section class="bottom-sheet workbench-sheet save-template-sheet" role="dialog" aria-modal="true" aria-labelledby="save-template-title">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <div><h2 id="save-template-title">${icon('template', 'icon-sm')}保存为模板</h2><div class="topbar-subtitle">命名并归档，之后可从「模板库 → 我的」重复使用</div></div>
+        <button type="button" class="icon-button" data-action="close-modal" aria-label="关闭">${icon('close')}</button>
+      </div>
+      <div class="print-options">
+        <div class="field wide"><label for="save-template-name">模板名称</label>
+          <input id="save-template-name" data-action="save-template-name" value="${escapeHtml(name)}" maxlength="40" autocomplete="off" placeholder="请输入模板名称">
+        </div>
+        <div class="field wide"><label for="save-template-folder">存储到文件夹</label>
+          <input id="save-template-folder" data-action="save-template-folder" value="${escapeHtml(folder)}" maxlength="24" list="save-template-folders" autocomplete="off" placeholder="例如：门店常用">
+          <datalist id="save-template-folders">${folders.map((item) => `<option value="${escapeHtml(item)}"></option>`).join('')}</datalist>
+          <small>可直接输入新文件夹名称</small>
+        </div>
+      </div>
+      <div class="template-preview-actions sticky-sheet-actions">
+        <button type="button" class="button-secondary" data-action="close-modal">取消</button>
+        <button type="button" class="button" data-action="confirm-save-template">保存模板</button>
+      </div>
+    </section>`;
+}
+
+function exitEditorSheet(state) {
+  const name = state.document && state.document.name || '未命名标签';
+  const discardLabel = state.editorBaselineProject ? '恢复打开前版本' : '删除本次草稿';
+  return `<div class="sheet-backdrop" data-action="cancel-close-editor"></div>
+    <section class="bottom-sheet workbench-sheet exit-editor-sheet" role="dialog" aria-modal="true" aria-labelledby="exit-editor-title">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <div><h2 id="exit-editor-title">保存这次修改？</h2><div class="topbar-subtitle">${escapeHtml(name)}</div></div>
+        <button type="button" class="icon-button" data-action="cancel-close-editor" aria-label="继续编辑">${icon('close')}</button>
+      </div>
+      <p class="sheet-description">修改已作为本机草稿自动保存。你可以保留草稿退出、另存为模板，或撤销本次打开后的全部修改。</p>
+      <div class="exit-editor-actions">
+        <button type="button" class="button" data-action="save-and-close-editor">保留修改并退出</button>
+        <button type="button" class="button-secondary" data-action="save-template-and-close">另存为模板</button>
+        <button type="button" class="button-ghost danger-text" data-action="discard-and-close-editor">${discardLabel}</button>
+        <button type="button" class="button-ghost" data-action="cancel-close-editor">取消，继续编辑</button>
+      </div>
+    </section>`;
+}
+
+function renameDocumentSheet(state) {
+  const value = state.documentNameDraft || (state.document && state.document.name) || '';
+  return `<div class="sheet-backdrop" data-action="close-modal"></div>
+    <section class="bottom-sheet workbench-sheet rename-document-sheet" role="dialog" aria-modal="true" aria-labelledby="rename-document-title">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <div><h2 id="rename-document-title">${icon('edit', 'icon-sm')}标签名称</h2><div class="topbar-subtitle">名称会显示在最近编辑、项目和打印历史中</div></div>
+        <button type="button" class="icon-button" data-action="close-modal" aria-label="关闭">${icon('close')}</button>
+      </div>
+      <div class="print-options"><div class="field wide"><label for="document-name-input">名称</label>
+        <input id="document-name-input" data-action="document-name-draft" value="${escapeHtml(value)}" maxlength="40" autocomplete="off" placeholder="例如：门店商品价签">
+      </div></div>
+      <div class="template-preview-actions sticky-sheet-actions">
+        <button type="button" class="button-secondary" data-action="close-modal">取消</button>
+        <button type="button" class="button" data-action="confirm-document-name">保存名称</button>
+      </div>
+    </section>`;
+}
+
+function backupRestoreSheet(state) {
+  return `<div class="sheet-backdrop" data-action="close-modal"></div>
+    <section class="bottom-sheet workbench-sheet backup-restore-sheet" role="dialog" aria-modal="true" aria-labelledby="backup-restore-title">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <div><h2 id="backup-restore-title">${icon('database', 'icon-sm')}备份与恢复</h2><div class="topbar-subtitle">${state.projects.length} 个标签 · ${state.userTemplates.length} 个模板 · ${state.dataRows.length} 行数据</div></div>
+        <button type="button" class="icon-button" data-action="close-modal" aria-label="关闭">${icon('close')}</button>
+      </div>
+      <div class="backup-cards">
+        <section class="backup-card"><span class="backup-card-icon">${icon('download')}</span><div><strong>导出完整备份</strong><p>保存标签、我的模板、批量数据和常用设置。</p></div><button type="button" class="button" data-action="export-backup">导出 JSON</button></section>
+        <section class="backup-card"><span class="backup-card-icon">${icon('upload')}</span><div><strong>从备份恢复</strong><p>先校验整份文件，成功后一次写入；失败不会保留半份数据。</p></div>
+          <label class="field wide"><span>恢复方式</span><select data-action="backup-strategy">
+            <option value="merge" ${state.backupStrategy === 'merge' ? 'selected' : ''}>合并（保留本机数据）</option>
+            <option value="replace" ${state.backupStrategy === 'replace' ? 'selected' : ''}>替换（覆盖本机数据）</option>
+          </select></label>
+          <button type="button" class="button-secondary" data-action="import-backup">选择备份文件</button>
+        </section>
+      </div>
+      ${state.backupStatus ? `<div class="backup-status" role="status">${escapeHtml(state.backupStatus)}</div>` : ''}
+    </section>`;
+}
+
+function scannerSheet(state) {
+  const status = state.scanStatus || 'idle';
+  const error = state.scanError || '';
+  return `<div class="sheet-backdrop" data-action="close-modal"></div>
+    <section class="bottom-sheet workbench-sheet scanner-sheet" role="dialog" aria-modal="true" aria-labelledby="scanner-title">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <div><h2 id="scanner-title">${icon('scan', 'icon-sm')}扫描条码 / 二维码</h2><div class="topbar-subtitle">识别结果会直接回填到当前元素</div></div>
+        <button type="button" class="icon-button" data-action="close-modal" aria-label="关闭">${icon('close')}</button>
+      </div>
+      <div class="scanner-stage${error ? ' has-error' : ''}">
+        <video id="barcode-scanner-video" class="scanner-video" muted playsinline aria-label="相机取景"></video>
+        <div class="scanner-frame" aria-hidden="true"></div>
+        ${status === 'starting' ? '<div class="scanner-status">正在打开相机…</div>' : ''}
+        ${error ? `<div class="scanner-fallback"><strong>相机暂不可用</strong><p>${escapeHtml(error)}</p><button type="button" class="button-secondary compact" data-action="restart-scan-camera">重试实时相机</button></div>` : ''}
+      </div>
+      <div class="scanner-actions">
+        <button type="button" class="button-secondary" data-action="scan-take-photo">${icon('camera', 'icon-sm')}拍照识别</button>
+        <button type="button" class="button-secondary" data-action="scan-pick-image">${icon('image', 'icon-sm')}相册识别</button>
+      </div>
+      <div class="scanner-manual">
+        <label for="scanner-manual-value">也可以手动输入</label>
+        <div class="scanner-manual-row">
+          <input id="scanner-manual-value" data-action="scan-manual-value" value="${escapeHtml(state.scanManualValue || '')}" placeholder="输入条码或二维码内容" autocomplete="off">
+          <button type="button" class="button" data-action="confirm-scan-manual" ${state.scanManualValue ? '' : 'disabled'}>使用</button>
+        </div>
+      </div>
+    </section>`;
+}
+
+function advancedQrField(state, field, label, options) {
+  const opts = options || {};
+  const value = state.advancedQrDraft && state.advancedQrDraft[field] != null ? state.advancedQrDraft[field] : '';
+  const error = state.advancedQrErrors && state.advancedQrErrors[field];
+  const tag = opts.multiline ? 'textarea' : 'input';
+  const attrs = opts.multiline
+    ? `rows="3"`
+    : `type="${opts.type || 'text'}" inputmode="${opts.inputmode || 'text'}"`;
+  const control = tag === 'textarea'
+    ? `<textarea data-action="advanced-qr-field" data-field="${field}" ${attrs} placeholder="${escapeHtml(opts.placeholder || '')}">${escapeHtml(value)}</textarea>`
+    : `<input data-action="advanced-qr-field" data-field="${field}" value="${escapeHtml(value)}" ${attrs} placeholder="${escapeHtml(opts.placeholder || '')}">`;
+  return `<div class="field wide${error ? ' invalid' : ''}"><label>${escapeHtml(label)}</label>${control}${error ? `<small role="alert">${escapeHtml(error)}</small>` : ''}</div>`;
+}
+
+function advancedQrFields(state) {
+  const type = state.advancedQrType || 'wifi';
+  if (type === 'text') return advancedQrField(state, 'text', '文本内容', { multiline: true, placeholder: '输入扫码后显示的文本' });
+  if (type === 'url') return advancedQrField(state, 'url', '网址', { type: 'url', inputmode: 'url', placeholder: 'https://example.com' });
+  if (type === 'wifi') return `${advancedQrField(state, 'ssid', 'Wi-Fi 名称', { placeholder: 'SSID' })}
+    ${advancedQrField(state, 'password', '密码', { placeholder: '开放网络可留空' })}
+    <div class="field wide"><label>加密方式</label><select data-action="advanced-qr-field" data-field="security">
+      ${[['WPA', 'WPA / WPA2'], ['SAE', 'WPA3'], ['WEP', 'WEP'], ['nopass', '开放网络']].map(([value, label]) => `<option value="${value}" ${(state.advancedQrDraft.security || 'WPA') === value ? 'selected' : ''}>${label}</option>`).join('')}
+    </select></div>
+    <label class="toggle-row"><span>隐藏网络</span><input type="checkbox" data-action="advanced-qr-hidden" ${state.advancedQrDraft.hidden ? 'checked' : ''}></label>`;
+  if (type === 'contact') return `${advancedQrField(state, 'fullName', '姓名', { placeholder: '张三' })}${advancedQrField(state, 'organization', '公司', { placeholder: '选填' })}${advancedQrField(state, 'title', '职位', { placeholder: '选填' })}${advancedQrField(state, 'phones', '电话', { inputmode: 'tel', placeholder: '多个号码用逗号分隔' })}${advancedQrField(state, 'emails', '邮箱', { inputmode: 'email', placeholder: '多个邮箱用逗号分隔' })}${advancedQrField(state, 'url', '网址', { inputmode: 'url', placeholder: '选填' })}`;
+  if (type === 'phone') return advancedQrField(state, 'number', '电话号码', { inputmode: 'tel', placeholder: '+86 13800138000' });
+  if (type === 'sms') return `${advancedQrField(state, 'number', '收件人号码', { inputmode: 'tel', placeholder: '13800138000' })}${advancedQrField(state, 'message', '短信内容', { multiline: true, placeholder: '选填' })}`;
+  return `${advancedQrField(state, 'to', '收件人', { inputmode: 'email', placeholder: 'name@example.com' })}${advancedQrField(state, 'subject', '主题', { placeholder: '选填' })}${advancedQrField(state, 'body', '正文', { multiline: true, placeholder: '选填' })}`;
+}
+
+function advancedQrSheet(state) {
+  const types = [['text', '文本'], ['url', '网址'], ['wifi', 'Wi-Fi'], ['contact', '名片'], ['phone', '电话'], ['sms', '短信'], ['email', '邮件']];
+  const editing = Boolean(state.advancedQrEditId);
+  return `<div class="sheet-backdrop" data-action="close-modal"></div>
+    <section class="bottom-sheet workbench-sheet advanced-qr-sheet" role="dialog" aria-modal="true" aria-labelledby="advanced-qr-title">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <div><h2 id="advanced-qr-title">${icon('qr', 'icon-sm')}${editing ? '编辑' : '高级'}二维码</h2><div class="topbar-subtitle">${editing ? '按结构化字段修改扫码内容' : '生成可直接扫码执行的标准内容'}</div></div>
+        <button type="button" class="icon-button" data-action="close-modal" aria-label="关闭">${icon('close')}</button>
+      </div>
+      <div class="advanced-qr-types" role="tablist">${types.map(([value, label]) => `<button type="button" class="industry-chip${state.advancedQrType === value ? ' active' : ''}" data-action="advanced-qr-type" data-type="${value}" role="tab" aria-selected="${state.advancedQrType === value}">${label}</button>`).join('')}</div>
+      <div class="advanced-qr-form">${advancedQrFields(state)}</div>
+      <div class="template-preview-actions sticky-sheet-actions">
+        <button type="button" class="button-secondary" data-action="close-modal">取消</button>
+        <button type="button" class="button" data-action="confirm-advanced-qr">${editing ? '更新二维码' : '插入二维码'}</button>
       </div>
     </section>`;
 }
@@ -1870,28 +2556,20 @@ function renderModal(state) {
   if (state.modal === 'stock') return stockSheet(state);
   if (state.modal === 'batch') return batchSheet(state);
   if (state.modal === 'manage-template') return manageUserTemplateSheet(state);
-  if (state.modal === 'about') return infoSheet('关于应用', `精臣标签 v${__APP_VERSION__}<br>本地模板编辑与蓝牙打印<br><br>行业模板与协议核心均在当前设备运行。`, '完成');
-  if (state.modal === 'login') return infoSheet('账号登录', '服务地址：<code>API_BASE_URL</code><br>客户端鉴权适配器：<code>AUTH_PROVIDER</code>', '完成');
-  if (state.modal === 'cloud') return infoSheet('云端同步', '服务地址：<code>API_BASE_URL</code><br>对象存储：<code>STORAGE_PROVIDER</code>', '完成');
-  if (state.modal === 'help') return infoSheet('帮助与反馈', '从首页「行业模板」选版式 → 编辑内容 → 连接打印机 → 打印。<br><br>反馈接口：<code>FEEDBACK_ENDPOINT</code>', '完成');
+  if (state.modal === 'save-template') return saveTemplateSheet(state);
+  if (state.modal === 'exit-editor') return exitEditorSheet(state);
+  if (state.modal === 'rename-document') return renameDocumentSheet(state);
+  if (state.modal === 'backup-restore') return backupRestoreSheet(state);
+  if (state.modal === 'scan-code') return scannerSheet(state);
+  if (state.modal === 'advanced-qr') return advancedQrSheet(state);
+  if (state.modal === 'default-print-settings') return defaultPrintSettingsSheet(state);
+  if (state.modal === 'about') return infoSheet('关于应用', `商跃标签 v${__APP_VERSION__}<br>本地模板编辑与蓝牙打印<br><br>公开货架仅展示通过权属门禁的商跃原创或已获书面授权内容；待补授权内容不公开展示。行业场景预设由商跃程序化生成，不是第三方目录。<br><br>字体库含 20 款 OFL 开源中文字库，按需联网加载。<a href="THIRD_PARTY_NOTICES.txt" target="_blank" rel="noopener">查看第三方许可</a>。`, '完成');
+  if (state.modal === 'login') return infoSheet('本地模式', '当前版本无需登录，标签、模板和打印记录都保存在本机。可通过「备份与恢复」导出副本。', '知道了');
+  if (state.modal === 'cloud') return infoSheet('数据存储', '当前版本仅在本机保存数据。建议定期使用「备份与恢复」导出项目，换机前先保留备份文件。', '知道了');
+  if (state.modal === 'help') return infoSheet('使用帮助', '1. 从首页选择模板或新建空白标签。<br>2. 点选元素后修改内容与样式。<br>3. 连接蓝牙打印机，确认纸张和浓度后打印。<br><br>遇到问题时，可先重新连接打印机并重试。', '知道了');
+  if (state.modal === 'unit-info') return infoSheet('尺寸单位', '标签纸与打印头规格统一使用毫米（mm），避免英寸换算造成裁切偏差。1 英寸 = 25.4 毫米。', '知道了');
   if (state.modal === 'material') return materialSheet(state);
   if (state.modal === 'border') return borderSheet(state);
-  if (state.modal === 'advanced-qr') {
-    return `<div class="sheet-backdrop" data-action="close-modal"></div>
-      <section class="bottom-sheet workbench-sheet" role="dialog" aria-modal="true">
-        <div class="sheet-handle"></div>
-        <div class="sheet-header">
-          <button class="icon-button" data-action="close-modal">关闭</button>
-          <h2 style="flex:1;text-align:center;margin:0;font-size:16px">插入高级二维码</h2>
-          <span style="width:40px"></span>
-        </div>
-        <div class="niim-empty-feature">
-          <div class="niim-empty-ico">${editorAsset('element/icon/features_icon_advance_qrcode.svg')}</div>
-          <strong>暂无高级二维码</strong>
-          <p>请先到【应用】-【高级二维码场景】中新建后进行使用</p>
-        </div>
-      </section>`;
-  }
   return '';
 }
 
@@ -1899,9 +2577,11 @@ module.exports = {
   contextActions,
   escapeHtml,
   isPlaceholderElement,
+  templateAttentionMessage,
   propertyPanel,
   renderMain,
   renderModal,
+  renderRecentPrint,
   selectedElement,
   selectedElements,
   templateCard,

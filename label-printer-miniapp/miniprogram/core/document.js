@@ -1,5 +1,24 @@
 let nextId = 1;
 
+// User-facing Simplified Chinese names for element types. Raw type ids such as
+// "qrcode" must never appear in inspector titles, layer lists, or summaries.
+const ELEMENT_TYPE_LABELS = Object.freeze({
+  text: '文本',
+  image: '图片',
+  material: '素材',
+  date: '时间',
+  barcode: '条码',
+  qrcode: '二维码',
+  serial: '序列号',
+  rect: '形状',
+  table: '表格',
+  line: '线条'
+});
+
+function elementTypeLabel(type) {
+  return ELEMENT_TYPE_LABELS[type] || '元素';
+}
+
 function makeId(prefix) {
   nextId += 1;
   return `${prefix}-${Date.now().toString(36)}-${nextId}`;
@@ -22,7 +41,7 @@ function createElement(type, document) {
       y: 1.5,
       width: Math.min(Math.max(14, width * 0.42), Math.max(10, width - 8)),
       height: Math.max(4, Math.min(8, height * 0.28)),
-      text: '双击编辑',
+      text: '点击后编辑文字',
       fontSize: 4,
       bold: false,
       italic: false,
@@ -348,28 +367,43 @@ function clampElement(element, document) {
   return element;
 }
 
-function hitTest(document, xMm, yMm) {
-  for (let index = document.elements.length - 1; index >= 0; index -= 1) {
-    const element = document.elements[index];
-    const centerX = element.x + element.width / 2;
-    const centerY = element.y + element.height / 2;
+function hitTestAll(document, xMm, yMm, options) {
+  const settings = options || {};
+  const minimumWidth = Math.max(0, Number(settings.minWidthMm) || Number(settings.minSizeMm) || 0);
+  const minimumHeight = Math.max(0, Number(settings.minHeightMm) || Number(settings.minSizeMm) || 0);
+  const matches = [];
+  const elements = Array.isArray(document && document.elements) ? document.elements : [];
+  for (let index = elements.length - 1; index >= 0; index -= 1) {
+    const element = elements[index];
+    const width = Math.max(0, Number(element.width) || 0);
+    const height = Math.max(0, Number(element.height) || 0);
+    const centerX = (Number(element.x) || 0) + width / 2;
+    const centerY = (Number(element.y) || 0) + height / 2;
     const angle = -(element.rotation || 0) * Math.PI / 180;
     const deltaX = xMm - centerX;
     const deltaY = yMm - centerY;
     const localX = deltaX * Math.cos(angle) - deltaY * Math.sin(angle);
     const localY = deltaX * Math.sin(angle) + deltaY * Math.cos(angle);
-    if (Math.abs(localX) <= element.width / 2 && Math.abs(localY) <= element.height / 2) {
-      return element;
+    if (Math.abs(localX) <= Math.max(width, minimumWidth) / 2
+      && Math.abs(localY) <= Math.max(height, minimumHeight) / 2) {
+      matches.push(element);
     }
   }
-  return null;
+  return matches;
+}
+
+function hitTest(document, xMm, yMm, options) {
+  return hitTestAll(document, xMm, yMm, options)[0] || null;
 }
 
 module.exports = {
+  ELEMENT_TYPE_LABELS,
   clampElement,
   cloneDocument,
   createDocument,
   createElement,
+  elementTypeLabel,
   hitTest,
+  hitTestAll,
   placeNewElement
 };

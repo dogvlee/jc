@@ -7,6 +7,10 @@ const MATERIAL_CATALOG = mats.MATERIAL_CATALOG;
 const drawMaterialSymbol = mats.drawMaterialSymbol;
 const materialById = mats.materialById;
 const materialCategories = mats.materialCategories;
+const {
+  SHANGYUE_MATERIAL_SYMBOL_IDS,
+  drawShangyueMaterialSymbol
+} = require('../miniprogram/core/material-symbols-v2');
 
 function mockContext() {
   const noop = () => {};
@@ -22,6 +26,32 @@ function mockContext() {
     setTransform: noop, setLineDash: noop, scale: noop, clip: noop,
     fillText: noop, drawImage: noop, putImageData: noop, strokeRect: noop,
     measureText: () => ({ width: 10, actualBoundingBoxAscent: 8, actualBoundingBoxDescent: 2 })
+  };
+}
+
+function recordingContext() {
+  const trace = [];
+  const record = (command) => (...values) => {
+    trace.push(`${command}:${values.map((value) => Number.isFinite(value) ? Number(value.toFixed(3)) : value).join(',')}`);
+  };
+  return {
+    trace,
+    lineWidth: 1,
+    lineCap: 'butt',
+    lineJoin: 'miter',
+    strokeStyle: '#000',
+    fillStyle: '#000',
+    save: record('save'),
+    restore: record('restore'),
+    beginPath: record('begin'),
+    moveTo: record('move'),
+    lineTo: record('line'),
+    bezierCurveTo: record('curve'),
+    quadraticCurveTo: record('quad'),
+    arc: record('arc'),
+    closePath: record('close'),
+    stroke: record('stroke'),
+    fill: record('fill')
   };
 }
 
@@ -65,6 +95,10 @@ test('chips and filter helper', () => {
   assert.ok(q.some((item) => item.id === 'panda'));
   const cute = materialsForChip('\u53ef\u7231');
   assert.ok(cute.length > 0);
+  const shangyue = materialsForChip('商跃');
+  assert.equal(shangyue.length, SHANGYUE_MATERIAL_SYMBOL_IDS.length);
+  assert.ok(shangyue.every((item) => SHANGYUE_MATERIAL_SYMBOL_IDS.includes(item.id)));
+  assert.ok(shangyue.every((item) => item.source === 'shangyue-vector-v2' && item.vector === true && item.raster === false));
 });
 
 test('material catalog has no VIP gate or searchable VIP tag', () => {
@@ -77,4 +111,16 @@ test('new decorative symbols draw', () => {
   for (const id of ['panda', 'cake', 'bracelet', 'lotus', 'gift', 'sparkle', 'diamond_ring']) {
     assert.doesNotThrow(() => drawMaterialSymbol(ctx, id, 0, 0, 40, 40, 2));
   }
+});
+
+test('Shangyue v2 material pack contains distinct resolution-independent vector drawings', () => {
+  assert.equal(SHANGYUE_MATERIAL_SYMBOL_IDS.length, 76);
+  const signatures = new Set();
+  for (const id of SHANGYUE_MATERIAL_SYMBOL_IDS) {
+    const context = recordingContext();
+    assert.equal(drawShangyueMaterialSymbol(context, id, 0, 0, 48, 48, 2), true);
+    signatures.add(context.trace.join('|'));
+  }
+  assert.equal(signatures.size, SHANGYUE_MATERIAL_SYMBOL_IDS.length);
+  assert.equal(drawShangyueMaterialSymbol(recordingContext(), 'not-a-symbol', 0, 0, 48, 48, 2), false);
 });

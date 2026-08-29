@@ -19,17 +19,31 @@ function contentFingerprint(documentValue) {
       Number(item.y) || 0,
       Number(item.width) || 0,
       Number(item.height) || 0,
+      Number(item.rotation) || 0,
       item.text || '',
       item.value || '',
       item.prefix || '',
       item.symbol || '',
-      item.format || ''
+      item.format || '',
+      item.path || '',
+      item.materialId || '',
+      item.fontFamily || '',
+      Number(item.fontSize) || 0,
+      item.bold === true,
+      item.align || '',
+      Number(item.lineWidth) || 0,
+      item.filled === true
     ])
   });
 }
 
-function thumbCacheKey(id, documentValue, dpi) {
-  return `${id}|${dpi || 203}|${contentFingerprint(documentValue)}`;
+function normalizedMaxSide(value) {
+  const side = Math.round(Number(value) || 400);
+  return Math.max(40, Math.min(1200, side));
+}
+
+function thumbCacheKey(id, documentValue, dpi, maxSide) {
+  return `${id}|${dpi || 203}|${normalizedMaxSide(maxSide)}|${contentFingerprint(documentValue)}`;
 }
 
 function getCachedThumb(key) {
@@ -70,12 +84,34 @@ function createCanvas(width, height) {
   return null;
 }
 
+function thumbRasterLayout(size, maxSide, pad) {
+  const safePad = Math.max(8, Number(pad) || 14);
+  const safeMaxSide = normalizedMaxSide(maxSide);
+  const innerMax = Math.max(40, safeMaxSide - safePad * 2);
+  const sourceWidth = Math.max(1, Number(size && size.width) || 1);
+  const sourceHeight = Math.max(1, Number(size && size.height) || 1);
+  // Template elements are vector/canvas primitives, so enlarging their screen
+  // thumbnail is preferable to letting the browser upscale a printer-DPI PNG.
+  const scale = innerMax / Math.max(sourceWidth, sourceHeight);
+  const paperWidth = Math.max(1, Math.round(sourceWidth * scale));
+  const paperHeight = Math.max(1, Math.round(sourceHeight * scale));
+  return {
+    pad: safePad,
+    scale,
+    paperWidth,
+    paperHeight,
+    width: paperWidth + safePad * 2,
+    height: paperHeight + safePad * 2
+  };
+}
+
 /**
  * Render a white-background label preview to a PNG data URL.
  * @returns {string} data URL or empty string on failure
  */
 function renderThumbDataUrl(documentValue, options) {
   const config = Object.assign({ dpi: 203, maxSide: 400, images: {}, pad: 14 }, options || {});
+  config.maxSide = normalizedMaxSide(config.maxSide);
   if (!documentValue) return '';
   const renderDocument = config.renderDocument;
   if (typeof renderDocument !== 'function') return '';
@@ -88,13 +124,13 @@ function renderThumbDataUrl(documentValue, options) {
   }
   if (!size.width || !size.height) return '';
 
-  const pad = Math.max(8, Number(config.pad) || 14);
-  const innerMax = Math.max(40, config.maxSide - pad * 2);
-  const scale = Math.min(1, innerMax / Math.max(size.width, size.height));
-  const paperW = Math.max(1, Math.round(size.width * scale));
-  const paperH = Math.max(1, Math.round(size.height * scale));
-  const outWidth = paperW + pad * 2;
-  const outHeight = paperH + pad * 2;
+  const layout = thumbRasterLayout(size, config.maxSide, config.pad);
+  const pad = layout.pad;
+  const scale = layout.scale;
+  const paperW = layout.paperWidth;
+  const paperH = layout.paperHeight;
+  const outWidth = layout.width;
+  const outHeight = layout.height;
   const canvas = createCanvas(outWidth, outHeight);
   if (!canvas || !canvas.getContext) return '';
 
@@ -131,10 +167,11 @@ function renderThumbDataUrl(documentValue, options) {
 
 function resolveThumb(id, documentValue, options) {
   const dpi = (options && options.dpi) || 203;
-  const key = thumbCacheKey(id, documentValue, dpi);
+  const maxSide = normalizedMaxSide(options && options.maxSide);
+  const key = thumbCacheKey(id, documentValue, dpi, maxSide);
   const cached = getCachedThumb(key);
   if (cached) return { key, dataUrl: cached, fromCache: true };
-  const dataUrl = renderThumbDataUrl(documentValue, Object.assign({}, options, { dpi }));
+  const dataUrl = renderThumbDataUrl(documentValue, Object.assign({}, options, { dpi, maxSide }));
   if (dataUrl) setCachedThumb(key, dataUrl);
   return { key, dataUrl, fromCache: false };
 }
@@ -143,8 +180,10 @@ module.exports = {
   contentFingerprint,
   getCachedThumb,
   invalidateThumbsByPrefix,
+  normalizedMaxSide,
   renderThumbDataUrl,
   resolveThumb,
   setCachedThumb,
+  thumbRasterLayout,
   thumbCacheKey
 };

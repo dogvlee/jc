@@ -104,6 +104,7 @@ function createElement(type, document) {
       width: size,
       height: size,
       path: '',
+      imageFit: 'contain',
       threshold: 180
     });
   }
@@ -122,7 +123,7 @@ function createElement(type, document) {
       offsetDays: 0,
       offsetHours: 0,
       showTime: true,
-      showSeconds: true,
+      showSeconds: false,
       expireMode: 'preset', // preset | custom
       expirePresetHours: 24,
       format: 'YYYY年MM月DD日 HH:mm',
@@ -348,21 +349,33 @@ function clampElement(element, document) {
   return element;
 }
 
-function hitTest(document, xMm, yMm) {
-  for (let index = document.elements.length - 1; index >= 0; index -= 1) {
-    const element = document.elements[index];
-    const centerX = element.x + element.width / 2;
-    const centerY = element.y + element.height / 2;
+function hitTestAll(document, xMm, yMm, options) {
+  const settings = options || {};
+  const minimumWidth = Math.max(0, Number(settings.minWidthMm) || Number(settings.minSizeMm) || 0);
+  const minimumHeight = Math.max(0, Number(settings.minHeightMm) || Number(settings.minSizeMm) || 0);
+  const matches = [];
+  const elements = Array.isArray(document && document.elements) ? document.elements : [];
+  for (let index = elements.length - 1; index >= 0; index -= 1) {
+    const element = elements[index];
+    const width = Math.max(0, Number(element.width) || 0);
+    const height = Math.max(0, Number(element.height) || 0);
+    const centerX = (Number(element.x) || 0) + width / 2;
+    const centerY = (Number(element.y) || 0) + height / 2;
     const angle = -(element.rotation || 0) * Math.PI / 180;
     const deltaX = xMm - centerX;
     const deltaY = yMm - centerY;
     const localX = deltaX * Math.cos(angle) - deltaY * Math.sin(angle);
     const localY = deltaX * Math.sin(angle) + deltaY * Math.cos(angle);
-    if (Math.abs(localX) <= element.width / 2 && Math.abs(localY) <= element.height / 2) {
-      return element;
+    if (Math.abs(localX) <= Math.max(width, minimumWidth) / 2
+      && Math.abs(localY) <= Math.max(height, minimumHeight) / 2) {
+      matches.push(element);
     }
   }
-  return null;
+  return matches;
+}
+
+function hitTest(document, xMm, yMm, options) {
+  return hitTestAll(document, xMm, yMm, options)[0] || null;
 }
 
 module.exports = {
@@ -371,5 +384,6 @@ module.exports = {
   createDocument,
   createElement,
   hitTest,
+  hitTestAll,
   placeNewElement
 };

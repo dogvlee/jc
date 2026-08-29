@@ -9,15 +9,16 @@ const {
   getOnlineTemplate
 } = require('../miniprogram/app/online-templates-pack');
 const { templates, getTemplate } = require('../miniprogram/app/catalog');
-const {
-  buildTemplateDocument,
-  LAYOUT_BUILDERS
-} = require('../miniprogram/app/template-layouts');
+const { buildTemplateDocument } = require('../miniprogram/app/template-layouts');
 
 const miniRoot = path.join(__dirname, '..', 'miniprogram');
 
-test('catalog exposes the complete 189-template library', () => {
-  assert.equal(templates.length, 189);
+test('public catalog excludes crawled packs and labels original versus authorized redesigns', () => {
+  assert.equal(templates.length, 22);
+  assert.equal(templates.filter((item) => item.source === 'shangyue-original').length, 17);
+  assert.equal(templates.filter((item) => item.source === 'shangyue-authorized-redesign').length, 5);
+  assert.ok(templates.every((item) => item.releaseApproved === true && item.publicCatalog === true));
+  assert.equal(templates.some((item) => item.source === 'online-niim' || item.source === 'niim-import'), false);
   assert.ok(ONLINE_TEMPLATES.length >= 80);
   assert.equal(new Set(templates.map((item) => item.id)).size, templates.length);
 });
@@ -25,12 +26,12 @@ test('catalog exposes the complete 189-template library', () => {
 test('online templates can be resolved and built into editable documents', () => {
   for (const item of ONLINE_TEMPLATES) {
     assert.equal(getOnlineTemplate(item.id).id, item.id);
-    assert.equal(typeof LAYOUT_BUILDERS[item.id], 'function');
     const document = buildOnlineDocument(item.id);
     assert.ok(document.elements.length >= 1, item.id);
-    const throughCatalog = buildTemplateDocument(getTemplate(item.id));
-    assert.equal(throughCatalog.widthMm, item.size[0]);
-    assert.equal(throughCatalog.heightMm, item.size[1]);
+    const throughLayouts = buildTemplateDocument(item);
+    assert.equal(throughLayouts.widthMm, item.size[0]);
+    assert.equal(throughLayouts.heightMm, item.size[1]);
+    assert.equal(getTemplate(item.id), null);
   }
 });
 

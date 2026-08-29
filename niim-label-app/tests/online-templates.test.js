@@ -5,6 +5,7 @@ const { templates, getTemplate } = require("../src/app/catalog");
 const { buildTemplateDocument, LAYOUT_BUILDERS } = require("../src/app/template-layouts");
 const { seedUserTemplates } = require("../src/app/state");
 const { templateLibraryPool } = require("../src/app/views");
+const { CLEANROOM_TEMPLATE_PACK } = require("../src/app/cleanroom-template-pack");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -30,25 +31,26 @@ test("import one online template has elements", () => {
   assert.equal(getOnlineTemplate(item.id).name, item.name);
 });
 
-test("buildTemplateDocument works for online id", () => {
+test("buildTemplateDocument does not register crawled online ids", () => {
   const item = ONLINE_TEMPLATES[0];
-  assert.equal(typeof LAYOUT_BUILDERS[item.id], "function");
-  const doc = buildTemplateDocument(getTemplate(item.id) || item);
-  assert.ok(doc.elements.length >= 1);
+  assert.equal(LAYOUT_BUILDERS[item.id], undefined);
+  const doc = buildTemplateDocument(item);
   assert.equal(doc.widthMm, item.size[0]);
   assert.equal(doc.heightMm, item.size[1]);
 });
 
-test("catalog includes online meta", () => {
-  const onlineInCatalog = templates.filter((t) => t.source === "online-niim");
-  assert.ok(onlineInCatalog.length >= 80, "catalog online " + onlineInCatalog.length);
+test("public catalog excludes crawled JingChen packs", () => {
+  const originalCount = templates.filter((item) => item.source === "shangyue-original").length;
+  const authorizedCount = templates.filter((item) => item.source === "shangyue-authorized-redesign").length;
+  assert.equal(originalCount, 35 + CLEANROOM_TEMPLATE_PACK.length);
+  assert.equal(templates.length, originalCount + authorizedCount);
+  assert.ok(templates.every((item) => item.publicCatalog === true && item.releaseApproved === true));
+  assert.equal(templates.filter((t) => t.source === "online-niim").length, 0);
+  assert.equal(getTemplate(ONLINE_TEMPLATES[0].id), null);
 });
 
-test("seedUserTemplates includes online templates", () => {
-  const ut = seedUserTemplates();
-  const online = ut.filter((t) => String(t.id).startsWith("online-"));
-  assert.ok(online.length >= 80, "seed online " + online.length);
-  assert.ok(online[0].document.elements.length >= 1);
+test("seedUserTemplates does not copy online catalog into My templates", () => {
+  assert.deepEqual(seedUserTemplates(), []);
 });
 
 test("all online image paths resolve to bundled assets", () => {
@@ -69,15 +71,16 @@ test("all online image paths resolve to bundled assets", () => {
   assert.equal(repairedImages[0].path, "assets/online-images/4726bf3eee2d3124.png");
 });
 
-test("template library removes seeded catalog duplicates but preserves My and custom templates", () => {
+test("template library hides seeded catalog copies from My and preserves genuine custom templates", () => {
   const seeded = seedUserTemplates();
   const all = templateLibraryPool({ templateCategory: "全部", userTemplates: seeded });
   assert.equal(all.length, templates.length);
   assert.equal(new Set(all.map((item) => item.id)).size, templates.length);
-  assert.equal(templateLibraryPool({ templateCategory: "我的", userTemplates: seeded }).length, seeded.length);
+  assert.equal(templateLibraryPool({ templateCategory: "我的", userTemplates: seeded }).length, 0);
 
   const custom = { id: "custom-r01", name: "自定义", document: { widthMm: 40, heightMm: 12, elements: [] } };
   const withCustom = templateLibraryPool({ templateCategory: "全部", userTemplates: [...seeded, custom] });
   assert.equal(withCustom.length, templates.length + 1);
   assert.ok(withCustom.some((item) => item.id === custom.id));
+  assert.equal(templateLibraryPool({ templateCategory: "我的", userTemplates: [...seeded, custom] }).length, 1);
 });

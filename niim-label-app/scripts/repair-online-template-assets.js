@@ -33,6 +33,7 @@ for (const template of ONLINE_TEMPLATES) {
 }
 
 const body = '/** Auto-generated offline NIIM online templates. */\n'
+  + "const { applyOnlineTemplateRuntimeFixes } = require('./online-template-runtime-fixes');\n"
   + `const ONLINE_TEMPLATES = ${JSON.stringify(ONLINE_TEMPLATES)};\n`
   + 'function getOnlineTemplate(id) {\n'
   + '  return ONLINE_TEMPLATES.find((item) => item.id === id) || null;\n'
@@ -40,7 +41,8 @@ const body = '/** Auto-generated offline NIIM online templates. */\n'
   + 'function buildOnlineDocument(id) {\n'
   + '  const item = getOnlineTemplate(id);\n'
   + '  if (!item || !item.document) return null;\n'
-  + '  return JSON.parse(JSON.stringify(item.document));\n'
+  + '  const document = JSON.parse(JSON.stringify(item.document));\n'
+  + '  return applyOnlineTemplateRuntimeFixes(id, document);\n'
   + '}\n'
   + 'module.exports = { ONLINE_TEMPLATES, getOnlineTemplate, buildOnlineDocument };\n';
 

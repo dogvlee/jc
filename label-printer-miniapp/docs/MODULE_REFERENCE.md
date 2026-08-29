@@ -25,7 +25,7 @@
 
 | 模块 | 责任 | 主要导出 | 主要调用方 | 副作用/状态 | 测试 |
 |---|---|---|---|---|---|
-| `app/catalog.js` | 合并 32 套基础、4 套导入和 153 套固化目录模板；提供分类和查找 | `categories`、`industries`、`templates`、`homeQuickActions`、`getTemplate`、`templatesByCategory`、`templatesByIndustry` | 首页、`template-layouts` 测试、`data-bind` 测试 | require 时组合大数组；不访问网络 | `tests/online-templates.test.js`、`tests/template-layouts.test.js`、`tests/data-bind.test.js` 间接覆盖 |
+| `app/catalog.js` | 合并 33 套基础、4 套导入和 153 套固化目录模板；提供分类和查找 | `categories`、`industries`、`templates`、`homeQuickActions`、`getTemplate`、`templatesByCategory`、`templatesByIndustry` | 首页、`template-layouts` 测试、`data-bind` 测试 | require 时组合大数组；不访问网络 | `tests/online-templates.test.js`、`tests/template-layouts.test.js`、`tests/data-bind.test.js` 间接覆盖 |
 | `app/data-bind.js` | 把一行 `name/code/price/date` 数据应用到模板文档；批量构造文档 | `applyRowToDocument`、`buildDocumentsFromRows`、`looksLikeCode`、`looksLikePrice` | 首页批量生成、测试 | **修改传入文档**及元素值/格式；无 I/O | `tests/data-bind.test.js` |
 | `app/imported-templates.js` | 在加载期转换 4 个 NIIM JSON 模板，并按 ID 提供深拷贝 | `IMPORTED_TEMPLATES`、`getImportedTemplate`、`buildImportedDocument` | `catalog.js`、`template-layouts.js` | require 时解析 JSON并构建文档；返回时 JSON 深拷贝 | `tests/niim-template-import.test.js`、`tests/online-templates.test.js` 间接覆盖 |
 | `app/online-templates-pack.js` | 固化原“在线目录”的 153 套元数据和可编辑文档构建数据 | `ONLINE_TEMPLATES`、`getOnlineTemplate`、`buildOnlineDocument` | `catalog.js`、`template-layouts.js` | 大型静态模块进入主包；无运行时网络请求 | `tests/online-templates.test.js` |
@@ -56,7 +56,7 @@
 | `core/bytes.js` | Uint8Array 转换/连接、16 位大端、读大端、位计数、异步等待 | `asUint8Array`、`concatBytes`、`countBits`、`readU16be`、`u16be`、`sleep` | 协议、编码、计划、BLE、客户端、连接管理器 | 除 `sleep` 使用计时器外为纯函数 | 无独立测试；由 protocol/image-encoder/print-plan/BLE/client 测试间接覆盖 |
 | `core/code128.js` | Code 128B 编码 | `encodeCode128B` | 渲染器 | 纯；非法输入抛错 | `tests/code128.test.js`、`tests/renderer.test.js` 间接覆盖 |
 | `core/ean13.js` | EAN-13 校验位与编码 | `checksum`、`encodeEan13` | 渲染器 | 纯；非法输入抛错 | `tests/ean13.test.js`、`tests/renderer.test.js` 间接覆盖 |
-| `core/niim-template-import.js` | 把 NIIM JSON 模板/元素转换为本地文档，映射对齐、字体、码制和资源路径 | `importNiimTemplate`、`convertElement`、`mapAlignH`、`mapAlignV`、`parseFontStyle`、`isMissingImagePath`、`resolveImagePath`、`CODE_TYPE_MAP` | 导入模板模块、首页 JSON 模板导入 | 新建并填充文档；跳过畸形元素；不访问网络 | `tests/niim-template-import.test.js` |
+| `core/niim-template-import.js` | 把 NIIM JSON 模板/元素转换为本地文档，映射对齐、字体、码制和资源路径；离线导入默认拒绝远程路径，授权目录显式选择保留 HTTPS 图片 | `importNiimTemplate`、`convertElement`、`mapAlignH`、`mapAlignV`、`parseFontStyle`、`isMissingImagePath`、`resolveImagePath`、`CODE_TYPE_MAP` | 导入模板模块、授权在线目录、首页 JSON 模板导入 | 新建并填充文档；跳过畸形元素；不访问网络 | `tests/niim-template-import.test.js`、`tests/authorized-template-catalog.test.js` |
 | `core/scan-label.js` | 规范化扫码结果，区分一维码/二维码，限制长度，把结果写入元素或构造成新标签 | `MAX_BARCODE_VALUE_LENGTH`、`MAX_SCAN_VALUE_LENGTH`、`applyScanToElement`、`buildScanDocument`、`inferBarcodeFormat`、`isOneDimensionalType`、`normalizeScanResult` | 首页扫码建标、编辑页扫码填入 | `applyScanToElement` 修改传入元素；其他函数纯；校验失败抛带 code 的错误 | `tests/scan-label.test.js`、`tests/editor-page.test.js` 间接覆盖 |
 | `core/profiles.js` | 设备 profile、型号/名称路由、预览尺寸、打印头对齐和非破坏式可打印性评估 | `PROFILES`、`getProfile`、`guessProfile`、`profileForModelId`、`previewCanvasSize`、`alignedCanvasSize`、`evaluatePrintability` | 首页、编辑页、打印逻辑测试 | 纯；非法/超尺寸抛错或返回阻断 | `tests/profiles.test.js`、`tests/print-plan.test.js` 间接覆盖 |
 | `core/image-encoder.js` | RGBA 阈值二值化、方向转换、行 RLE、稀疏索引/位图/空行/检查行编码 | `encodeImageData`、`isBlackPixel`、`indexBlackPixels`、`pixelCounts`、`rowToCommand` | `PrinterClient`、`print-plan.js` | 纯；分配点阵数组 | `tests/image-encoder.test.js`、`tests/print-plan.test.js` 间接覆盖 |
@@ -70,6 +70,8 @@
 | `services/repository.js` | schema v2 本地仓储、规范化、迁移、集合上限、备份/覆盖恢复/回滚 | `Repository`、`KEYS`、`LEGACY_KEYS`、`STORAGE_VERSION`、`defaultRows`、`defaultSettings`、`normalizeDocument` | `app.js`、首页、编辑页 | 同步读写/删除 storage；恢复时多键补偿；读取会过滤损坏文档 | `tests/repository.test.js` |
 | `services/csv.js` | RFC 风格常用 CSV 引号解析、序列化和列映射 | `parseCsv`、`stringifyCsv`、`rowsToRecords` | 首页 | 纯；未闭合引号抛错 | `tests/csv.test.js` |
 | `services/scanner.js` | Promise 化微信原生扫码，统一默认码型、取消、权限失败和不支持环境 | `scanCode` | 首页、编辑页 | 调用 `wx.scanCode`/注入 API；不写存储 | `tests/scanner.test.js` |
+| `services/authorized-template-catalog.js` | 匿名读取已授权的模板、素材和边框分页；模板转换为编辑文档，三类目录均按来源 ID 去重 | `fetchAuthorizedTemplatePage`、`fetchAuthorizedMaterialPage`、`fetchAuthorizedBorderPage`、`mergeRemoteTemplates` 及规范化函数 | 首页模板库、编辑器素材/边框面板 | 只调用固定的 3 个公开目录接口；内存返回，不访问用户/VIP 接口 | `tests/authorized-template-catalog.test.js`、`tests/editor-page.test.js` |
+| `services/remote-image-cache.js` | 在打开在线模板时按需下载 HTTPS 图片，复用本地缓存并把文档路径改成本地文件 | `localizeDocumentImages`、`localizeUrl`、`isRemoteImage` | 首页 → 编辑器 | 调用 `wx.downloadFile` 和文件系统；模块内缓存 URL→路径 | `tests/remote-image-cache.test.js` |
 | `services/ble-session.js` | 适配器/扫描/GATT/可信通道/MTU/notify、完整帧写入、请求队列、解析和断线清理 | `BleSession`、`PRIMARY_SERVICE`、`PRIMARY_WRITE_CHARACTERISTIC`、`PRIMARY_NOTIFY_CHARACTERISTIC`、`callWx`、`withTimeout`、`isAlreadyConnectedError` | 连接管理器、编辑页后备、测试 | 调用微信 BLE API；注册全局监听；计时器；维护 parser/pending/queue/连接状态 | `tests/ble-session.test.js` |
 | `services/printer-client.js` | NIIMBOT transport 后握手、信息读取、点阵计划发送、任务族完成等待和取消 | `PrinterClient` | 连接管理器、编辑页后备 | 发送 BLE 请求；维护 connecting/ready/printing/cancelled/pageIndex；使用计时器轮询 | `tests/printer-client.test.js`、`tests/print-plan.test.js` 间接覆盖 |
 | `services/printer-connection-manager.js` | 应用级单例连接编排：单飞、TTL、OS 连接检查、already/zombie 恢复、持久化、自动重连、kill switch、诊断 | `PrinterConnectionManager`、`codedError`、`DEFAULT_DEVICE_STORAGE_KEY`、`DEFAULT_KILL_SWITCH_KEY`、`DEFAULT_SESSION_TTL_MS`、`DEFAULT_FAST_REUSE_TTL_MS`、`DEFAULT_REOPEN_DELAY_MS` | `app.js`、首页订阅、编辑页连接/诊断/打印前确认 | storage；适配器监听；重连计时器；连接缓存和订阅；调用 session/client | `tests/printer-connection-manager.test.js` |
@@ -96,7 +98,7 @@ Repository 独立于连接栈；二者只通过 lastDevice 存储键在应用装
 | `vendor/qrcode.js` | `qrcode-generator` 的本地 CommonJS bundle | `core/renderer.js` | 第三方构建产物；不能手改后忘记重建/许可 | `tests/renderer.test.js`；`npm run build:vendor` 可重建 |
 | `THIRD_PARTY_NOTICES.txt` | 小程序包内第三方告知 | 发布流程 | 法务/许可文本 | 人工审查 |
 
-`app/online-templates-pack.js` 虽然名称包含 online，但当前是随包静态数据，不发网络请求。
+`app/online-templates-pack.js` 虽然名称包含 online，但自身仍是随包静态数据，不发网络请求；运行时模板、素材和边框授权目录由 `services/authorized-template-catalog.js` 独立负责，不把全量数据或图片加入主包。
 
 ## 7. 脚本和工程配置
 
@@ -109,7 +111,7 @@ Repository 独立于连接栈；二者只通过 lastDevice 存储键在应用装
 
 ## 8. 测试文件索引
 
-当前 `tests/` 有 30 个 `*.test.js`：
+当前 `tests/` 有 33 个 `*.test.js`：
 
 | 测试 | 主覆盖模块/契约 |
 |---|---|

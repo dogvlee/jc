@@ -5,8 +5,9 @@ const { drawMaterialSymbol } = require('./materials');
 const { drawBorderStyle, borderById } = require('./borders');
 const { clampTextArcAngle, normalizeTextMode } = require('./text-direction');
 const { CHROME } = require('./editor-gesture');
+const { QR_QUIET_ZONE_MODULES, validateCodeElement } = require('./code-quality');
+const { resolveFontFamily } = require('./font-family');
 
-const QR_QUIET_ZONE_MODULES = 4;
 const thresholdImageCache = new WeakMap();
 const DOT_EPSILON = 1e-6;
 
@@ -19,7 +20,7 @@ function mmToDots(value, dpi) {
 }
 
 function fontValue(element, fontPixels) {
-  return `${element.italic ? 'italic ' : ''}${element.bold ? 'bold ' : ''}${fontPixels}px ${element.fontFamily || 'sans-serif'}`;
+  return `${element.italic ? 'italic ' : ''}${element.bold ? 'bold ' : ''}${fontPixels}px ${resolveFontFamily(element.fontFamily)}`;
 }
 
 function lineSpacingValue(element) {
@@ -469,7 +470,7 @@ function drawText(context, element, dpi) {
     context.clip();
     const rawText = String(element.text || '');
     const isEmpty = rawText.trim().length === 0;
-    const displayText = isEmpty ? '双击编辑' : rawText;
+    const displayText = isEmpty ? '点击后编辑文字' : rawText;
     const paintEl = Object.assign({}, element, { text: displayText });
     const ink = isEmpty ? '#9aa3a8' : (element.color || '#000000');
     // Reverse/反白 (video): fill with element color, white glyphs + underline
@@ -579,7 +580,26 @@ function drawGeneratedText(context, element, dpi, text) {
   drawText(context, Object.assign({}, element, { text }), dpi);
 }
 
+function drawCodeNotice(context, element, dpi, message) {
+  withElementTransform(context, element, dpi, (x, y, width, height) => {
+    const ink = element.color || '#000000';
+    context.strokeStyle = ink;
+    context.lineWidth = Math.max(1, mmToDots(0.25, dpi));
+    context.strokeRect(x, y, width, height);
+    context.fillStyle = ink;
+    context.font = `${Math.max(8, Math.min(height * 0.35, mmToDots(2.5, dpi)))}px sans-serif`;
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText(message, x + width / 2, y + height / 2, Math.max(1, width - 4));
+  });
+}
+
 function drawBarcode(context, element, dpi) {
+  if (element.unsupportedCodeType === true || element.requiresFormatConfirmation === true
+    || !['code128', 'ean13'].includes(String(element.format || '').toLowerCase())) {
+    drawCodeNotice(context, element, dpi, '码制待确认');
+    return;
+  }
   let encoded;
   try {
     encoded = element.format === 'ean13' ? encodeEan13(element.value) : encodeCode128B(element.value);
@@ -670,26 +690,7 @@ function drawQrCode(context, element, dpi) {
 
 function validateDocument(document, dpi) {
   document.elements.forEach((element) => {
-    if (element.type === 'barcode') {
-      const encoded = element.format === 'ean13' ? encodeEan13(element.value) : encodeCode128B(element.value);
-      const availableDots = Math.floor(mmToDots(element.width, dpi));
-      if (availableDots < encoded.moduleCount) {
-        throw new Error(`条码元素过窄，当前内容至少需要 ${encoded.moduleCount} 个打印点`);
-      }
-    }
-    if (element.type === 'qrcode') {
-      const code = qrcode(0, element.errorCorrection || 'M');
-      code.addData(String(element.value || ''), 'Byte');
-      code.make();
-      const requiredDots = code.getModuleCount() + QR_QUIET_ZONE_MODULES * 2;
-      const availableDots = Math.floor(Math.min(
-        mmToDots(element.width, dpi),
-        mmToDots(element.height, dpi)
-      ) + DOT_EPSILON);
-      if (availableDots < requiredDots) {
-        throw new Error(`二维码元素过小，当前内容至少需要 ${requiredDots} x ${requiredDots} 个打印点`);
-      }
-    }
+    if (element.type === 'barcode' || element.type === 'qrcode') validateCodeElement(element, dpi);
   });
 }
 
@@ -996,22 +997,36 @@ function renderDocument(context, document, canvasSize, dpi, images, options) {
   });
 }
 
-function drawSnapGuides(context, guides, canvasSize, dpi) {
+function normalizeDisplayScale(value) {
+  const scale = Number(value);
+  return Number.isFinite(scale) && scale > 0 ? scale : 1;
+}
+
+function scaleChromeDash(values, displayScale) {
+  return values.map((value) => value * displayScale);
+}
+
+function scaleChromeFont(value, displayScale) {
+  return String(value).replace(/(\d+(?:\.\d+)?)px/, (_, pixels) => `${Number(pixels) * displayScale}px`);
+}
+
+function drawSnapGuides(context, guides, canvasSize, dpi, displayScale) {
   if (!guides || !guides.length) return;
+  const scale = normalizeDisplayScale(displayScale);
   context.save();
   context.setTransform(1, 0, 0, 1, 0, 0);
   // Snap rulers: blue dashed crosshair + mm ticks
   context.strokeStyle = CHROME.guide;
-  context.lineWidth = CHROME.guideWidth;
-  context.setLineDash(CHROME.guideDash);
-  context.font = CHROME.guideLabelFont;
+  context.lineWidth = CHROME.guideWidth * scale;
+  context.setLineDash(scaleChromeDash(CHROME.guideDash, scale));
+  context.font = scaleChromeFont(CHROME.guideLabelFont, scale);
   context.fillStyle = CHROME.guideLabel;
   context.textBaseline = 'middle';
-  const stepMm = canvasSize.width > 400 ? 10 : 5;
+  const stepMm = canvasSize.width / scale > 400 ? 10 : 5;
   guides.forEach((guide) => {
     if (!guide || !Number.isFinite(guide.pos)) return;
     if (guide.axis === 'v') {
-      const x = mmToDots(guide.pos, dpi) + 0.5;
+      const x = mmToDots(guide.pos, dpi) + 0.5 * scale;
       context.beginPath();
       context.moveTo(x, 0);
       context.lineTo(x, canvasSize.height);
@@ -1020,16 +1035,16 @@ function drawSnapGuides(context, guides, canvasSize, dpi) {
       for (let mm = 0; mm <= Math.ceil(canvasSize.height * 25.4 / dpi); mm += stepMm) {
         const y = mmToDots(mm, dpi);
         context.beginPath();
-        context.moveTo(x - 4, y);
-        context.lineTo(x + 4, y);
+        context.moveTo(x - 4 * scale, y);
+        context.lineTo(x + 4 * scale, y);
         context.stroke();
         if (mm > 0 && mm % (stepMm * 2) === 0) {
-          context.fillText(String(mm), x + 6, y);
+          context.fillText(String(mm), x + 6 * scale, y);
         }
       }
-      context.setLineDash(CHROME.guideDash);
+      context.setLineDash(scaleChromeDash(CHROME.guideDash, scale));
     } else if (guide.axis === 'h') {
-      const y = mmToDots(guide.pos, dpi) + 0.5;
+      const y = mmToDots(guide.pos, dpi) + 0.5 * scale;
       context.beginPath();
       context.moveTo(0, y);
       context.lineTo(canvasSize.width, y);
@@ -1038,32 +1053,33 @@ function drawSnapGuides(context, guides, canvasSize, dpi) {
       for (let mm = 0; mm <= Math.ceil(canvasSize.width * 25.4 / dpi); mm += stepMm) {
         const x = mmToDots(mm, dpi);
         context.beginPath();
-        context.moveTo(x, y - 4);
-        context.lineTo(x, y + 4);
+        context.moveTo(x, y - 4 * scale);
+        context.lineTo(x, y + 4 * scale);
         context.stroke();
         if (mm > 0 && mm % (stepMm * 2) === 0) {
-          context.fillText(String(mm), x + 2, y - 8);
+          context.fillText(String(mm), x + 2 * scale, y - 8 * scale);
         }
       }
-      context.setLineDash(CHROME.guideDash);
+      context.setLineDash(scaleChromeDash(CHROME.guideDash, scale));
     }
   });
   context.restore();
 }
 
-function renderSelection(context, selected, canvasSize, dpi, guides) {
+function renderSelection(context, selected, canvasSize, dpi, guides, displayScale) {
+  const scale = normalizeDisplayScale(displayScale);
   context.setTransform(1, 0, 0, 1, 0, 0);
   context.clearRect(0, 0, canvasSize.width, canvasSize.height);
   // paper margin only when guides active (drag) — keep select shot clean
   if (guides && guides.length) {
     context.save();
-    context.setLineDash(CHROME.paperMarginDash);
+    context.setLineDash(scaleChromeDash(CHROME.paperMarginDash, scale));
     context.strokeStyle = CHROME.paperMargin;
-    context.lineWidth = CHROME.guideWidth;
-    context.strokeRect(0.5, 0.5, canvasSize.width - 1, canvasSize.height - 1);
+    context.lineWidth = CHROME.guideWidth * scale;
+    context.strokeRect(0.5 * scale, 0.5 * scale, canvasSize.width - scale, canvasSize.height - scale);
     context.restore();
   }
-  drawSnapGuides(context, guides, canvasSize, dpi);
+  drawSnapGuides(context, guides, canvasSize, dpi, scale);
   const selections = Array.isArray(selected) ? selected.filter(Boolean) : (selected ? [selected] : []);
   if (!selections.length) {
     return;
@@ -1082,9 +1098,14 @@ function renderSelection(context, selected, canvasSize, dpi, guides) {
     });
     context.save();
     context.strokeStyle = CHROME.multiSelect;
-    context.lineWidth = CHROME.multiSelectWidth;
-    context.setLineDash(CHROME.multiSelectDash);
-    context.strokeRect(minX - 1, minY - 1, maxX - minX + 2, maxY - minY + 2);
+    context.lineWidth = CHROME.multiSelectWidth * scale;
+    context.setLineDash(scaleChromeDash(CHROME.multiSelectDash, scale));
+    context.strokeRect(
+      minX - scale,
+      minY - scale,
+      maxX - minX + 2 * scale,
+      maxY - minY + 2 * scale
+    );
     context.restore();
   }
 
@@ -1103,15 +1124,15 @@ function renderSelection(context, selected, canvasSize, dpi, guides) {
         let sample = element.text || '';
         if (element.type === 'date') sample = formatDateValue(element);
         else if (element.type === 'serial') sample = serialValue(element);
-        if (element.type === 'text' && !String(sample).trim()) sample = '双击编辑';
+        if (element.type === 'text' && !String(sample).trim()) sample = '点击后编辑文字';
         const fitted = fitText(context, Object.assign({}, element, { text: sample }), width, height, dpi);
         if (fitted && fitted.blockWidth > 0 && fitted.blockHeight > 0) {
           const hAlign = element.align === 'center' || element.align === 'middle' ? 'center'
             : (element.align === 'right' || element.align === 'bottom' ? 'right' : 'left');
-          sx = alignedStart(x, width, fitted.blockWidth, hAlign) - 1;
-          sy = alignedStart(y, height, fitted.blockHeight, element.verticalAlign || 'middle') - 1;
-          sw = fitted.blockWidth + 2;
-          sh = fitted.blockHeight + 2;
+          sx = alignedStart(x, width, fitted.blockWidth, hAlign) - scale;
+          sy = alignedStart(y, height, fitted.blockHeight, element.verticalAlign || 'middle') - scale;
+          sw = fitted.blockWidth + 2 * scale;
+          sh = fitted.blockHeight + 2 * scale;
           // ratios of content box inside element (for handle hit-test in mm)
           Object.defineProperty(element, '_fit', { configurable: true, enumerable: false, writable: true, value: {
             left: (sx - x) / Math.max(1, width),
@@ -1126,11 +1147,11 @@ function renderSelection(context, selected, canvasSize, dpi, guides) {
     }
     // Date: dashed + hatch; other types: solid blue
     context.strokeStyle = color;
-    context.lineWidth = CHROME.selectionWidth;
+    context.lineWidth = CHROME.selectionWidth * scale;
     context.fillStyle = CHROME.selectionFill;
     context.fillRect(sx, sy, sw, sh);
     if (isDate) {
-      context.setLineDash(CHROME.dateDash);
+      context.setLineDash(scaleChromeDash(CHROME.dateDash, scale));
       context.strokeRect(sx, sy, sw, sh);
       context.setLineDash([]);
       // light diagonal hatch
@@ -1139,8 +1160,8 @@ function renderSelection(context, selected, canvasSize, dpi, guides) {
       context.rect(sx, sy, sw, sh);
       context.clip();
       context.strokeStyle = CHROME.selectionFill;
-      context.lineWidth = 1;
-      const step = 6;
+      context.lineWidth = scale;
+      const step = 6 * scale;
       for (let i = -sh; i < sw + sh; i += step) {
         context.beginPath();
         context.moveTo(sx + i, sy);
@@ -1154,7 +1175,7 @@ function renderSelection(context, selected, canvasSize, dpi, guides) {
     }
     if (element.locked) return;
     // Handles on content-fitted box (贴蓝框): white dots with blue ring
-    const r = CHROME.handleRadius;
+    const r = CHROME.handleRadius * scale;
     const mids = [
       [sx + sw, sy + sh / 2],
       [sx + sw / 2, sy + sh]
@@ -1164,7 +1185,7 @@ function renderSelection(context, selected, canvasSize, dpi, guides) {
       context.arc(point[0], point[1], r, 0, Math.PI * 2);
       context.fillStyle = CHROME.handleFill;
       context.fill();
-      context.lineWidth = CHROME.handleRingWidth;
+      context.lineWidth = CHROME.handleRingWidth * scale;
       context.strokeStyle = CHROME.handleRing;
       context.stroke();
     });
@@ -1172,16 +1193,16 @@ function renderSelection(context, selected, canvasSize, dpi, guides) {
     const rx = sx + sw;
     const ry = sy + sh;
     context.beginPath();
-    context.arc(rx, ry, r + 1, 0, Math.PI * 2);
+    context.arc(rx, ry, r + scale, 0, Math.PI * 2);
     context.fillStyle = CHROME.handleFill;
     context.fill();
     context.strokeStyle = CHROME.handleRing;
-    context.lineWidth = CHROME.handleRingWidth;
+    context.lineWidth = CHROME.handleRingWidth * scale;
     context.stroke();
     context.beginPath();
     context.arc(rx, ry, r * 0.55, -0.2, Math.PI * 1.2);
     context.strokeStyle = CHROME.handleArrow;
-    context.lineWidth = CHROME.handleArrowWidth;
+    context.lineWidth = CHROME.handleArrowWidth * scale;
     context.stroke();
   }));
 }

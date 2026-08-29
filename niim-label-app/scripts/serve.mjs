@@ -35,5 +35,5 @@ createServer(async (request, response) => {
     response.end('Internal Server Error');
   }
 }).listen(port, '127.0.0.1', () => {
-  console.log(`精臣标签: http://127.0.0.1:${port}`);
+  console.log(`商跃标签: http://127.0.0.1:${port}`);
 });

@@ -11,7 +11,27 @@ function looksLikeCode(text) {
   return /code|编号|条码|sku|货号/i.test(String(text || ''));
 }
 
+function assertBatchCompatible(documentValue) {
+  if (!documentValue || !Array.isArray(documentValue.elements)) {
+    throw new Error('批量模板数据损坏');
+  }
+  if (documentValue.templateMeta && documentValue.templateMeta.batchCompatible === false) {
+    throw new Error('此模板不支持批量数据，请选择内置基础模板');
+  }
+  return documentValue;
+}
+
+function confirmBoundValue(element) {
+  if (!element) return element;
+  element.requiresInput = false;
+  delete element.requiresInputReason;
+  delete element.invalidCode;
+  delete element.codeValidationMessage;
+  return element;
+}
+
 function applyRowToDocument(documentValue, row, options) {
+  assertBatchCompatible(documentValue);
   const config = Object.assign({
     nameField: 'name',
     codeField: 'code',
@@ -34,32 +54,44 @@ function applyRowToDocument(documentValue, row, options) {
   const serials = documentValue.elements.filter((item) => item.type === 'serial');
 
   // Title-like first text
-  if (texts[0] && name) texts[0].text = name;
+  if (texts[0] && name) {
+    texts[0].text = name;
+    confirmBoundValue(texts[0]);
+  }
 
   // Price-looking text or second text
   const priceTarget = texts.find((item) => looksLikePrice(item.text)) || texts[1];
   if (priceTarget && price) {
     priceTarget.text = /¥|￥/.test(price) ? price : `¥${price}`;
+    confirmBoundValue(priceTarget);
   }
 
   // Code-looking text (if any remaining)
   const codeTarget = texts.find((item) => item !== texts[0] && item !== priceTarget && looksLikeCode(item.text));
-  if (codeTarget && code) codeTarget.text = code;
+  if (codeTarget && code) {
+    codeTarget.text = code;
+    confirmBoundValue(codeTarget);
+  }
 
   // Third text can absorb date label if no date element
   if (date && texts[2] && !dates.length && texts[2] !== priceTarget) {
     texts[2].text = date;
+    confirmBoundValue(texts[2]);
   }
 
   barcodes.forEach((barcode) => {
     if (!code) return;
     barcode.value = code;
     barcode.format = /^\d{12,13}$/.test(code) ? 'ean13' : 'code128';
+    delete barcode.unsupportedCodeType;
+    delete barcode.requiresFormatConfirmation;
+    confirmBoundValue(barcode);
   });
 
   qrcodes.forEach((qr) => {
     if (code) qr.value = code;
     else if (name) qr.value = name;
+    if (code || name) confirmBoundValue(qr);
   });
 
   dates.forEach((item) => {
@@ -91,6 +123,7 @@ function buildDocumentsFromRows(templateFactory, rows, options) {
 
 module.exports = {
   applyRowToDocument,
+  assertBatchCompatible,
   buildDocumentsFromRows,
   looksLikeCode,
   looksLikePrice

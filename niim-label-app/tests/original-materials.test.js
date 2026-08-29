@@ -19,6 +19,7 @@ const { initialState } = require('../src/app/state');
 const { renderModal } = require('../src/app/views');
 
 const ROOT = path.resolve(__dirname, '..');
+const RESEARCH_MANIFEST = require('../src/data/original-materials.json');
 const EXPECTED_IDS = [
   'niim-9202', 'niim-9200', 'niim-9198', 'niim-9199', 'niim-9092',
   'niim-9089', 'niim-9085', 'niim-9077', 'niim-9078', 'niim-9079',
@@ -74,11 +75,11 @@ function mockContext() {
   };
 }
 
-test('reference material manifest is the first exact 15-item catalog group', () => {
-  assert.equal(ORIGINAL_MATERIAL_MANIFEST.items.length, 15);
-  assert.deepEqual(ORIGINAL_MATERIAL_CATALOG.map((item) => item.id), EXPECTED_IDS);
-  assert.deepEqual(MATERIAL_CATALOG.slice(0, 15).map((item) => item.id), EXPECTED_IDS);
-  assert.deepEqual(materialsForChip('最新').slice(0, 15).map((item) => item.id), EXPECTED_IDS);
+test('product material catalog no longer prefixes the 15 third-party bitmaps', () => {
+  assert.equal(ORIGINAL_MATERIAL_MANIFEST.items.length, 0);
+  assert.deepEqual(ORIGINAL_MATERIAL_CATALOG, []);
+  assert.equal(MATERIAL_CATALOG.some((item) => String(item.id).startsWith('niim-')), false);
+  assert.equal(materialsForChip('最新').some((item) => String(item.id).startsWith('niim-')), false);
 });
 
 test('reference assets default to latest and closing search returns to latest', () => {
@@ -95,20 +96,22 @@ test('reference assets default to latest and closing search returns to latest', 
     materialSearchOpen: false
   });
   assert.match(html, /data-chip="最新"[^>]*aria-selected="true"/);
-  assert.equal((html.match(/<img src="assets\/materials\/original\//g) || []).length, 15);
+  assert.equal((html.match(/<img src="assets\/materials\/original\//g) || []).length, 0);
 });
 
 test('switching a selected material replaces path and clears its loaded image', () => {
   const element = { id: 'material-1', type: 'material', symbol: 'check' };
   const images = { [element.id]: { naturalWidth: 56, naturalHeight: 56 } };
-  assert.equal(applyMaterialToElement(element, ORIGINAL_MATERIAL_CATALOG[1], images), true);
-  assert.equal(element.symbol, EXPECTED_IDS[1]);
-  assert.equal(element.path, ORIGINAL_MATERIAL_CATALOG[1].asset);
+  const next = MATERIAL_CATALOG.find((item) => item.id === 'star');
+  assert.equal(applyMaterialToElement(element, next, images), true);
+  assert.equal(element.symbol, 'star');
   assert.equal(images[element.id], undefined);
 });
 
-test('all 15 original assets have verified bytes and magic-based extensions', () => {
-  for (const item of ORIGINAL_MATERIAL_CATALOG) {
+test('research-only third-party material files stay out of the product catalog', () => {
+  assert.equal(RESEARCH_MANIFEST.items.length, 15);
+  assert.deepEqual(RESEARCH_MANIFEST.items.map((item) => item.id), EXPECTED_IDS);
+  for (const item of RESEARCH_MANIFEST.items) {
     const filename = localAsset(item);
     const bytes = fs.readFileSync(filename);
     assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'), item.sha256, item.id);
@@ -117,7 +120,7 @@ test('all 15 original assets have verified bytes and magic-based extensions', ()
   }
 });
 
-test('latest material panel renders 15 real images without per-card VIP badges', () => {
+test('latest material panel does not render third-party original bitmaps', () => {
   const html = renderModal({
     modal: 'material',
     document: { elements: [] },
@@ -126,20 +129,15 @@ test('latest material panel renders 15 real images without per-card VIP badges',
     materialQuery: '',
     materialSearchOpen: false
   });
-  const originalTiles = html.match(/<button[^>]+class="niim-mat-tile[\s\S]*?<\/button>/g)
-    .filter((tile) => tile.includes('assets/materials/original/'));
-  assert.equal(originalTiles.length, 15);
-  for (const tile of originalTiles) {
-    assert.match(tile, /<img\s/);
-    assert.doesNotMatch(tile, /niim-mat-vip|>\s*VIP\s*</i);
-  }
+  assert.doesNotMatch(html, /assets\/materials\/original\//);
+  assert.doesNotMatch(html, /授权待核/);
 });
 
 test('material raster is drawn when loaded and vector fallback remains available', () => {
   const documentValue = createDocument(40, 30);
   const raster = createElement('material', documentValue);
-  raster.symbol = EXPECTED_IDS[0];
-  raster.path = ORIGINAL_MATERIAL_CATALOG[0].asset;
+  raster.symbol = 'check';
+  raster.path = 'assets/materials/original/9202.png';
   documentValue.elements = [raster];
   const rasterContext = mockContext();
   const image = { naturalWidth: 1240, naturalHeight: 1634, width: 1240, height: 1634 };

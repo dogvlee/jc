@@ -1,7 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const { createDocument, createElement } = require('../miniprogram/core/document');
+const { listFontCatalog } = require('../miniprogram/core/font-family');
 const { createImageCacheRegistry } = require('../miniprogram/core/image-cache');
 const { getProfile } = require('../miniprogram/core/profiles');
 
@@ -40,6 +43,80 @@ test('editor multi-selection aligns every unlocked element', () => {
   editor.document.elements[2].y = 10;
   editor.alignSelection({ currentTarget: { dataset: { value: 'bottom' } } });
   assert.deepEqual(editor.document.elements.map((item) => item.y + item.height), [12, 12, 12]);
+});
+
+test('editor template panel keeps base layouts available with accurate source labels', () => {
+  const editor = Object.assign({}, pageDefinition, {
+    data: {},
+    repository: {
+      getUserTemplates: () => [{
+        id: 'mine', name: '我的模板',
+        document: { widthMm: 40, heightMm: 30, elements: [] }
+      }]
+    },
+    setData(patch) { Object.assign(this.data, patch); }
+  });
+  editor.loadTemplates();
+  assert.equal(editor.data.templates.filter((item) => item.source === 'builtin-base').length, 0);
+  assert.equal(editor.data.templates.filter((item) => item.source === 'shangyue-original').length, 17);
+  assert.equal(editor.data.templates.filter((item) => item.source === 'shangyue-authorized-redesign').length, 5);
+  assert.ok(editor.data.templates.some((item) => item.id === 'mine' && item.source === 'user'));
+  assert.ok(editor.data.templates.every((item) => (
+    item.source === 'shangyue-original'
+      || item.source === 'shangyue-authorized-redesign'
+      || item.source === 'user'
+  )));
+  assert.equal(editor.data.templateNames.some((name) => name.includes('· 内置基础')), false);
+  assert.ok(editor.data.templateNames.some((name) => name.includes('· 商跃原创')));
+  assert.ok(editor.data.templateNames.some((name) => name.includes('· 精诚授权改编')));
+});
+
+test('print preflight identifies the exact low-density code and exposes repair controls', () => {
+  const document = createDocument(40, 30);
+  const element = createElement('barcode', document);
+  element.id = 'low-density';
+  element.value = '1234567890';
+  element.width = 12;
+  document.elements = [element];
+  const editor = Object.assign({}, pageDefinition, {
+    document,
+    profile: getProfile('b1'),
+    profileConfirmed: true
+  });
+  const block = editor.evaluatePrintBlock();
+  assert.equal(block.kind, 'element');
+  assert.equal(block.errorCode, 'CODE_MODULE_DENSITY_LOW');
+  assert.equal(block.elementId, 'low-density');
+  assert.match(block.message, /2 打印点\/模块/);
+
+  const wxml = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'editor', 'index.wxml'), 'utf8');
+  assert.match(wxml, /bindtap="fixCodeSize">按最小清晰度放大/);
+  assert.match(wxml, /bindtap="focusPrintElement">定位并修改该元素/);
+});
+
+test('editor font picker exposes the open-source CJK catalog', () => {
+  const catalog = listFontCatalog();
+  const wxml = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/editor/index.wxml'), 'utf8');
+  assert.equal(catalog.length, 23);
+  assert.equal(catalog.filter((font) => font.remote).length, 20);
+  assert.match(wxml, /wx:for="\{\{fontCatalog\}\}"/);
+  assert.match(wxml, /bindtap="setFontFamily"/);
+  assert.match(wxml, /\{\{fontCatalogNote\}\}/);
+  assert.match(pageDefinition.data.fontCatalogNote, /23 款字体 · 20 款 OFL/);
+  assert.ok(catalog.some((font) => font.id === 'sy-heiti' && font.license === 'OFL-1.1'));
+  assert.ok(catalog.every((font) => font.license === 'system' || font.license === 'OFL-1.1'));
+
+  const document = createDocument(40, 30);
+  const text = createElement('text', document);
+  document.elements = [text];
+  const editor = Object.assign({}, pageDefinition, {
+    document,
+    selectedIds: [text.id],
+    selectedId: text.id,
+    commit(mutator) { mutator(this.document); }
+  });
+  editor.setFontFamily({ currentTarget: { dataset: { value: 'sy-huangyou' } } });
+  assert.equal(editor.document.elements[0].fontFamily, 'sy-huangyou');
 });
 
 test('editor multi-selection distributes three elements with equal gaps', () => {
@@ -95,6 +172,67 @@ test('editor code scanning is single-flight and clears its busy state', async ()
   await Promise.all([first, second]);
   assert.equal(editor.data.codeScanning, false);
   assert.equal(barcode.value, 'ABC-100');
+  delete global.wx;
+});
+
+test('editing code content clears value errors while format confirmation requires an explicit choice', () => {
+  const document = createDocument(40, 30);
+  const barcode = createElement('barcode', document);
+  barcode.value = 'ABC-16';
+  barcode.format = 'unsupported';
+  barcode.requiresInput = true;
+  barcode.requiresInputReason = 'unsupported-code-type';
+  barcode.invalidCode = true;
+  barcode.unsupportedCodeType = true;
+  barcode.requiresFormatConfirmation = true;
+  document.elements = [barcode];
+  const editor = Object.assign({}, pageDefinition, {
+    document,
+    selectedId: barcode.id,
+    selectedIds: [barcode.id],
+    commit(mutator) { mutator(this.document); }
+  });
+
+  editor.updateField({ currentTarget: { dataset: { field: 'value' } }, detail: { value: 'REAL-100' } });
+  assert.equal(barcode.requiresInput, false);
+  assert.equal(barcode.invalidCode, undefined);
+  assert.equal(barcode.unsupportedCodeType, true, 'editing value does not guess the source symbology');
+
+  editor.setChoiceField({ currentTarget: { dataset: { field: 'format', value: 'code128' } } });
+  assert.equal(barcode.format, 'code128');
+  assert.equal(barcode.unsupportedCodeType, undefined);
+  assert.equal(barcode.requiresFormatConfirmation, undefined);
+  assert.equal(barcode.requiresInput, false);
+});
+
+test('explicit editor text placeholders and required sample codes cannot print', () => {
+  const document = createDocument(40, 30);
+  const text = createElement('text', document);
+  text.text = '双击文本框编辑';
+  document.elements = [text];
+  const editor = Object.assign({}, pageDefinition, {
+    document,
+    profile: getProfile('b1'),
+    profileConfirmed: true
+  });
+  assert.equal(editor.evaluatePrintBlock().kind, 'placeholder');
+
+  const barcode = createElement('barcode', document);
+  barcode.value = '123456789';
+  barcode.requiresInput = true;
+  barcode.requiresInputReason = 'sample-code';
+  document.elements = [barcode];
+  const block = editor.evaluatePrintBlock();
+  assert.equal(block.kind, 'placeholder');
+  assert.equal(block.canConfirmOriginal, true);
+
+  global.wx = { showToast() {} };
+  editor.data = { printBlock: block };
+  editor.setData = function setData(patch) { Object.assign(this.data, patch); };
+  editor.commit = function commit(mutator) { mutator(this.document); };
+  editor.confirmPrintElementValue();
+  assert.equal(barcode.requiresInput, false);
+  assert.equal(barcode.sampleValueConfirmed, true);
   delete global.wx;
 });
 
@@ -269,4 +407,226 @@ test('onUnload detaches listeners synchronously before asynchronous BLE cleanup'
   assert.equal(managerRemoved, true);
   releaseClose();
   await unloading;
+});
+
+function remoteAssetWxMock() {
+  return {
+    env: { USER_DATA_PATH: 'wxfile://usr' },
+    getFileSystemManager() {
+      return {
+        access(options) { options.fail({ errMsg: 'not found' }); },
+        mkdir(options) { options.success({}); },
+        saveFile(options) { options.success({ savedFilePath: options.filePath }); }
+      };
+    },
+    downloadFile(options) {
+      options.success({ statusCode: 200, tempFilePath: 'wxfile://tmp/catalog.png' });
+    },
+    showModal() {}
+  };
+}
+
+test('an online material is cached locally before insertion into the editable document', async () => {
+  global.wx = remoteAssetWxMock();
+  const document = createDocument(40, 30);
+  document.elements = [];
+  const editor = Object.assign({}, pageDefinition, {
+    pageActive: true,
+    document,
+    data: { materialAssetLoadingId: '', showMaterialSheet: true },
+    remoteMaterials: [{
+      id: 'niim-remote-test-1',
+      label: '远程素材',
+      asset: 'https://oss-print.niimbot.com/public_resources/material/editor-test-1.png',
+      sourceUrl: 'https://oss-print.niimbot.com/public_resources/material/editor-test-1.png',
+      source: 'remote-niim-material'
+    }],
+    selectedId: '',
+    selectedIds: [],
+    multiSelect: false,
+    replaceMaterial: false,
+    setData(patch) { Object.assign(this.data, patch); },
+    commit(mutator) { mutator(this.document); },
+    invalidateImage() {},
+    setSelection(ids) { this.selectedIds = ids; this.selectedId = ids[0] || ''; }
+  });
+  await editor.pickMaterial({ currentTarget: { dataset: { id: 'niim-remote-test-1' } } });
+  assert.equal(document.elements.length, 1);
+  assert.equal(document.elements[0].type, 'material');
+  assert.equal(document.elements[0].materialId, 'niim-remote-test-1');
+  assert.match(document.elements[0].path, /^wxfile:\/\/usr\/niim-online-assets\//);
+  assert.equal(editor.data.showMaterialSheet, false);
+  assert.equal(editor.data.editorPanelTab, 'elements');
+  delete global.wx;
+});
+
+test('an online border is cached and inserted as the bottom image layer', async () => {
+  global.wx = remoteAssetWxMock();
+  const document = createDocument(50, 30);
+  const text = createElement('text', document);
+  document.elements = [text];
+  const editor = Object.assign({}, pageDefinition, {
+    pageActive: true,
+    document,
+    data: { borderAssetLoadingId: '', showBorderSheet: true },
+    remoteBorders: [{
+      id: 'niim-border-remote-test-1',
+      label: '远程边框',
+      asset: 'https://oss-print.niimbot.com/public_resources/material/editor-border-test-1.png',
+      sourceUrl: 'https://oss-print.niimbot.com/public_resources/material/editor-border-test-1.png',
+      source: 'remote-niim-border',
+      ninePatch: { identity: true }
+    }],
+    selectedId: text.id,
+    selectedIds: [text.id],
+    multiSelect: false,
+    setData(patch) { Object.assign(this.data, patch); },
+    commit(mutator) { mutator(this.document); },
+    invalidateImage() {},
+    setSelection(ids) { this.selectedIds = ids; this.selectedId = ids[0] || ''; }
+  });
+  await editor.pickBorder({ currentTarget: { dataset: { id: 'niim-border-remote-test-1' } } });
+  assert.equal(document.elements.length, 2);
+  assert.equal(document.elements[0].type, 'image');
+  assert.equal(document.elements[0].onlineBorderId, 'niim-border-remote-test-1');
+  assert.equal(document.elements[0].width, 50);
+  assert.equal(document.elements[0].height, 30);
+  assert.equal(document.elements[0].locked, true);
+  assert.match(document.elements[0].path, /^wxfile:\/\/usr\/niim-online-assets\//);
+  assert.equal(document.elements[1].id, text.id);
+  assert.equal(editor.data.showBorderSheet, false);
+  assert.equal(editor.data.editorPanelTab, 'elements');
+  delete global.wx;
+});
+
+test('online and programmatic borders share one slot instead of stacking', async () => {
+  global.wx = remoteAssetWxMock();
+  const document = createDocument(50, 30);
+  const programmatic = createElement('rect', document);
+  programmatic.borderStyle = 'double';
+  programmatic.decorativeBorder = true;
+  document.elements = [programmatic];
+  const editor = Object.assign({}, pageDefinition, {
+    pageActive: true,
+    document,
+    data: { borderAssetLoadingId: '', showBorderSheet: true },
+    remoteBorders: [{
+      id: 'niim-border-remote-exclusive',
+      label: '远程边框',
+      asset: 'https://oss-print.niimbot.com/public_resources/material/exclusive.png',
+      source: 'remote-niim-border'
+    }],
+    selectedId: programmatic.id,
+    selectedIds: [programmatic.id],
+    multiSelect: false,
+    setData(patch) { Object.assign(this.data, patch); },
+    commit(mutator) { mutator(this.document); },
+    invalidateImage() {},
+    setSelection(ids) { this.selectedIds = ids; this.selectedId = ids[0] || ''; }
+  });
+
+  await editor.pickBorder({ currentTarget: { dataset: { id: 'niim-border-remote-exclusive' } } });
+  assert.equal(document.elements.filter((item) => item.type === 'rect' && item.decorativeBorder).length, 0);
+  assert.equal(document.elements.filter((item) => item.onlineBorderId).length, 1);
+  assert.equal(editor.data.editorPanelTab, 'elements');
+
+  editor.data.showBorderSheet = true;
+  await editor.pickBorder({ currentTarget: { dataset: { id: 'double' } } });
+  assert.equal(document.elements.filter((item) => item.onlineBorderId).length, 0);
+  assert.equal(document.elements.filter((item) => item.type === 'rect' && item.decorativeBorder).length, 1);
+  assert.equal(editor.data.editorPanelTab, 'elements');
+  delete global.wx;
+});
+
+test('closing the editor with unsaved changes prompts before exiting', () => {
+  let sheetOptions = null;
+  let savedCount = 0;
+  let backCount = 0;
+  global.wx = {
+    showActionSheet(options) { sheetOptions = options; },
+    navigateBack() { backCount += 1; },
+    setStorageSync() {},
+    showToast() {},
+    showModal() {}
+  };
+  const document = createDocument(40, 30);
+  document.elements = [createElement('text', document)];
+  const editor = Object.assign({}, pageDefinition, {
+    data: { projectId: 'p1' },
+    document,
+    projectId: 'p1',
+    dirtySinceSave: true,
+    repository: { saveProject(value, id) { savedCount += 1; return { id: id || 'p1' }; } },
+    setData(patch) { Object.assign(this.data, patch); }
+  });
+
+  editor.closeEditor();
+  assert.equal(backCount, 0);
+  assert.deepEqual(sheetOptions.itemList, ['保存并退出', '不保存退出']);
+
+  sheetOptions.success({ tapIndex: 0 });
+  assert.equal(savedCount, 1);
+  assert.equal(backCount, 1);
+  assert.equal(editor.dirtySinceSave, false);
+
+  editor.dirtySinceSave = true;
+  editor.closeEditor();
+  sheetOptions.success({ tapIndex: 1 });
+  assert.equal(savedCount, 1);
+  assert.equal(backCount, 2);
+
+  editor.dirtySinceSave = false;
+  sheetOptions = null;
+  editor.closeEditor();
+  assert.equal(sheetOptions, null);
+  assert.equal(backCount, 3);
+  delete global.wx;
+});
+
+test('reopening the print sheet clears progress left over from the previous run', () => {
+  const editor = Object.assign({}, pageDefinition, {
+    data: { printing: false, printProgress: 100, printMessage: '打印完成' },
+    refreshPrintBlock() { return null; },
+    setData(patch) { Object.assign(this.data, patch); }
+  });
+  editor.openPrintSheet();
+  assert.equal(editor.data.showPrintSheet, true);
+  assert.equal(editor.data.printProgress, 0);
+  assert.equal(editor.data.printMessage, '');
+
+  editor.data.printing = true;
+  editor.data.printProgress = 40;
+  editor.data.printMessage = '正在打印';
+  editor.openPrintSheet();
+  assert.equal(editor.data.printProgress, 40);
+  assert.equal(editor.data.printMessage, '正在打印');
+});
+
+test('print copies accept direct input and clamp to the valid range', () => {
+  const editor = Object.assign({}, pageDefinition, {
+    data: { copies: 3 },
+    setData(patch) { Object.assign(this.data, patch); }
+  });
+  editor.setCopiesInput({ detail: { value: '30' } });
+  assert.equal(editor.data.copies, 30);
+  editor.setCopiesInput({ detail: { value: '500' } });
+  assert.equal(editor.data.copies, 99);
+  editor.setCopiesInput({ detail: { value: '0' } });
+  assert.equal(editor.data.copies, 1);
+  editor.setCopiesInput({ detail: { value: '12' } });
+  editor.setCopiesInput({ detail: { value: '' } });
+  assert.equal(editor.data.copies, 12);
+  const wxml = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'editor', 'index.wxml'), 'utf8');
+  assert.match(wxml, /class="copies-input"[^>]*bindblur="setCopiesInput"/);
+});
+
+test('inspector and layer list surface Chinese element type labels', () => {
+  const { elementTypeLabel } = require('../miniprogram/core/document');
+  assert.equal(elementTypeLabel('qrcode'), '二维码');
+  assert.equal(elementTypeLabel('serial'), '序列号');
+  assert.equal(elementTypeLabel('unknown-type'), '元素');
+  const wxml = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'editor', 'index.wxml'), 'utf8');
+  assert.match(wxml, /: selectedTypeLabel\}\}/);
+  assert.match(wxml, /class="layer-type">\{\{item\._typeLabel\}\}/);
+  assert.equal(/inspector-title">[^<]*selected\.type/.test(wxml), false);
 });

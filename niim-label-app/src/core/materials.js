@@ -1,29 +1,68 @@
 /** Built-in monochrome materials for thermal labels (vector, 0..1 unit box). */
-const ORIGINAL_MATERIAL_MANIFEST = require('../data/original-materials.json');
+const {
+  SHANGYUE_MATERIAL_SYMBOL_IDS,
+  drawShangyueMaterialSymbol
+} = require('./material-symbols-v2');
 
-// The reference screen used a paid-only tab. Product acceptance removes that
-// tab entirely, so the imported reference set lands on the ordinary 最新 tab.
+const SHANGYUE_MATERIAL_SYMBOL_SET = new Set(SHANGYUE_MATERIAL_SYMBOL_IDS);
+
 const DEFAULT_MATERIAL_CHIP = '最新';
-
-const ORIGINAL_MATERIAL_CATALOG = ORIGINAL_MATERIAL_MANIFEST.items.map((item) => ({
-  id: item.id,
-  remoteId: item.remoteId,
-  label: item.label,
-  category: item.category,
-  tags: item.tags.slice(),
-  sourceTier: item.sourceTier,
-  asset: item.asset,
-  sourceUrl: item.sourceUrl,
-  format: item.format,
-  width: item.width,
-  height: item.height,
-  sha256: item.sha256
-}));
+const ORIGINAL_MATERIAL_MANIFEST = { items: [] };
+const ORIGINAL_MATERIAL_CATALOG = [];
 
 const MATERIAL_CHIPS = [
-  '最新', '热门', '可爱', '饰品', '祝福', '园艺',
-  '标记', '警示', '物流', '箭头', '联系', '餐饮', '零售', '形状'
+  '最新', '商跃', '零售', '仓储', '效期', '服饰', '设备', '办公',
+  '热门', '餐饮', '物流', '警示', '标记', '联系', '箭头',
+  '可爱', '饰品', '祝福', '园艺', '形状'
 ];
+
+/**
+ * Shangyue-owned scenario materials designed specifically for small thermal
+ * labels. They deliberately use business concepts instead of decorative
+ * filler, so shopkeepers can search by the language used in daily work.
+ */
+const SHANGYUE_SCENE_MATERIALS = Object.freeze([
+  { id: 'retail_shelf', label: '商品货架', category: '零售', tags: ['零售', '门店', '陈列', '商跃', '最新'] },
+  { id: 'cash_register', label: '收银机', category: '零售', tags: ['零售', '门店', '收银', '商跃'] },
+  { id: 'shopping_basket', label: '购物篮', category: '零售', tags: ['零售', '购物', '门店', '商跃'] },
+  { id: 'price_drop', label: '降价促销', category: '零售', tags: ['零售', '促销', '特价', '降价', '商跃', '热门'] },
+  { id: 'membership_card', label: '会员卡', category: '零售', tags: ['零售', '会员', '积分', '商跃'] },
+
+  { id: 'warehouse_rack', label: '仓储货架', category: '仓储', tags: ['仓储', '货位', '库位', '仓库', '商跃', '最新'] },
+  { id: 'pallet', label: '托盘', category: '仓储', tags: ['仓储', '托盘', '物流', '商跃'] },
+  { id: 'forklift', label: '叉车', category: '仓储', tags: ['仓储', '叉车', '搬运', '物流', '商跃'] },
+  { id: 'inventory_box', label: '库存箱', category: '仓储', tags: ['仓储', '库存', '盘点', '箱码', '商跃'] },
+  { id: 'outbound', label: '出库', category: '仓储', tags: ['仓储', '出库', '发货', '物流', '商跃'] },
+
+  { id: 'expiry_calendar', label: '有效期', category: '效期', tags: ['效期', '有效期', '到期', '日期', '商跃', '热门'] },
+  { id: 'hourglass', label: '保质期', category: '效期', tags: ['效期', '保质期', '期限', '商跃'] },
+  { id: 'first_in_first_out', label: '先进先出', category: '效期', tags: ['效期', '先进先出', 'FIFO', '轮转', '商跃'] },
+  { id: 'cold_chain', label: '冷链保存', category: '效期', tags: ['效期', '冷链', '冷藏', '保鲜', '商跃'] },
+  { id: 'batch_stamp', label: '批次章', category: '效期', tags: ['效期', '批次', '批号', '生产', '商跃'] },
+
+  { id: 'tshirt', label: 'T恤', category: '服饰', tags: ['服饰', '服装', '尺码', '吊牌', '商跃', '最新'] },
+  { id: 'dress', label: '连衣裙', category: '服饰', tags: ['服饰', '女装', '裙装', '商跃'] },
+  { id: 'shoe', label: '鞋履', category: '服饰', tags: ['服饰', '鞋码', '鞋子', '商跃'] },
+  { id: 'ring_size', label: '戒圈尺码', category: '服饰', tags: ['服饰', '饰品', '珠宝', '戒指', '尺码', '商跃'] },
+  { id: 'jewelry_box', label: '首饰盒', category: '服饰', tags: ['服饰', '饰品', '珠宝', '首饰', '商跃'] },
+
+  { id: 'cable_coil', label: '线缆盘', category: '设备', tags: ['设备', '线缆', '电线', '长度', '商跃', '热门'] },
+  { id: 'plug', label: '电源插头', category: '设备', tags: ['设备', '电源', '插头', '线缆', '商跃'] },
+  { id: 'network_port', label: '网络端口', category: '设备', tags: ['设备', '网口', '网络', '端口', '商跃'] },
+  { id: 'device_serial', label: '设备铭牌', category: '设备', tags: ['设备', '铭牌', '序列号', '资产', '商跃'] },
+  { id: 'grounding', label: '接地', category: '设备', tags: ['设备', '接地', '电气', '安全', '警示', '商跃'] },
+
+  { id: 'file_box', label: '档案盒', category: '办公', tags: ['办公', '档案', '文件', '归档', '商跃'] },
+  { id: 'medicine', label: '药品', category: '办公', tags: ['办公', '生活', '药品', '医药', '效期', '商跃'] },
+  { id: 'kitchen_jar', label: '储物罐', category: '办公', tags: ['办公', '生活', '厨房', '收纳', '商跃'] },
+  { id: 'school_book', label: '课本', category: '办公', tags: ['办公', '学习', '课本', '姓名贴', '商跃'] },
+  { id: 'plant_pot', label: '盆栽', category: '办公', tags: ['办公', '生活', '园艺', '植物', '商跃'] }
+]);
+
+const SHANGYUE_SCENE_MATERIAL_SYMBOL_IDS = Object.freeze(
+  SHANGYUE_SCENE_MATERIALS.map((item) => item.id)
+);
+const SHANGYUE_SCENE_MATERIAL_SYMBOL_SET = new Set(SHANGYUE_SCENE_MATERIAL_SYMBOL_IDS);
 
 const MATERIAL_CATALOG = ORIGINAL_MATERIAL_CATALOG.concat([
   { id: 'check', label: '对勾', category: '标记', tags: ["标记", "热门", "最新"] },
@@ -155,7 +194,18 @@ const MATERIAL_CATALOG = ORIGINAL_MATERIAL_CATALOG.concat([
   { id: 'refresh', label: '刷新', category: '箭头', tags: ['箭头','最新'] },
   { id: 'download', label: '下载', category: '箭头', tags: ['箭头'] },
   { id: 'upload', label: '上传', category: '箭头', tags: ['箭头'] }
-]);
+], SHANGYUE_SCENE_MATERIALS).map((item) => {
+  const isV2Symbol = SHANGYUE_MATERIAL_SYMBOL_SET.has(item.id);
+  const isSceneSymbol = SHANGYUE_SCENE_MATERIAL_SYMBOL_SET.has(item.id);
+  if (!isV2Symbol && !isSceneSymbol) return item;
+  return {
+    ...item,
+    tags: Array.from(new Set([...(item.tags || []), '商跃'])),
+    source: isSceneSymbol ? 'shangyue-vector-scene-v1' : 'shangyue-vector-v2',
+    vector: true,
+    raster: false
+  };
+});
 
 function materialById(id) {
   return MATERIAL_CATALOG.find((item) => item.id === id) || MATERIAL_CATALOG[0];
@@ -184,9 +234,9 @@ function materialsForChip(chip, query) {
   let list = MATERIAL_CATALOG.slice();
   const c = chip || '';
   if (c && c !== '搜索' && c !== '全部') {
-    list = list.filter((item) =>
-      (item.tags && item.tags.includes(c)) || item.category === c
-    );
+    list = list.filter((item) => c === '商跃'
+      ? SHANGYUE_MATERIAL_SYMBOL_SET.has(item.id) || SHANGYUE_SCENE_MATERIAL_SYMBOL_SET.has(item.id)
+      : (item.tags && item.tags.includes(c)) || item.category === c);
   }
   const q = String(query || '').trim().toLowerCase();
   if (q) {
@@ -209,6 +259,230 @@ function materialCategories() {
     if (!seen.includes(item.category)) seen.push(item.category);
   });
   return seen;
+}
+
+/** Draw the original Shangyue scenario pack in a 24 x 24 unit box. */
+function drawShangyueSceneMaterialSymbol(context, symbol, x, y, w, h, lineWidthPx) {
+  if (!SHANGYUE_SCENE_MATERIAL_SYMBOL_SET.has(symbol)) return false;
+
+  const sx = (u) => x + (u / 24) * w;
+  const sy = (v) => y + (v / 24) * h;
+  const unit = Math.min(w, h) / 24;
+  const stroke = () => {
+    context.lineWidth = Math.max(1, lineWidthPx || 2);
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    context.stroke();
+  };
+  const path = (points, close = false, filled = false) => {
+    context.beginPath();
+    points.forEach(([px, py], index) => {
+      if (index === 0) context.moveTo(sx(px), sy(py));
+      else context.lineTo(sx(px), sy(py));
+    });
+    if (close) context.closePath();
+    if (filled) context.fill();
+    else stroke();
+  };
+  const segments = (lines) => {
+    context.beginPath();
+    lines.forEach(([x1, y1, x2, y2]) => {
+      context.moveTo(sx(x1), sy(y1));
+      context.lineTo(sx(x2), sy(y2));
+    });
+    stroke();
+  };
+  const rect = (left, top, right, bottom, filled = false) => {
+    path([[left, top], [right, top], [right, bottom], [left, bottom]], true, filled);
+  };
+  const circle = (cx, cy, radius, filled = false) => {
+    context.beginPath();
+    context.arc(sx(cx), sy(cy), radius * unit, 0, Math.PI * 2);
+    if (filled) context.fill();
+    else stroke();
+  };
+
+  switch (symbol) {
+    case 'retail_shelf':
+      rect(4, 3, 20, 21);
+      segments([[4, 9, 20, 9], [4, 15, 20, 15]]);
+      rect(6, 5, 10, 9); rect(13, 4, 18, 9);
+      rect(5, 11, 12, 15); rect(15, 10, 19, 15);
+      rect(7, 17, 11, 21); rect(13, 16, 18, 21);
+      break;
+    case 'cash_register':
+      path([[5, 10], [18, 10], [21, 20], [3, 20]], true);
+      rect(7, 3, 17, 10); rect(9, 5, 15, 8);
+      [7, 11, 15].forEach((px) => circle(px, 14, 0.7, true));
+      [8.5, 12.5, 16.5].forEach((px) => circle(px, 17, 0.7, true));
+      break;
+    case 'shopping_basket':
+      path([[4, 9], [20, 9], [18, 20], [6, 20]], true);
+      context.beginPath(); context.moveTo(sx(7), sy(10));
+      context.quadraticCurveTo(sx(8), sy(2), sx(12), sy(3));
+      context.quadraticCurveTo(sx(16), sy(2), sx(17), sy(10)); stroke();
+      segments([[9, 12, 9, 18], [12, 12, 12, 18], [15, 12, 15, 18]]);
+      break;
+    case 'price_drop':
+      path([[4, 5], [14, 4], [21, 11], [12, 20], [4, 13]], true);
+      circle(8, 8, 1.3);
+      path([[11, 8], [16, 13], [16, 10], [16, 13], [13, 13]]);
+      break;
+    case 'membership_card':
+      rect(3, 5, 21, 19);
+      circle(8, 11, 2.2);
+      context.beginPath(); context.moveTo(sx(5), sy(17));
+      context.quadraticCurveTo(sx(8), sy(13), sx(11), sy(17)); stroke();
+      segments([[13, 9, 19, 9], [13, 12, 18, 12], [13, 15, 16, 15]]);
+      break;
+
+    case 'warehouse_rack':
+      segments([[3, 3, 3, 22], [21, 3, 21, 22], [3, 8, 21, 8], [3, 14, 21, 14], [3, 20, 21, 20]]);
+      rect(5, 4, 11, 8); rect(14, 3, 19, 8);
+      rect(6, 10, 13, 14); rect(15, 9, 20, 14);
+      rect(4, 16, 10, 20); rect(12, 16, 19, 20);
+      break;
+    case 'pallet':
+      rect(4, 4, 11, 12); rect(12, 4, 20, 12);
+      path([[4, 4], [7.5, 7], [11, 4], [12, 4], [16, 8], [20, 4]]);
+      rect(3, 14, 21, 17); rect(5, 17, 8, 21); rect(16, 17, 19, 21);
+      path([[3, 21], [21, 21]]);
+      break;
+    case 'forklift':
+      path([[4, 16], [4, 8], [11, 8], [14, 16], [18, 16], [18, 20], [4, 20]], true);
+      path([[11, 8], [11, 4], [16, 4], [16, 16]]);
+      segments([[16, 16, 21, 16], [21, 6, 21, 20]]);
+      path([[16, 12], [20, 12]]);
+      circle(7, 20, 2); circle(15, 20, 2);
+      break;
+    case 'inventory_box':
+      path([[4, 7], [12, 3], [20, 7], [20, 18], [12, 22], [4, 18]], true);
+      path([[4, 7], [12, 12], [20, 7], [12, 12], [12, 22], [8, 5], [16, 9]]);
+      path([[14, 16], [16, 18], [20, 13]]);
+      break;
+    case 'outbound':
+      rect(3, 6, 14, 18);
+      path([[3, 6], [8.5, 10], [14, 6], [8.5, 10], [8.5, 18]]);
+      path([[12, 13], [21, 13], [17, 9], [21, 13], [17, 17]]);
+      break;
+
+    case 'expiry_calendar':
+      rect(4, 5, 20, 21);
+      segments([[4, 10, 20, 10], [8, 3, 8, 7], [16, 3, 16, 7]]);
+      circle(12, 15, 3.2);
+      path([[12, 15], [12, 12.5], [14, 16]]);
+      break;
+    case 'hourglass':
+      path([[6, 3], [18, 3], [17, 8], [13, 12], [17, 16], [18, 21], [6, 21], [7, 16], [11, 12], [7, 8]], true);
+      path([[8, 6], [16, 6], [12, 10]], true, true);
+      path([[8, 19], [16, 19], [12, 14]], true, true);
+      break;
+    case 'first_in_first_out':
+      rect(3, 5, 8, 11); rect(9.5, 5, 14.5, 11); rect(16, 5, 21, 11);
+      path([[3, 16], [19, 16], [15, 12], [19, 16], [15, 20]]);
+      circle(6, 8, 0.7, true); circle(12, 8, 0.7, true); circle(18.5, 8, 0.7, true);
+      break;
+    case 'cold_chain':
+      rect(4, 4, 20, 21);
+      segments([[12, 7, 12, 18], [8, 9, 16, 16], [8, 16, 16, 9]]);
+      segments([[9.5, 7.5, 12, 10], [12, 10, 14.5, 7.5], [9.5, 17.5, 12, 15], [12, 15, 14.5, 17.5]]);
+      break;
+    case 'batch_stamp':
+      path([[8, 4], [16, 4], [15, 11], [19, 14], [19, 17], [5, 17], [5, 14], [9, 11]], true);
+      segments([[4, 20, 20, 20], [9, 13, 9, 18], [15, 13, 15, 18], [7, 15, 17, 15]]);
+      break;
+
+    case 'tshirt':
+      path([[8, 4], [4, 7], [2, 12], [6, 14], [8, 11], [8, 21], [16, 21], [16, 11], [18, 14], [22, 12], [20, 7], [16, 4]], true);
+      context.beginPath(); context.moveTo(sx(8), sy(4)); context.quadraticCurveTo(sx(12), sy(9), sx(16), sy(4)); stroke();
+      break;
+    case 'dress':
+      context.beginPath(); context.moveTo(sx(9), sy(3)); context.quadraticCurveTo(sx(12), sy(7), sx(15), sy(3)); stroke();
+      path([[9, 3], [7, 10], [9, 12], [4, 21], [20, 21], [15, 12], [17, 10], [15, 3]], true);
+      path([[8, 11], [16, 11]]);
+      break;
+    case 'shoe':
+      context.beginPath(); context.moveTo(sx(4), sy(15));
+      context.quadraticCurveTo(sx(8), sy(15), sx(10), sy(7));
+      context.quadraticCurveTo(sx(13), sy(13), sx(20), sy(14));
+      context.quadraticCurveTo(sx(23), sy(15), sx(21), sy(19));
+      context.lineTo(sx(5), sy(19)); context.quadraticCurveTo(sx(2), sy(18), sx(4), sy(15)); stroke();
+      path([[10, 11], [13, 11], [8, 19], [8, 17], [20, 17]]);
+      break;
+    case 'ring_size':
+      circle(11, 12, 6); circle(11, 12, 3.2);
+      path([[18, 5], [21, 5], [21, 20], [18, 20]]);
+      segments([[18, 8, 20, 8], [18, 11, 20, 11], [18, 14, 20, 14], [18, 17, 20, 17]]);
+      break;
+    case 'jewelry_box':
+      rect(4, 11, 20, 21);
+      path([[4, 11], [7, 4], [17, 4], [20, 11], [7, 4], [12, 10], [17, 4]]);
+      path([[9, 15], [12, 12], [15, 15], [12, 19]], true);
+      break;
+
+    case 'cable_coil':
+      circle(11, 11, 7); circle(11, 11, 3.5); circle(11, 11, 1, true);
+      context.beginPath(); context.moveTo(sx(16), sy(16));
+      context.quadraticCurveTo(sx(21), sy(17), sx(19), sy(22)); stroke();
+      path([[18, 22], [21, 22]]);
+      break;
+    case 'plug':
+      rect(7, 6, 17, 14);
+      segments([[10, 6, 10, 2], [14, 6, 14, 2], [9, 14, 9, 18], [9, 18, 15, 18], [15, 18, 15, 14]]);
+      context.beginPath(); context.moveTo(sx(15), sy(18)); context.quadraticCurveTo(sx(19), sy(18), sx(20), sy(22)); stroke();
+      break;
+    case 'network_port':
+      rect(4, 5, 20, 20);
+      path([[7, 8], [17, 8], [17, 14], [15, 14], [15, 17], [9, 17], [9, 14], [7, 14]], true);
+      [9, 11, 13, 15].forEach((px) => path([[px, 8], [px, 11]]));
+      break;
+    case 'device_serial':
+      rect(3, 5, 21, 19);
+      circle(6, 8, 0.8, true); circle(18, 8, 0.8, true);
+      segments([[8, 8, 16, 8], [6, 12, 18, 12], [6, 15, 14, 15], [16, 15, 18, 15], [6, 17, 9, 17], [11, 17, 13, 17]]);
+      break;
+    case 'grounding':
+      segments([[12, 3, 12, 14], [6, 14, 18, 14], [8, 18, 16, 18], [10, 21, 14, 21]]);
+      path([[8, 5], [12, 9], [16, 5]]);
+      break;
+
+    case 'file_box':
+      path([[5, 3], [17, 3], [20, 6], [20, 21], [5, 21]], true);
+      path([[17, 3], [17, 6], [20, 6]]);
+      rect(8, 8, 17, 14); circle(12.5, 18, 1.2);
+      break;
+    case 'medicine':
+      rect(6, 7, 18, 21);
+      rect(8, 3, 16, 7);
+      segments([[12, 10, 12, 18], [8, 14, 16, 14]]);
+      break;
+    case 'kitchen_jar':
+      rect(7, 3, 17, 6);
+      context.beginPath(); context.moveTo(sx(6), sy(7));
+      context.quadraticCurveTo(sx(4), sy(14), sx(7), sy(21));
+      context.lineTo(sx(17), sy(21)); context.quadraticCurveTo(sx(20), sy(14), sx(18), sy(7)); context.closePath(); stroke();
+      path([[7, 11], [17, 11], [9, 15], [15, 15]]);
+      break;
+    case 'school_book':
+      context.beginPath(); context.moveTo(sx(3), sy(5));
+      context.quadraticCurveTo(sx(8), sy(3), sx(12), sy(7));
+      context.quadraticCurveTo(sx(16), sy(3), sx(21), sy(5));
+      context.lineTo(sx(21), sy(20)); context.quadraticCurveTo(sx(16), sy(18), sx(12), sy(22));
+      context.quadraticCurveTo(sx(8), sy(18), sx(3), sy(20)); context.closePath(); stroke();
+      segments([[12, 7, 12, 22], [6, 9, 10, 10], [14, 10, 19, 9], [6, 14, 10, 15], [14, 15, 19, 14]]);
+      break;
+    case 'plant_pot':
+      path([[7, 13], [17, 13], [15, 22], [9, 22]], true);
+      path([[12, 13], [12, 5]]);
+      context.beginPath(); context.moveTo(sx(12), sy(8)); context.quadraticCurveTo(sx(5), sy(7), sx(5), sy(3)); context.quadraticCurveTo(sx(11), sy(2), sx(12), sy(8)); stroke();
+      context.beginPath(); context.moveTo(sx(12), sy(10)); context.quadraticCurveTo(sx(19), sy(9), sx(20), sy(5)); context.quadraticCurveTo(sx(14), sy(4), sx(12), sy(10)); stroke();
+      path([[6, 16], [18, 16]]);
+      break;
+    default:
+      return false;
+  }
+
+  return true;
 }
 
 /**
@@ -234,6 +508,19 @@ function drawMaterialSymbol(context, symbol, x, y, w, h, lineWidthPx) {
   context.fillStyle = '#000000';
 
   const id = symbol || 'check';
+
+  // V2 glyphs replace the early catalog's repeated placeholder geometry with
+  // distinct Shangyue-owned vector drawings. Legacy primitives remain below as
+  // a compatibility fallback for existing documents and the basic symbol set.
+  if (drawShangyueMaterialSymbol(context, id, x, y, w, h, lw)) {
+    context.restore();
+    return;
+  }
+
+  if (drawShangyueSceneMaterialSymbol(context, id, x, y, w, h, lw)) {
+    context.restore();
+    return;
+  }
 
   if (id === 'check') {
     context.beginPath();
@@ -1058,8 +1345,11 @@ module.exports = {
   MATERIAL_CHIPS,
   ORIGINAL_MATERIAL_CATALOG,
   ORIGINAL_MATERIAL_MANIFEST,
+  SHANGYUE_SCENE_MATERIAL_SYMBOL_IDS,
+  SHANGYUE_SCENE_MATERIALS,
   applyMaterialToElement,
   drawMaterialSymbol,
+  drawShangyueSceneMaterialSymbol,
   materialChipAfterSearchToggle,
   materialById,
   materialCategories,

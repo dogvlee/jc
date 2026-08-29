@@ -1,10 +1,11 @@
 /**
  * Offline industry label layouts for the template experience.
  * Coordinates are millimeters. Layouts are clean-room designs matching
- * common NIIMBOT product flows (retail / warehouse / office / lifestyle),
+ * common label-printer product flows (retail / warehouse / office / lifestyle),
  * not copies of proprietary template JSON or remote assets.
  */
 const { createDocument, createElement } = require('../core/document');
+const { CLEANROOM_LAYOUT_BUILDERS } = require('./cleanroom-template-pack');
 
 function text(doc, opts) {
   const el = createElement('text', doc);
@@ -37,6 +38,39 @@ function qrcode(doc, opts) {
     errorCorrection: 'M'
   }, opts);
   return el;
+}
+
+/**
+ * Operational placeholders are deliberately print-blocking. Editing the
+ * content in the normal property panel clears these flags, which prevents a
+ * polished sample value from being mistaken for real store or customer data.
+ */
+function requiredText(doc, opts) {
+  return text(doc, Object.assign({
+    text: '请填写',
+    requiresInput: true,
+    requiresInputReason: 'placeholder-text',
+    riskRole: 'business-data'
+  }, opts));
+}
+
+function sampleBarcode(doc, opts) {
+  return barcode(doc, Object.assign({
+    value: 'DEMO01',
+    format: 'code128',
+    requiresInput: true,
+    requiresInputReason: 'sample-code',
+    riskRole: 'sample-code'
+  }, opts));
+}
+
+function sampleQr(doc, opts) {
+  return qrcode(doc, Object.assign({
+    value: 'SYDEMO:01',
+    requiresInput: true,
+    requiresInputReason: 'sample-code',
+    riskRole: 'sample-code'
+  }, opts));
 }
 
 function rect(doc, opts) {
@@ -93,6 +127,83 @@ function finish(doc, name, meta) {
   return doc;
 }
 
+function shangyueOriginalMeta(industry, stock, extra) {
+  return Object.assign({
+    industry,
+    stock,
+    origin: 'shangyue-original',
+    authorship: 'shangyue-clean-room',
+    designVersion: '1.0.0',
+    createdAt: '2026-08-17',
+    copyright: '© 2026 商跃',
+    thirdPartyAssets: false,
+    approvedOriginal: true,
+    approvalStatus: 'approved',
+    publicCatalog: true,
+    releaseApproved: true,
+    manualReviewStatus: 'approved-2026-08-19',
+    batchCompatible: false
+  }, extra || {});
+}
+
+function scenarioMeta(industry, stock, scenarioGroup, verifiedProfiles) {
+  return shangyueOriginalMeta(industry, stock, {
+    scenarioGroup,
+    riskGuard: 'edit-before-print',
+    verifiedProfiles: verifiedProfiles || ['b1', 'b21', 'b21-c2b', 'b21s'],
+    designVersion: '1.1.0',
+    createdAt: '2026-08-19'
+  });
+}
+
+function scenarioFrame(doc, label, options) {
+  const opts = options || {};
+  const top = Number(opts.top || 0.8);
+  const height = Number(opts.height || 4.6);
+  const titleWidth = Number(opts.titleWidth || 19);
+  return [
+    rect(doc, {
+      x: 0.7, y: 0.7, width: doc.widthMm - 1.4, height: doc.heightMm - 1.4,
+      shapeKind: 'rounded', lineWidth: 0.35, locked: true
+    }),
+    rect(doc, {
+      x: 0.7, y: top, width: doc.widthMm - 1.4, height,
+      filled: true, lineWidth: 0.2, locked: true
+    }),
+    text(doc, {
+      x: 1.7, y: top + 0.35, width: titleWidth, height: height - 0.7,
+      text: label, fontSize: 2.25, bold: true, reverse: true
+    }),
+    text(doc, {
+      x: doc.widthMm - 10.7, y: top + 0.35, width: 9, height: height - 0.7,
+      text: 'SY · 场景', fontSize: 2.05, bold: true, reverse: true, align: 'right'
+    })
+  ];
+}
+
+function shangyueAuthorizedRedesignMeta(industry, stock, extra) {
+  return Object.assign({
+    industry,
+    stock,
+    source: 'shangyue-authorized-redesign',
+    origin: 'shangyue-authorized-redesign',
+    authorship: 'shangyue-independent-redesign',
+    authorizationStatus: 'operator-confirmed-document-reference-pending',
+    authorizationReference: '',
+    authorizedRedesign: true,
+    designVersion: '2.0.0',
+    createdAt: '2026-08-18',
+    copyright: '精诚授权改编 · 商跃重设计',
+    thirdPartyAssets: false,
+    approvedOriginal: false,
+    approvalStatus: 'authorized',
+    publicCatalog: true,
+    releaseApproved: true,
+    manualReviewStatus: 'approved-2026-08-18',
+    batchCompatible: false
+  }, extra || {});
+}
+
 /** 商品价格 · 40×30 · 条码价签 */
 function layoutProductPrice() {
   const doc = createDocument(40, 30);
@@ -131,12 +242,12 @@ function layoutJewelry() {
   doc.elements = [
     text(doc, {
       x: 2, y: 1.5, width: 36, height: 4.5,
-      text: 'JingChen Jewelry', fontSize: 3.2, bold: true, align: 'center',
+      text: 'SHANGYUE JEWELRY', fontSize: 3.2, bold: true, align: 'center',
       fontFamily: 'serif'
     }),
     line(doc, { x: 6, y: 6.5, width: 28, height: 0.8, lineWidth: 0.25 }),
     text(doc, { x: 2.5, y: 8, width: 35, height: 2.8, text: '类型：红宝石手链', fontSize: 2.3 }),
-    text(doc, { x: 2.5, y: 11, width: 35, height: 2.8, text: '编号：JC-8842', fontSize: 2.3 }),
+    text(doc, { x: 2.5, y: 11, width: 35, height: 2.8, text: '编号：SY-8842', fontSize: 2.3 }),
     text(doc, { x: 2.5, y: 14, width: 35, height: 2.8, text: '重量：5.2g', fontSize: 2.3 }),
     text(doc, {
       x: 2.5, y: 17.5, width: 35, height: 4,
@@ -244,6 +355,593 @@ function layoutFoodDate() {
     })
   ];
   return finish(doc, '食品日期标签', { industry: '生活', stock: '40×30' });
+}
+
+/** 商跃原创心意卡 · 40×30 · 无第三方图片或字体 */
+function layoutShangyueWishCard() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    rect(doc, {
+      x: 0.8, y: 0.8, width: 38.4, height: 28.4,
+      shapeKind: 'rounded', lineWidth: 0.35, locked: true
+    }),
+    rect(doc, {
+      x: 1.8, y: 2.2, width: 1.2, height: 25.6,
+      filled: true, lineWidth: 0.35, locked: true
+    }),
+    text(doc, {
+      x: 4.2, y: 2.2, width: 12.5, height: 3.4,
+      text: '商跃原创', fontSize: 2.2, bold: true,
+      reverse: true, align: 'center'
+    }),
+    text(doc, {
+      x: 4.2, y: 6.3, width: 20.5, height: 5.2,
+      text: '生日快乐', fontSize: 4.6, bold: true
+    }),
+    text(doc, {
+      x: 4.2, y: 11.7, width: 20.5, height: 3.4,
+      text: '新一岁 · 常欢喜', fontSize: 2.7, bold: true
+    }),
+    line(doc, {
+      x: 4.2, y: 15.7, width: 20, height: 0.7,
+      lineWidth: 0.35, locked: true
+    }),
+    text(doc, {
+      x: 4.2, y: 17.4, width: 20.5, height: 8.8,
+      text: '愿每一次出发\n都有好风景', fontSize: 2.6,
+      lineSpacing: 1.35, verticalAlign: 'top'
+    }),
+    qrcode(doc, {
+      x: 27.2, y: 6.8, width: 10.8, height: 10.8,
+      value: '生日快乐，愿你常欢喜。', errorCorrection: 'M'
+    }),
+    text(doc, {
+      x: 26.5, y: 18.4, width: 12.2, height: 3.2,
+      text: '扫码见心意', fontSize: 2.2, align: 'center'
+    }),
+    serial(doc, {
+      x: 27, y: 22.2, width: 11.2, height: 3.4,
+      prefix: 'NO.', start: 1, digits: 4,
+      fontSize: 2.2, align: 'center'
+    })
+  ];
+  return finish(doc, '商跃心意祝福卡', {
+    industry: '生活',
+    stock: '40×30',
+    origin: 'shangyue-original',
+    authorship: 'shangyue-clean-room',
+    designVersion: '1.0.0',
+    createdAt: '2026-08-16',
+    copyright: '© 2026 商跃',
+    thirdPartyAssets: false,
+    batchCompatible: false
+  });
+}
+
+/** 商跃原创零售价签 · 40×30 · 顶栏反白 + 双价 + EAN */
+function layoutShangyuePriceTag() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    rect(doc, {
+      x: 0.8, y: 0.8, width: 38.4, height: 28.4,
+      shapeKind: 'rounded', lineWidth: 0.35, locked: true
+    }),
+    rect(doc, {
+      x: 0.8, y: 0.8, width: 38.4, height: 4.6,
+      filled: true, lineWidth: 0.2, locked: true
+    }),
+    text(doc, {
+      x: 1.6, y: 1.2, width: 13.2, height: 3.6,
+      text: '商跃价签', fontSize: 2.4, bold: true,
+      reverse: true, align: 'left'
+    }),
+    text(doc, {
+      x: 26.4, y: 1.3, width: 12, height: 3.4,
+      text: '零售', fontSize: 2.2, bold: true,
+      reverse: true, align: 'right'
+    }),
+    text(doc, {
+      x: 2.2, y: 6.2, width: 35.6, height: 4.8,
+      text: '云南青提', fontSize: 4.2, bold: true
+    }),
+    text(doc, {
+      x: 2.2, y: 11.2, width: 35.6, height: 3,
+      text: '产地 宾川 · 500g / 盒', fontSize: 2.3
+    }),
+    text(doc, {
+      x: 2.2, y: 14.6, width: 20, height: 5.2,
+      text: '¥16.80', fontSize: 4.8, bold: true
+    }),
+    text(doc, {
+      x: 22.4, y: 15.4, width: 15.4, height: 3.2,
+      text: '会员 15.20', fontSize: 2.3, align: 'right'
+    }),
+    barcode(doc, {
+      x: 2.4, y: 20.6, width: 35.2, height: 7.4,
+      value: '6901234567892', format: 'ean13'
+    })
+  ];
+  return finish(doc, '商跃零售价签', shangyueOriginalMeta('零售', '40×30'));
+}
+
+/** 商跃原创仓储货位 · 40×30 · 左侧竖条 + 右侧码井 */
+function layoutShangyueBinLabel() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    rect(doc, {
+      x: 0.8, y: 0.8, width: 38.4, height: 28.4,
+      shapeKind: 'rounded', lineWidth: 0.35, locked: true
+    }),
+    rect(doc, {
+      x: 1.6, y: 2.0, width: 1.2, height: 26.0,
+      filled: true, lineWidth: 0.3, locked: true
+    }),
+    text(doc, {
+      x: 3.6, y: 2.0, width: 12.8, height: 3.2,
+      text: '商跃仓储', fontSize: 2.2, bold: true,
+      reverse: true, align: 'center'
+    }),
+    text(doc, {
+      x: 3.6, y: 6.0, width: 21.6, height: 5.0,
+      text: 'A-12-08', fontSize: 4.2, bold: true
+    }),
+    text(doc, {
+      x: 3.6, y: 11.4, width: 21.6, height: 2.8,
+      text: 'SKU SY-WH-0817', fontSize: 2.2
+    }),
+    text(doc, {
+      x: 3.6, y: 14.4, width: 21.6, height: 2.8,
+      text: '冷冻蓝莓 5kg', fontSize: 2.4, bold: true
+    }),
+    text(doc, {
+      x: 3.6, y: 17.4, width: 21.6, height: 2.6,
+      text: '批次 20260817', fontSize: 2.2
+    }),
+    serial(doc, {
+      x: 3.6, y: 21.6, width: 21.6, height: 3.2,
+      prefix: 'BIN-', start: 1208, digits: 4,
+      fontSize: 2.2
+    }),
+    qrcode(doc, {
+      x: 26.4, y: 6.0, width: 11.2, height: 11.2,
+      value: 'BIN://A-12-08/SY-WH-0817', errorCorrection: 'M'
+    }),
+    text(doc, {
+      x: 26.0, y: 18.0, width: 12.0, height: 2.8,
+      text: '扫码入库', fontSize: 2.2, align: 'center'
+    })
+  ];
+  return finish(doc, '商跃仓储货位', shangyueOriginalMeta('仓储', '40×30'));
+}
+
+/** 商跃原创姓名贴 · 40×20 · 横条签名 + 班级电话 */
+function layoutShangyueNameSticker() {
+  const doc = createDocument(40, 20);
+  doc.elements = [
+    rect(doc, {
+      x: 0.6, y: 0.6, width: 38.8, height: 18.8,
+      shapeKind: 'rounded', lineWidth: 0.3, locked: true
+    }),
+    rect(doc, {
+      x: 1.4, y: 1.6, width: 1.2, height: 16.8,
+      filled: true, lineWidth: 0.25, locked: true
+    }),
+    text(doc, {
+      x: 3.2, y: 1.6, width: 7.2, height: 3.0,
+      text: '商跃', fontSize: 2.2, bold: true,
+      reverse: true, align: 'center'
+    }),
+    text(doc, {
+      x: 3.2, y: 5.2, width: 34.0, height: 6.2,
+      text: '林晓舟', fontSize: 5.0, bold: true
+    }),
+    text(doc, {
+      x: 3.2, y: 11.8, width: 34.0, height: 3.2,
+      text: '三年二班 · 12 号', fontSize: 2.4
+    }),
+    text(doc, {
+      x: 3.2, y: 15.2, width: 34.0, height: 2.8,
+      text: '家属 138-0000-2288', fontSize: 2.2
+    })
+  ];
+  return finish(doc, '商跃姓名贴', shangyueOriginalMeta('生活', '40×20'));
+}
+
+/** 商跃原创效期签 · 40×30 · 顶栏分区 + 制作/食用日期表 */
+function layoutShangyueFreshDate() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    rect(doc, {
+      x: 0.8, y: 0.8, width: 38.4, height: 28.4,
+      shapeKind: 'rounded', lineWidth: 0.35, locked: true
+    }),
+    rect(doc, {
+      x: 0.8, y: 0.8, width: 38.4, height: 4.6,
+      filled: true, lineWidth: 0.2, locked: true
+    }),
+    text(doc, {
+      x: 1.8, y: 1.2, width: 13.0, height: 3.6,
+      text: '商跃效期', fontSize: 2.4, bold: true,
+      reverse: true, align: 'left'
+    }),
+    text(doc, {
+      x: 26.8, y: 1.3, width: 11.4, height: 3.4,
+      text: '冷藏', fontSize: 2.2, bold: true,
+      reverse: true, align: 'right'
+    }),
+    text(doc, {
+      x: 2.2, y: 6.4, width: 35.6, height: 4.6,
+      text: '桂花酿', fontSize: 4.0, bold: true
+    }),
+    text(doc, {
+      x: 2.4, y: 11.6, width: 8.2, height: 3.0,
+      text: '制作', fontSize: 2.3
+    }),
+    dateEl(doc, {
+      x: 11.0, y: 11.4, width: 26.6, height: 3.4,
+      label: '', showTime: false,
+      format: 'YYYY-MM-DD', fontSize: 2.6, bold: true, align: 'right'
+    }),
+    text(doc, {
+      x: 2.4, y: 15.6, width: 8.2, height: 3.0,
+      text: '食用至', fontSize: 2.3
+    }),
+    dateEl(doc, {
+      x: 11.0, y: 15.4, width: 26.6, height: 3.4,
+      label: '', showTime: false,
+      dateRole: 'expire', expireMode: 'preset', expirePresetHours: 48,
+      format: 'YYYY-MM-DD', fontSize: 2.6, bold: true, align: 'right'
+    }),
+    line(doc, {
+      x: 2.4, y: 19.6, width: 35.2, height: 0.6,
+      lineWidth: 0.3, locked: true
+    }),
+    text(doc, {
+      x: 2.4, y: 21.0, width: 35.2, height: 6.4,
+      text: '开封后请冷藏，当日用完', fontSize: 2.4,
+      verticalAlign: 'top'
+    })
+  ];
+  return finish(doc, '商跃效期签', shangyueOriginalMeta('生活', '40×30'));
+}
+
+/** 精诚授权改编 · 商跃连网码 · 40×30 · 左码右凭据的信息卡 */
+function layoutShangyueWifiCard() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    rect(doc, {
+      x: 0.8, y: 0.8, width: 38.4, height: 28.4,
+      shapeKind: 'rect', lineWidth: 0.35, locked: true
+    }),
+    text(doc, {
+      x: 2.0, y: 2.0, width: 13.0, height: 3.0,
+      text: '扫码加入', fontSize: 2.2, bold: true, align: 'center'
+    }),
+    qrcode(doc, {
+      x: 2.0, y: 5.6, width: 13.0, height: 13.0,
+      value: 'WIFI:T:WPA;S:SY-Guest;P:welcome26;;', errorCorrection: 'M'
+    }),
+    text(doc, {
+      x: 2.0, y: 19.4, width: 13.0, height: 2.8,
+      text: 'WPA2 · GUEST', fontSize: 2.2, align: 'center'
+    }),
+    rect(doc, { x: 16.45, y: 2.0, width: 0.3, height: 25.8, filled: true, lineWidth: 0.2, locked: true }),
+    text(doc, {
+      x: 18.2, y: 2.0, width: 10.0, height: 3.0,
+      text: 'SY · VISITOR', fontSize: 2.2, bold: true,
+      reverse: true, align: 'center'
+    }),
+    text(doc, {
+      x: 18.2, y: 6.0, width: 19.4, height: 4.8,
+      text: '访客通行证', fontSize: 3.6, bold: true
+    }),
+    text(doc, {
+      x: 18.2, y: 11.0, width: 19.4, height: 2.8,
+      text: 'SSID  SY-Guest', fontSize: 2.2
+    }),
+    rect(doc, {
+      x: 18.2, y: 14.4, width: 19.4, height: 5.4,
+      shapeKind: 'rect', lineWidth: 0.3, locked: true
+    }),
+    text(doc, {
+      x: 19.0, y: 15.2, width: 17.8, height: 3.8,
+      text: 'PASS  welcome26', fontSize: 2.4, bold: true, align: 'center'
+    }),
+    text(doc, {
+      x: 18.2, y: 21.0, width: 19.4, height: 3.0,
+      text: '打印后请改密码', fontSize: 2.2,
+      bold: true
+    }),
+    text(doc, {
+      x: 18.2, y: 24.4, width: 19.4, height: 2.6,
+      text: '商跃连网 · 临时凭据', fontSize: 2.2
+    })
+  ];
+  return finish(doc, '商跃连网码', shangyueAuthorizedRedesignMeta('办公', '40×30', {
+    designVersion: '2.0.0', createdAt: '2026-08-18'
+  }));
+}
+
+/** 精诚授权改编 · 商跃促销价签 · 40×30 · 上置条码 + 右侧反白价格舱 */
+function layoutShangyuePromoTag() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    rect(doc, { x: 0.8, y: 0.8, width: 38.4, height: 28.4, shapeKind: 'rect', lineWidth: 0.35, locked: true }),
+    barcode(doc, { x: 2.0, y: 1.8, width: 36.0, height: 7.2, value: '6909876543212', format: 'ean13', showText: false }),
+    line(doc, { x: 2.0, y: 9.6, width: 36.0, height: 0.4, lineWidth: 0.3, locked: true }),
+    text(doc, { x: 2.0, y: 10.6, width: 19.8, height: 2.8, text: '周末闪促  /  02', fontSize: 2.2, bold: true }),
+    text(doc, { x: 2.0, y: 13.6, width: 20.2, height: 5.0, text: '炭烤鸡腿堡', fontSize: 3.6, bold: true }),
+    text(doc, { x: 2.0, y: 19.0, width: 20.2, height: 2.8, text: '两件起 · 门店自提', fontSize: 2.2 }),
+    text(doc, { x: 2.0, y: 22.2, width: 20.2, height: 2.8, text: '日常 ¥12.00', fontSize: 2.2, strike: true }),
+    text(doc, { x: 2.0, y: 25.4, width: 20.2, height: 2.4, text: '商跃门店优惠', fontSize: 2.2 }),
+    rect(doc, { x: 23.6, y: 10.4, width: 14.4, height: 17.4, filled: true, lineWidth: 0.25, locked: true }),
+    text(doc, { x: 24.4, y: 11.2, width: 12.8, height: 2.8, text: '到手价', fontSize: 2.2, bold: true, reverse: true, align: 'center' }),
+    text(doc, { x: 24.2, y: 14.4, width: 13.2, height: 6.2, text: '¥6.90', fontSize: 5.0, bold: true, reverse: true, align: 'center' }),
+    text(doc, { x: 24.4, y: 21.0, width: 12.8, height: 3.0, text: '立省 5.10', fontSize: 2.2, reverse: true, align: 'center' }),
+    text(doc, { x: 24.4, y: 24.2, width: 12.8, height: 2.8, text: '售完为止', fontSize: 2.2, reverse: true, align: 'center' })
+  ];
+  return finish(doc, '商跃促销价签', shangyueAuthorizedRedesignMeta('零售', '40×30', {
+    designVersion: '2.0.0', createdAt: '2026-08-18'
+  }));
+}
+
+/** 商跃原创珠宝吊牌 · 40×30 */
+function layoutShangyueJewelryTag() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    rect(doc, { x: 0.8, y: 0.8, width: 38.4, height: 28.4, shapeKind: 'rounded', lineWidth: 0.35, locked: true }),
+    rect(doc, { x: 1.6, y: 2.0, width: 1.2, height: 26.0, filled: true, lineWidth: 0.3, locked: true }),
+    text(doc, { x: 3.6, y: 2.0, width: 13.2, height: 3.2, text: '商跃金饰', fontSize: 2.2, bold: true, reverse: true, align: 'center' }),
+    text(doc, { x: 3.6, y: 6.0, width: 33.6, height: 4.6, text: '18K 红宝石手链', fontSize: 3.4, bold: true }),
+    text(doc, { x: 3.6, y: 11.0, width: 33.6, height: 2.8, text: '编号 SY-J8842', fontSize: 2.3 }),
+    text(doc, { x: 3.6, y: 14.2, width: 33.6, height: 2.8, text: '重量 5.2g · 手围 16cm', fontSize: 2.3 }),
+    text(doc, { x: 3.6, y: 17.4, width: 33.6, height: 4.0, text: '¥2,580', fontSize: 3.8, bold: true }),
+    barcode(doc, { x: 3.0, y: 22.0, width: 34.0, height: 6.0, value: 'SYJ8842', format: 'code128', showText: false })
+  ];
+  return finish(doc, '商跃珠宝吊牌', shangyueOriginalMeta('零售', '40×30'));
+}
+
+/** 商跃原创服装吊牌 · 40×30 */
+function layoutShangyueGarmentTag() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    rect(doc, { x: 0.8, y: 0.8, width: 38.4, height: 28.4, shapeKind: 'rounded', lineWidth: 0.35, locked: true }),
+    rect(doc, { x: 0.8, y: 0.8, width: 38.4, height: 4.6, filled: true, lineWidth: 0.2, locked: true }),
+    text(doc, { x: 1.6, y: 1.2, width: 14.4, height: 3.6, text: '商跃成衣', fontSize: 2.4, bold: true, reverse: true }),
+    text(doc, { x: 26.8, y: 1.3, width: 11.4, height: 3.4, text: '春夏', fontSize: 2.2, bold: true, reverse: true, align: 'right' }),
+    text(doc, { x: 2.2, y: 6.2, width: 35.6, height: 4.4, text: '直筒牛仔裤', fontSize: 3.6, bold: true }),
+    text(doc, { x: 2.2, y: 11.0, width: 35.6, height: 2.8, text: '款号 SY-2601 · 靛蓝', fontSize: 2.3 }),
+    text(doc, { x: 2.2, y: 14.0, width: 35.6, height: 2.8, text: '尺码 M / 170 · 98% 棉', fontSize: 2.3 }),
+    text(doc, { x: 2.2, y: 17.2, width: 35.6, height: 4.0, text: '¥299', fontSize: 3.8, bold: true }),
+    barcode(doc, { x: 5.0, y: 21.8, width: 30.0, height: 6.2, value: '6901234567892', format: 'ean13', showText: false })
+  ];
+  return finish(doc, '商跃服装吊牌', shangyueOriginalMeta('零售', '40×30'));
+}
+
+/** 商跃原创物流简签 · 40×30 */
+function layoutShangyueShipLabel() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    rect(doc, { x: 0.8, y: 0.8, width: 38.4, height: 28.4, shapeKind: 'rounded', lineWidth: 0.35, locked: true }),
+    rect(doc, { x: 1.6, y: 2.0, width: 1.2, height: 26.0, filled: true, lineWidth: 0.3, locked: true }),
+    text(doc, { x: 3.6, y: 2.0, width: 13.2, height: 3.2, text: '商跃物流', fontSize: 2.2, bold: true, reverse: true, align: 'center' }),
+    text(doc, { x: 3.6, y: 6.0, width: 21.6, height: 4.4, text: '华东仓', fontSize: 3.8, bold: true }),
+    text(doc, { x: 3.6, y: 10.6, width: 21.6, height: 2.8, text: '杭州滨江 · 3 号库', fontSize: 2.2 }),
+    text(doc, { x: 3.6, y: 13.8, width: 21.6, height: 2.8, text: '1/4 · 易碎轻放', fontSize: 2.2 }),
+    qrcode(doc, { x: 26.4, y: 6.2, width: 11.2, height: 11.2, value: 'SHIP://SYF1024', errorCorrection: 'M' }),
+    text(doc, { x: 26.0, y: 18.0, width: 12.0, height: 2.6, text: '扫码签收', fontSize: 2.2, align: 'center' }),
+    barcode(doc, { x: 3.2, y: 21.4, width: 33.6, height: 6.4, value: 'SYF1024', format: 'code128', showText: false })
+  ];
+  return finish(doc, '商跃物流简签', shangyueOriginalMeta('仓储', '40×30'));
+}
+
+/** 商跃原创线缆标识 · 40×12 */
+function layoutShangyueCableTag() {
+  const doc = createDocument(40, 12);
+  doc.elements = [
+    rect(doc, { x: 0.4, y: 0.4, width: 39.2, height: 11.2, shapeKind: 'rounded', lineWidth: 0.3, locked: true }),
+    rect(doc, { x: 1.0, y: 0.9, width: 0.9, height: 10.2, filled: true, lineWidth: 0.25, locked: true }),
+    text(doc, { x: 2.4, y: 1.0, width: 11.2, height: 5.2, text: 'CAT6', fontSize: 3.2, bold: true }),
+    text(doc, { x: 2.4, y: 6.4, width: 11.2, height: 4.2, text: '柜 12', fontSize: 2.2 }),
+    barcode(doc, { x: 14.0, y: 1.4, width: 24.8, height: 9.0, value: 'C206', format: 'code128', showText: false })
+  ];
+  return finish(doc, '商跃线缆标识', shangyueOriginalMeta('办公', '40×12'));
+}
+
+/** 商跃原创固定资产 · 40×30 */
+function layoutShangyueAssetTag() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    rect(doc, { x: 0.8, y: 0.8, width: 38.4, height: 28.4, shapeKind: 'rounded', lineWidth: 0.35, locked: true }),
+    rect(doc, { x: 1.6, y: 2.0, width: 1.2, height: 26.0, filled: true, lineWidth: 0.3, locked: true }),
+    text(doc, { x: 3.6, y: 2.0, width: 13.2, height: 3.2, text: '商跃资产', fontSize: 2.2, bold: true, reverse: true, align: 'center' }),
+    text(doc, { x: 3.6, y: 6.0, width: 21.6, height: 4.4, text: 'ThinkPad', fontSize: 3.6, bold: true }),
+    text(doc, { x: 3.6, y: 10.8, width: 21.6, height: 2.8, text: '研发中心 · 张工', fontSize: 2.2 }),
+    serial(doc, { x: 3.6, y: 14.0, width: 21.6, height: 3.2, prefix: 'FA-', start: 1024, digits: 4, fontSize: 2.4, bold: true }),
+    text(doc, { x: 3.6, y: 17.8, width: 21.6, height: 2.6, text: '购置 2025-11', fontSize: 2.2 }),
+    qrcode(doc, { x: 26.4, y: 6.2, width: 11.2, height: 11.2, value: 'FA://SY-1024', errorCorrection: 'M' }),
+    text(doc, { x: 26.0, y: 18.2, width: 12.0, height: 2.8, text: '扫码盘点', fontSize: 2.2, align: 'center' })
+  ];
+  return finish(doc, '商跃固定资产', shangyueOriginalMeta('办公', '40×30'));
+}
+
+/** 商跃原创商务名片 · 40×30 */
+function layoutShangyueBizCard() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    rect(doc, { x: 0.8, y: 0.8, width: 38.4, height: 28.4, shapeKind: 'rounded', lineWidth: 0.35, locked: true }),
+    rect(doc, { x: 1.6, y: 2.0, width: 1.2, height: 26.0, filled: true, lineWidth: 0.3, locked: true }),
+    text(doc, { x: 3.6, y: 2.0, width: 8.4, height: 3.2, text: '商跃', fontSize: 2.2, bold: true, reverse: true, align: 'center' }),
+    text(doc, { x: 3.6, y: 6.0, width: 21.6, height: 5.0, text: '周衡', fontSize: 4.4, bold: true }),
+    text(doc, { x: 3.6, y: 11.4, width: 21.6, height: 2.8, text: '产品设计', fontSize: 2.4 }),
+    text(doc, { x: 3.6, y: 14.8, width: 21.6, height: 2.8, text: '000-0000-0000', fontSize: 2.2 }),
+    text(doc, { x: 3.6, y: 18.0, width: 21.6, height: 2.8, text: 'demo＠example.invalid', fontSize: 2.2 }),
+    qrcode(doc, { x: 26.4, y: 7.0, width: 11.2, height: 11.2, value: 'MECARD:N:周衡;TEL:000-0000-0000;', errorCorrection: 'M' })
+  ];
+  return finish(doc, '商跃商务名片', shangyueOriginalMeta('办公', '40×30'));
+}
+
+/** 精诚授权改编 · 商跃餐饮效期 · 40×30 · 双时间窗格 */
+function layoutShangyueKitchenDate() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    rect(doc, { x: 0.8, y: 0.8, width: 38.4, height: 28.4, shapeKind: 'rect', lineWidth: 0.35, locked: true }),
+    text(doc, { x: 1.8, y: 1.6, width: 21.0, height: 4.2, text: '香草鸡汤', fontSize: 3.6, bold: true }),
+    text(doc, { x: 26.0, y: 1.6, width: 12.0, height: 3.2, text: '0–4℃', fontSize: 2.2, bold: true, reverse: true, align: 'center' }),
+    line(doc, { x: 1.8, y: 6.4, width: 36.2, height: 0.4, lineWidth: 0.3, locked: true }),
+    rect(doc, { x: 1.8, y: 8.0, width: 17.2, height: 10.2, shapeKind: 'rect', lineWidth: 0.3, locked: true }),
+    rect(doc, { x: 21.0, y: 8.0, width: 17.0, height: 10.2, shapeKind: 'rect', lineWidth: 0.3, locked: true }),
+    text(doc, { x: 2.6, y: 8.8, width: 15.6, height: 2.6, text: '起算', fontSize: 2.2, bold: true, align: 'center' }),
+    dateEl(doc, { x: 2.6, y: 12.0, width: 15.6, height: 4.8, label: '', showTime: false, format: 'MM-DD HH:mm', fontSize: 2.4, bold: true, align: 'center' }),
+    text(doc, { x: 21.8, y: 8.8, width: 15.4, height: 2.6, text: '截止', fontSize: 2.2, bold: true, align: 'center' }),
+    dateEl(doc, { x: 21.8, y: 12.0, width: 15.4, height: 4.8, label: '', showTime: false, dateRole: 'expire', expireMode: 'preset', expirePresetHours: 4, format: 'MM-DD HH:mm', fontSize: 2.4, bold: true, align: 'center' }),
+    text(doc, { x: 1.8, y: 19.4, width: 36.2, height: 3.0, text: '批次 K-0818  ·  值班 A', fontSize: 2.2, bold: true }),
+    text(doc, { x: 1.8, y: 22.8, width: 36.2, height: 2.8, text: '□ 已密封   □ 已复核   □ 已贴签', fontSize: 2.2 }),
+    text(doc, { x: 1.8, y: 25.8, width: 36.2, height: 2.2, text: '商跃后厨 · 超时即弃', fontSize: 2.2, align: 'right' })
+  ];
+  return finish(doc, '商跃餐饮效期', shangyueAuthorizedRedesignMeta('生活', '40×30', {
+    designVersion: '2.0.0', createdAt: '2026-08-18'
+  }));
+}
+
+/** 商跃原创药品签 · 40×20 */
+function layoutShangyueMedLabel() {
+  const doc = createDocument(40, 20);
+  doc.elements = [
+    rect(doc, { x: 0.5, y: 0.5, width: 39.0, height: 19.0, shapeKind: 'rounded', lineWidth: 0.3, locked: true }),
+    rect(doc, { x: 0.5, y: 0.5, width: 39.0, height: 3.8, filled: true, lineWidth: 0.2, locked: true }),
+    text(doc, { x: 1.4, y: 0.8, width: 14.0, height: 3.2, text: '商跃用药', fontSize: 2.2, bold: true, reverse: true }),
+    text(doc, { x: 1.6, y: 5.0, width: 36.6, height: 4.0, text: '布洛芬缓释胶囊', fontSize: 3.0, bold: true }),
+    text(doc, { x: 1.6, y: 9.4, width: 36.6, height: 2.8, text: '0.3g × 20 粒 · 1 粒 / 12h', fontSize: 2.2 }),
+    dateEl(doc, { x: 1.6, y: 12.8, width: 36.6, height: 2.8, label: '有效至', showTime: false, dateRole: 'expire', expireMode: 'preset', expirePresetHours: 24 * 365, format: 'YYYY-MM-DD', fontSize: 2.2 }),
+    text(doc, { x: 1.6, y: 16.0, width: 36.6, height: 2.6, text: '儿童请在成人监护下使用', fontSize: 2.2 })
+  ];
+  return finish(doc, '商跃药品签', shangyueOriginalMeta('生活', '40×20'));
+}
+
+/** 商跃原创席卡 · 40×30 */
+function layoutShangyueSeatCard() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    rect(doc, { x: 0.8, y: 0.8, width: 38.4, height: 28.4, shapeKind: 'rounded', lineWidth: 0.35, locked: true }),
+    text(doc, { x: 13.4, y: 2.4, width: 13.2, height: 3.2, text: '商跃喜宴', fontSize: 2.2, bold: true, reverse: true, align: 'center' }),
+    text(doc, { x: 2.4, y: 7.2, width: 35.2, height: 5.4, text: '张伟  &  李娜', fontSize: 3.8, bold: true, align: 'center' }),
+    line(doc, { x: 10.0, y: 13.4, width: 20.0, height: 0.6, lineWidth: 0.3, locked: true }),
+    text(doc, { x: 2.4, y: 15.2, width: 35.2, height: 5.2, text: '桌号  08', fontSize: 4.2, bold: true, align: 'center' }),
+    text(doc, { x: 2.4, y: 21.6, width: 35.2, height: 5.0, text: '2026.10.01  宴会厅', fontSize: 2.3, align: 'center' })
+  ];
+  return finish(doc, '商跃席卡', shangyueOriginalMeta('生活', '40×30'));
+}
+
+/** 商跃原创烘焙价签 · 40×30 */
+function layoutShangyueBakeryTag() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    rect(doc, { x: 0.8, y: 0.8, width: 38.4, height: 28.4, shapeKind: 'rounded', lineWidth: 0.35, locked: true }),
+    rect(doc, { x: 0.8, y: 0.8, width: 38.4, height: 4.6, filled: true, lineWidth: 0.2, locked: true }),
+    text(doc, { x: 1.6, y: 1.2, width: 14.4, height: 3.6, text: '商跃烘焙', fontSize: 2.4, bold: true, reverse: true }),
+    text(doc, { x: 26.8, y: 1.3, width: 11.4, height: 3.4, text: '当日', fontSize: 2.2, bold: true, reverse: true, align: 'right' }),
+    text(doc, { x: 2.2, y: 6.2, width: 35.6, height: 4.4, text: '芒果奶油蛋糕', fontSize: 3.4, bold: true }),
+    text(doc, { x: 2.2, y: 11.0, width: 35.6, height: 2.8, text: '芒果 · 动物奶油', fontSize: 2.3 }),
+    text(doc, { x: 2.2, y: 14.0, width: 35.6, height: 2.8, text: '6 寸 / 约 680g', fontSize: 2.3 }),
+    text(doc, { x: 2.2, y: 17.2, width: 35.6, height: 4.0, text: '¥128', fontSize: 3.8, bold: true }),
+    barcode(doc, { x: 5.0, y: 21.8, width: 30.0, height: 6.2, value: '6901111222333', format: 'ean13', showText: false })
+  ];
+  return finish(doc, '商跃烘焙价签', shangyueOriginalMeta('零售', '40×30'));
+}
+
+/** 精诚授权改编 · 商跃植物签 · 40×30 · 三栏照护仪表 */
+function layoutShangyuePlantTag() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    rect(doc, { x: 0.8, y: 0.8, width: 38.4, height: 28.4, shapeKind: 'rect', lineWidth: 0.35, locked: true }),
+    text(doc, { x: 1.8, y: 1.8, width: 12.0, height: 2.8, text: 'CARE / P-026', fontSize: 2.2, bold: true, reverse: true, align: 'center' }),
+    text(doc, { x: 1.8, y: 5.2, width: 36.2, height: 4.8, text: '薄荷 · 留兰香', fontSize: 3.8, bold: true }),
+    line(doc, { x: 1.8, y: 10.6, width: 36.2, height: 0.4, lineWidth: 0.3, locked: true }),
+    rect(doc, { x: 13.65, y: 11.8, width: 0.3, height: 10.8, filled: true, lineWidth: 0.2, locked: true }),
+    rect(doc, { x: 25.85, y: 11.8, width: 0.3, height: 10.8, filled: true, lineWidth: 0.2, locked: true }),
+    text(doc, { x: 1.8, y: 12.0, width: 11.2, height: 4.0, text: '光', fontSize: 3.4, bold: true, align: 'center' }),
+    text(doc, { x: 14.6, y: 12.0, width: 10.6, height: 4.0, text: '水', fontSize: 3.4, bold: true, align: 'center' }),
+    text(doc, { x: 26.8, y: 12.0, width: 11.2, height: 4.0, text: '温', fontSize: 3.4, bold: true, align: 'center' }),
+    text(doc, { x: 1.8, y: 16.4, width: 11.2, height: 5.0, text: '明亮散射', fontSize: 2.2, align: 'center' }),
+    text(doc, { x: 14.6, y: 16.4, width: 10.6, height: 5.0, text: '土干再浇', fontSize: 2.2, align: 'center' }),
+    text(doc, { x: 26.8, y: 16.4, width: 11.2, height: 5.0, text: '16–24℃', fontSize: 2.2, align: 'center' }),
+    rect(doc, { x: 1.8, y: 23.4, width: 36.2, height: 4.2, filled: true, lineWidth: 0.2, locked: true }),
+    text(doc, { x: 2.6, y: 24.0, width: 22.0, height: 3.0, text: '新芽期 · 7 天一检', fontSize: 2.2, bold: true, reverse: true }),
+    text(doc, { x: 25.0, y: 24.0, width: 12.2, height: 3.0, text: '商跃园艺', fontSize: 2.2, reverse: true, align: 'right' })
+  ];
+  return finish(doc, '商跃植物签', shangyueAuthorizedRedesignMeta('生活', '40×30', {
+    designVersion: '2.0.0', createdAt: '2026-08-18'
+  }));
+}
+
+/** 商跃原创工位牌 · 40×30 */
+function layoutShangyueDeskPlate() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    rect(doc, { x: 0.8, y: 0.8, width: 38.4, height: 28.4, shapeKind: 'rounded', lineWidth: 0.35, locked: true }),
+    rect(doc, { x: 1.6, y: 2.0, width: 1.2, height: 26.0, filled: true, lineWidth: 0.3, locked: true }),
+    text(doc, { x: 3.6, y: 2.0, width: 13.2, height: 3.2, text: '商跃工位', fontSize: 2.2, bold: true, reverse: true, align: 'center' }),
+    text(doc, { x: 3.6, y: 6.0, width: 21.6, height: 5.0, text: '赵敏', fontSize: 4.4, bold: true }),
+    text(doc, { x: 3.6, y: 11.4, width: 21.6, height: 2.8, text: '产品设计', fontSize: 2.4 }),
+    text(doc, { x: 3.6, y: 14.6, width: 21.6, height: 2.8, text: '分机 8806', fontSize: 2.2 }),
+    text(doc, { x: 3.6, y: 17.8, width: 21.6, height: 2.8, text: '工位 3F-B12', fontSize: 2.2 }),
+    qrcode(doc, { x: 26.4, y: 6.4, width: 11.2, height: 11.2, value: 'EMP://8806', errorCorrection: 'M' }),
+    text(doc, { x: 26.0, y: 18.4, width: 12.0, height: 2.8, text: '企业码', fontSize: 2.2, align: 'center' })
+  ];
+  return finish(doc, '商跃工位牌', shangyueOriginalMeta('办公', '40×30'));
+}
+
+/** 商跃原创样品签 · 40×20 */
+function layoutShangyueLabTag() {
+  const doc = createDocument(40, 20);
+  doc.elements = [
+    rect(doc, { x: 0.5, y: 0.5, width: 39.0, height: 19.0, shapeKind: 'rounded', lineWidth: 0.3, locked: true }),
+    text(doc, { x: 1.4, y: 1.2, width: 37.0, height: 3.6, text: '样品 S-2026-081', fontSize: 2.6, bold: true }),
+    dateEl(doc, { x: 1.4, y: 5.0, width: 18.0, height: 3.0, label: '', showTime: false, format: 'YYYY-MM-DD', fontSize: 2.3 }),
+    text(doc, { x: 20.0, y: 5.0, width: 18.4, height: 3.0, text: '室温保存', fontSize: 2.2, align: 'right' }),
+    barcode(doc, { x: 1.4, y: 8.8, width: 37.0, height: 9.4, value: 'S081', format: 'code128', showText: false })
+  ];
+  return finish(doc, '商跃样品签', shangyueOriginalMeta('行业', '40×20'));
+}
+
+/** 精诚授权改编 · 商跃洗涤说明 · 40×30 · 面料侧栏 + 四格参数 */
+function layoutShangyueCareTag() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    rect(doc, { x: 0.8, y: 0.8, width: 38.4, height: 28.4, shapeKind: 'rect', lineWidth: 0.35, locked: true }),
+    rect(doc, { x: 0.8, y: 0.8, width: 10.4, height: 28.4, filled: true, lineWidth: 0.2, locked: true }),
+    text(doc, { x: 1.6, y: 2.0, width: 8.8, height: 5.0, text: '100%', fontSize: 3.8, bold: true, reverse: true, align: 'center' }),
+    text(doc, { x: 1.6, y: 7.2, width: 8.8, height: 3.0, text: 'COTTON', fontSize: 2.2, bold: true, reverse: true, align: 'center' }),
+    line(doc, { x: 2.0, y: 11.2, width: 8.0, height: 0.35, lineWidth: 0.25, locked: true }),
+    text(doc, { x: 1.6, y: 12.2, width: 8.8, height: 4.8, text: '商跃\n面料卡', fontSize: 2.2, bold: true, reverse: true, align: 'center' }),
+    text(doc, { x: 1.6, y: 23.0, width: 8.8, height: 3.0, text: 'SY-2601', fontSize: 2.2, reverse: true, align: 'center' }),
+    text(doc, { x: 12.6, y: 1.8, width: 25.4, height: 4.0, text: '洗护参数', fontSize: 3.2, bold: true }),
+    line(doc, { x: 12.6, y: 6.2, width: 25.4, height: 0.4, lineWidth: 0.3, locked: true }),
+    rect(doc, { x: 12.6, y: 8.0, width: 11.8, height: 7.0, shapeKind: 'rect', lineWidth: 0.25, locked: true }),
+    rect(doc, { x: 26.2, y: 8.0, width: 11.8, height: 7.0, shapeKind: 'rect', lineWidth: 0.25, locked: true }),
+    rect(doc, { x: 12.6, y: 16.6, width: 11.8, height: 7.0, shapeKind: 'rect', lineWidth: 0.25, locked: true }),
+    rect(doc, { x: 26.2, y: 16.6, width: 11.8, height: 7.0, shapeKind: 'rect', lineWidth: 0.25, locked: true }),
+    text(doc, { x: 13.2, y: 9.0, width: 10.6, height: 5.0, text: '30℃\n轻柔', fontSize: 2.2, bold: true, align: 'center' }),
+    text(doc, { x: 26.8, y: 9.0, width: 10.6, height: 5.0, text: '反面\n入袋', fontSize: 2.2, bold: true, align: 'center' }),
+    text(doc, { x: 13.2, y: 17.6, width: 10.6, height: 5.0, text: '阴凉\n平铺', fontSize: 2.2, bold: true, align: 'center' }),
+    text(doc, { x: 26.8, y: 17.6, width: 10.6, height: 5.0, text: '蒸汽\n低温', fontSize: 2.2, bold: true, align: 'center' }),
+    text(doc, { x: 12.6, y: 25.2, width: 25.4, height: 2.6, text: '深浅分洗 · 反面整理', fontSize: 2.2, align: 'right' })
+  ];
+  return finish(doc, '商跃洗涤说明', shangyueAuthorizedRedesignMeta('零售', '40×30', {
+    designVersion: '2.0.0', createdAt: '2026-08-18'
+  }));
+}
+
+/** 商跃原创线号序列 · 30×12 */
+function layoutShangyueSerialCable() {
+  const doc = createDocument(30, 12);
+  doc.elements = [
+    rect(doc, { x: 0.4, y: 0.4, width: 29.2, height: 11.2, shapeKind: 'rounded', lineWidth: 0.3, locked: true }),
+    serial(doc, { x: 1.2, y: 0.8, width: 27.6, height: 3.6, prefix: 'LN-', start: 2208, digits: 4, fontSize: 2.8, bold: true }),
+    barcode(doc, { x: 1.2, y: 4.8, width: 27.6, height: 6.4, value: '2208', format: 'code128', showText: false })
+  ];
+  return finish(doc, '商跃线号序列', shangyueOriginalMeta('办公', '30×12'));
 }
 
 /** 固定资产 · 50×30 */
@@ -358,7 +1056,7 @@ function layoutBusinessCard() {
     }),
     text(doc, {
       x: 2.5, y: 8, width: 30, height: 3,
-      text: '产品经理 · 精臣生态', fontSize: 2.5
+      text: '产品经理 · 商跃团队', fontSize: 2.5
     }),
     line(doc, { x: 2.5, y: 12, width: 28, height: 0.6, lineWidth: 0.3 }),
     text(doc, {
@@ -367,7 +1065,7 @@ function layoutBusinessCard() {
     }),
     text(doc, {
       x: 2.5, y: 17, width: 30, height: 2.8,
-      text: '邮箱 liming@example.com', fontSize: 2.2
+      text: '邮箱 demo＠example.invalid', fontSize: 2.2
     }),
     text(doc, {
       x: 2.5, y: 20.5, width: 30, height: 2.8,
@@ -375,7 +1073,7 @@ function layoutBusinessCard() {
     }),
     qrcode(doc, {
       x: 35, y: 7, width: 12, height: 12,
-      value: 'MECARD:N:李明;TEL:13800008888;'
+      value: 'MECARD:N:示例用户;TEL:000-0000-0000;'
     })
   ];
   return finish(doc, '商务名片', { industry: '办公', stock: '50×30' });
@@ -391,7 +1089,7 @@ function layoutClothing() {
     }),
     text(doc, {
       x: 2, y: 6.5, width: 36, height: 3,
-      text: '款号：JC-2601', fontSize: 2.4, align: 'center'
+      text: '款号：SY-2601', fontSize: 2.4, align: 'center'
     }),
     text(doc, { x: 2, y: 10.2, width: 17.5, height: 3, text: '颜色：靛蓝', fontSize: 2.3 }),
     text(doc, {
@@ -498,7 +1196,7 @@ function layoutPromo() {
     }),
     text(doc, {
       x: 17, y: 1.8, width: 31, height: 5,
-      text: 'NIIMBOT 牛肉三明治', fontSize: 3.2, bold: true
+      text: '商跃 · 牛肉三明治', fontSize: 3.2, bold: true
     }),
     text(doc, {
       x: 2, y: 9, width: 28, height: 7,
@@ -520,7 +1218,7 @@ function layoutPromo() {
   return finish(doc, '促销价签', { industry: '零售', stock: '50×30' });
 }
 
-/** 国网风格信息牌 · 50×30 简化离线版（无远程底图） */
+/** 通用电力计量信息牌 · 50×30 简化离线版（无远程底图） */
 function layoutStateGrid() {
   const doc = createDocument(50, 30);
   doc.elements = [
@@ -538,7 +1236,7 @@ function layoutStateGrid() {
     }),
     text(doc, {
       x: 1.5, y: 11.4, width: 28, height: 2.8,
-      text: '表号：SG20260801001', fontSize: 2.3
+      text: '表号：MTR20260801001', fontSize: 2.3
     }),
     text(doc, {
       x: 1.5, y: 14.6, width: 28, height: 2.8,
@@ -546,18 +1244,18 @@ function layoutStateGrid() {
     }),
     barcode(doc, {
       x: 1.5, y: 18.5, width: 28, height: 9.5,
-      value: 'SG20260801001', format: 'code128'
+      value: 'MTR20260801001', format: 'code128'
     }),
     qrcode(doc, {
       x: 32, y: 4, width: 15, height: 15,
-      value: 'https://95598.cn/'
+      value: 'METER://330108/MTR20260801001'
     }),
     text(doc, {
       x: 31, y: 20, width: 17, height: 6,
-      text: '扫码关注\n网上国网', fontSize: 2.2, align: 'center'
+      text: '扫码查看\n用电信息', fontSize: 2.2, align: 'center'
     })
   ];
-  return finish(doc, '国网电力标识', { industry: '行业', stock: '50×30' });
+  return finish(doc, '电力计量标识', { industry: '行业', stock: '50×30' });
 }
 
 /** 序列号线缆 · 30×12 */
@@ -580,9 +1278,6 @@ function layoutSerialCable() {
   ];
   return finish(doc, '线号序列标签', { industry: '办公', stock: '30×12' });
 }
-
-const { buildImportedDocument, getImportedTemplate } = require('./imported-templates');
-const { buildOnlineDocument, getOnlineTemplate, ONLINE_TEMPLATES } = require('./online-templates-pack');
 
 /** 订婚婚礼席卡 · 50×30 */
 function layoutWedding() {
@@ -856,7 +1551,7 @@ function layoutJewelryMini() {
       x: 1.5, y: 1, width: 27, height: 3.5,
       text: '18K 金项链', fontSize: 2.8, bold: true, align: 'center'
     }),
-    text(doc, { x: 1.5, y: 5, width: 27, height: 2.5, text: '编号 JC-2201  2.1g', fontSize: 2.1, align: 'center' }),
+    text(doc, { x: 1.5, y: 5, width: 27, height: 2.5, text: '编号 SY-2201  2.1g', fontSize: 2.1, align: 'center' }),
     text(doc, {
       x: 1.5, y: 8.5, width: 27, height: 3.5,
       text: '¥3,280', fontSize: 3.4, bold: true, align: 'center'
@@ -883,7 +1578,7 @@ function layoutGarmentCare() {
     text(doc, { x: 2.5, y: 19, width: 35, height: 3, text: '低温熨烫 · 悬挂晾干', fontSize: 2.3 }),
     text(doc, {
       x: 2.5, y: 24, width: 35, height: 3.5,
-      text: '款号 JC-2601', fontSize: 2.4, bold: true
+      text: '款号 SY-2601', fontSize: 2.4, bold: true
     })
   ];
   return finish(doc, '服装洗涤说明', { industry: '零售', stock: '40×30' });
@@ -990,35 +1685,436 @@ function layoutPlantCare() {
   return finish(doc, '园艺植物标签', { industry: '生活', stock: '40×30' });
 }
 
-function layoutFromImport(id) {
-  return function build() {
-    const doc = buildImportedDocument(id);
-    if (!doc) {
-      const t = getImportedTemplate(id);
-      const fallback = createDocument(40, 30);
-      fallback.name = (t && t.name) || id;
-      return fallback;
-    }
-    return doc;
-  };
+/** 商跃原创双价货架签 · 40×30 */
+function layoutShangyueShelfDualPrice() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    ...scenarioFrame(doc, '双价货架'),
+    requiredText(doc, {
+      x: 2, y: 6.1, width: 36, height: 4.4,
+      text: '品名｜请填写', fontSize: 3.8, bold: true
+    }),
+    text(doc, { x: 2, y: 10.6, width: 10, height: 2.6, text: '规格 / 单位', fontSize: 2.1 }),
+    requiredText(doc, {
+      x: 12, y: 10.5, width: 26, height: 2.8,
+      text: '请填写规格', fontSize: 2.3, align: 'right'
+    }),
+    rect(doc, { x: 2, y: 13.9, width: 17.2, height: 6.4, shapeKind: 'rounded', lineWidth: 0.3, locked: true }),
+    rect(doc, { x: 20.8, y: 13.9, width: 17.2, height: 6.4, shapeKind: 'rounded', lineWidth: 0.3, locked: true }),
+    text(doc, { x: 2.8, y: 14.3, width: 6, height: 2.2, text: '零售价', fontSize: 1.9 }),
+    requiredText(doc, {
+      x: 3, y: 16.2, width: 15.2, height: 3.4,
+      text: '¥ --.--', fontSize: 3.8, bold: true, align: 'center'
+    }),
+    text(doc, { x: 21.6, y: 14.3, width: 6, height: 2.2, text: '会员价', fontSize: 1.9 }),
+    requiredText(doc, {
+      x: 21.8, y: 16.2, width: 15.2, height: 3.4,
+      text: '¥ --.--', fontSize: 3.8, bold: true, align: 'center'
+    }),
+    sampleBarcode(doc, {
+      x: 2.3, y: 21.5, width: 35.4, height: 6.6,
+      value: 'DEMO01', showText: false
+    })
+  ];
+  return finish(doc, '商跃双价货架签', scenarioMeta('零售', '40×30', '零售价签'));
 }
 
-function layoutFromOnline(id) {
-  return function build() {
-    const doc = buildOnlineDocument(id);
-    if (!doc) {
-      const t = getOnlineTemplate(id);
-      const fallback = createDocument(40, 30);
-      fallback.name = (t && t.name) || id;
-      return fallback;
-    }
-    return doc;
-  };
+/** 商跃原创生鲜产地签 · 40×30 */
+function layoutShangyueProduceOrigin() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    ...scenarioFrame(doc, '生鲜产地'),
+    requiredText(doc, {
+      x: 2, y: 6.1, width: 36, height: 4.6,
+      text: '生鲜品名｜请填写', fontSize: 3.7, bold: true
+    }),
+    text(doc, { x: 2, y: 11.1, width: 7, height: 2.7, text: '产地', fontSize: 2.1, bold: true }),
+    requiredText(doc, { x: 9, y: 11, width: 12, height: 2.9, text: '请填写', fontSize: 2.3 }),
+    text(doc, { x: 22, y: 11.1, width: 6, height: 2.7, text: '等级', fontSize: 2.1, bold: true }),
+    requiredText(doc, { x: 28, y: 11, width: 10, height: 2.9, text: '请填写', fontSize: 2.3, align: 'right' }),
+    line(doc, { x: 2, y: 14.2, width: 36, height: 0.6, lineWidth: 0.25, locked: true }),
+    text(doc, { x: 2, y: 15, width: 10, height: 2.7, text: '计价单位', fontSize: 2.1 }),
+    requiredText(doc, { x: 12, y: 14.9, width: 26, height: 2.9, text: '请填写', fontSize: 2.3, align: 'right' }),
+    text(doc, { x: 2, y: 18.1, width: 10, height: 2.7, text: '批次码', fontSize: 2.1 }),
+    sampleBarcode(doc, {
+      x: 12, y: 18.1, width: 26, height: 9.8,
+      value: 'DEMO', showText: true, fontSize: 2
+    })
+  ];
+  return finish(doc, '商跃生鲜产地签', scenarioMeta('零售', '40×30', '零售价签'));
 }
 
-const onlineLayoutEntries = {};
-for (const item of ONLINE_TEMPLATES) {
-  onlineLayoutEntries[item.id] = layoutFromOnline(item.id);
+/** 商跃原创门店活动签 · 40×30 */
+function layoutShangyueMarketPromo() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    ...scenarioFrame(doc, '门店活动'),
+    requiredText(doc, {
+      x: 2.2, y: 6.3, width: 35.6, height: 4.6,
+      text: '活动主题｜请填写', fontSize: 3.6, bold: true, align: 'center'
+    }),
+    requiredText(doc, {
+      x: 3, y: 11.5, width: 34, height: 7.2,
+      text: '¥ --.--', fontSize: 6.2, bold: true, align: 'center'
+    }),
+    text(doc, { x: 3, y: 19.2, width: 9, height: 2.8, text: '活动至', fontSize: 2.2, bold: true }),
+    requiredText(doc, {
+      x: 12, y: 19, width: 25, height: 3,
+      text: '请填写截止时间', fontSize: 2.3, align: 'right'
+    }),
+    rect(doc, { x: 3, y: 23, width: 34, height: 4.2, filled: true, lineWidth: 0.2, locked: true }),
+    text(doc, {
+      x: 4, y: 23.5, width: 32, height: 3.2,
+      text: '打印前请核对价格与活动规则', fontSize: 2.05, reverse: true, align: 'center'
+    })
+  ];
+  return finish(doc, '商跃门店活动签', scenarioMeta('零售', '40×30', '零售价签'));
+}
+
+/** 商跃原创拣货波次签 · 40×30 */
+function layoutShangyuePickWave() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    ...scenarioFrame(doc, '拣货波次'),
+    requiredText(doc, {
+      x: 2, y: 6.2, width: 23, height: 4.2,
+      text: '波次｜请填写', fontSize: 3.4, bold: true
+    }),
+    text(doc, { x: 2, y: 10.8, width: 7, height: 2.7, text: '路线', fontSize: 2.1, bold: true }),
+    requiredText(doc, { x: 8, y: 10.7, width: 17, height: 2.9, text: '起点 → 终点', fontSize: 2.25 }),
+    text(doc, { x: 2, y: 14.2, width: 7, height: 2.7, text: '件数', fontSize: 2.1, bold: true }),
+    requiredText(doc, { x: 8, y: 14.1, width: 17, height: 2.9, text: '请填写', fontSize: 2.3 }),
+    text(doc, { x: 2, y: 17.6, width: 7, height: 2.7, text: '复核人', fontSize: 2.1, bold: true }),
+    requiredText(doc, { x: 8, y: 17.5, width: 17, height: 2.9, text: '请填写', fontSize: 2.3 }),
+    sampleQr(doc, {
+      x: 26.3, y: 7.2, width: 11.5, height: 11.5,
+      value: 'SYDEMO:PICK'
+    }),
+    text(doc, { x: 26, y: 19.2, width: 12.1, height: 2.7, text: '扫码复核', fontSize: 2.05, align: 'center' }),
+    rect(doc, { x: 2, y: 22.4, width: 36, height: 4.7, shapeKind: 'rounded', lineWidth: 0.3, locked: true }),
+    requiredText(doc, {
+      x: 3, y: 23, width: 34, height: 3.5,
+      text: '异常备注｜无 / 请填写', fontSize: 2.15
+    })
+  ];
+  return finish(doc, '商跃拣货波次签', scenarioMeta('仓储', '40×30', '仓储资产'));
+}
+
+/** 商跃原创退货质检签 · 40×30 */
+function layoutShangyueReturnCheck() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    ...scenarioFrame(doc, '退货质检'),
+    requiredText(doc, {
+      x: 2, y: 6.1, width: 36, height: 4,
+      text: '退货单｜请填写', fontSize: 3.3, bold: true
+    }),
+    text(doc, {
+      x: 2, y: 10.6, width: 36, height: 3,
+      text: '核对项  □ 外观  □ 配件  □ 包装', fontSize: 2.25
+    }),
+    requiredText(doc, {
+      x: 2, y: 14, width: 36, height: 3,
+      text: '处置状态｜请填写', fontSize: 2.4, bold: true
+    }),
+    requiredText(doc, {
+      x: 2, y: 17.5, width: 36, height: 3,
+      text: '质检人｜请填写', fontSize: 2.25
+    }),
+    sampleBarcode(doc, {
+      x: 2.4, y: 21.4, width: 35.2, height: 6.5,
+      value: 'DEMO01', showText: false
+    })
+  ];
+  return finish(doc, '商跃退货质检签', scenarioMeta('仓储', '40×30', '仓储资产'));
+}
+
+/** 商跃原创工具资产签 · 40×30 */
+function layoutShangyueToolAsset() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    ...scenarioFrame(doc, '工具资产'),
+    requiredText(doc, {
+      x: 2, y: 6.2, width: 23, height: 4.2,
+      text: '工具名称｜请填写', fontSize: 3.2, bold: true
+    }),
+    requiredText(doc, { x: 2, y: 10.9, width: 23, height: 3, text: '资产编号｜请填写', fontSize: 2.25 }),
+    requiredText(doc, { x: 2, y: 14.3, width: 23, height: 3, text: '保管区｜请填写', fontSize: 2.25 }),
+    requiredText(doc, { x: 2, y: 17.7, width: 23, height: 3, text: '点检周期｜请填写', fontSize: 2.25 }),
+    sampleQr(doc, {
+      x: 26.2, y: 7.1, width: 11.7, height: 11.7,
+      value: 'SYDEMO:TOOL'
+    }),
+    text(doc, { x: 26, y: 19.4, width: 12, height: 2.6, text: '扫码盘点', fontSize: 2.05, align: 'center' }),
+    line(doc, { x: 2, y: 22.2, width: 36, height: 0.6, lineWidth: 0.3, locked: true }),
+    requiredText(doc, { x: 2, y: 23.3, width: 36, height: 3.3, text: '异常记录｜无 / 请填写', fontSize: 2.15 })
+  ];
+  return finish(doc, '商跃工具资产签', scenarioMeta('仓储', '40×30', '仓储资产'));
+}
+
+/** 商跃原创茶饮杯贴 · 40×30 */
+function layoutShangyueDrinkCup() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    ...scenarioFrame(doc, '茶饮杯贴'),
+    requiredText(doc, {
+      x: 2, y: 6.1, width: 23, height: 4.6,
+      text: '饮品名｜请填写', fontSize: 3.5, bold: true
+    }),
+    requiredText(doc, { x: 2, y: 11.2, width: 23, height: 3, text: '糖度｜请填写', fontSize: 2.3 }),
+    requiredText(doc, { x: 2, y: 14.6, width: 23, height: 3, text: '冰度｜请填写', fontSize: 2.3 }),
+    requiredText(doc, {
+      x: 26, y: 7, width: 12, height: 7,
+      text: '# --', fontSize: 5.4, bold: true, align: 'center'
+    }),
+    text(doc, { x: 26, y: 14.2, width: 12, height: 2.6, text: '取餐号', fontSize: 2, align: 'center' }),
+    dateEl(doc, {
+      x: 2, y: 18, width: 36, height: 3,
+      label: '打印 ', dateRole: 'generic', format: 'MM-DD HH:mm',
+      showTime: true, showSeconds: false, fontSize: 2.2
+    }),
+    sampleBarcode(doc, {
+      x: 2.4, y: 22, width: 35.2, height: 5.9,
+      value: 'DEMO01', showText: false
+    })
+  ];
+  return finish(doc, '商跃茶饮杯贴', scenarioMeta('生活', '40×30', '食品效期'));
+}
+
+/** 商跃原创冷链解冻签 · 40×30 */
+function layoutShangyueThawWindow() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    ...scenarioFrame(doc, '冷链解冻'),
+    requiredText(doc, {
+      x: 2, y: 6.2, width: 36, height: 4.2,
+      text: '品名｜请填写', fontSize: 3.4, bold: true
+    }),
+    rect(doc, { x: 2, y: 11.1, width: 36, height: 4.6, shapeKind: 'rounded', lineWidth: 0.3, locked: true }),
+    text(doc, { x: 3, y: 11.7, width: 7, height: 3.2, text: '解冻', fontSize: 2.2, bold: true }),
+    requiredText(doc, { x: 10, y: 11.6, width: 27, height: 3.3, text: '请填写日期时间', fontSize: 2.35, align: 'right' }),
+    rect(doc, { x: 2, y: 16.5, width: 36, height: 4.6, shapeKind: 'rounded', lineWidth: 0.3, locked: true }),
+    text(doc, { x: 3, y: 17.1, width: 7, height: 3.2, text: '废弃', fontSize: 2.2, bold: true }),
+    requiredText(doc, { x: 10, y: 17, width: 27, height: 3.3, text: '请填写日期时间', fontSize: 2.35, bold: true, align: 'right' }),
+    requiredText(doc, { x: 2, y: 22, width: 20, height: 3, text: '责任人｜请填写', fontSize: 2.2 }),
+    rect(doc, { x: 23, y: 22, width: 15, height: 4.6, filled: true, lineWidth: 0.2, locked: true }),
+    text(doc, { x: 24, y: 22.7, width: 13, height: 3.2, text: '按 SOP 核对', fontSize: 2.1, bold: true, reverse: true, align: 'center' })
+  ];
+  return finish(doc, '商跃冷链解冻签', scenarioMeta('生活', '40×30', '食品效期'));
+}
+
+/** 商跃原创过敏原核对签 · 40×30 */
+function layoutShangyueAllergenCheck() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    ...scenarioFrame(doc, '过敏原核对'),
+    requiredText(doc, {
+      x: 2, y: 6.1, width: 36, height: 4.1,
+      text: '餐品名｜请填写', fontSize: 3.3, bold: true
+    }),
+    text(doc, {
+      x: 2, y: 10.5, width: 36, height: 3.1,
+      text: '核对项  □ 麸质  □ 乳  □ 蛋  □ 坚果', fontSize: 2.15
+    }),
+    rect(doc, { x: 2, y: 14.2, width: 36, height: 6.7, shapeKind: 'rounded', lineWidth: 0.35, locked: true }),
+    requiredText(doc, {
+      x: 3, y: 15, width: 34, height: 5,
+      text: '过敏原｜必须核对后填写', fontSize: 2.55, bold: true,
+      wordWrap: true, verticalAlign: 'top'
+    }),
+    requiredText(doc, { x: 2, y: 22, width: 23, height: 3.1, text: '复核人｜请填写', fontSize: 2.25 }),
+    rect(doc, { x: 26, y: 22, width: 12, height: 4.5, filled: true, lineWidth: 0.2, locked: true }),
+    text(doc, { x: 27, y: 22.7, width: 10, height: 3.1, text: '未核对勿贴', fontSize: 2.05, bold: true, reverse: true, align: 'center' })
+  ];
+  return finish(doc, '商跃过敏原核对签', scenarioMeta('生活', '40×30', '食品效期'));
+}
+
+/** 商跃原创尺码色号签 · 40×30 */
+function layoutShangyueSizeColor() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    ...scenarioFrame(doc, '尺码色号'),
+    requiredText(doc, {
+      x: 2, y: 6.1, width: 36, height: 4,
+      text: '款号｜请填写', fontSize: 3.25, bold: true
+    }),
+    rect(doc, { x: 2, y: 10.8, width: 17.2, height: 7.2, shapeKind: 'rounded', lineWidth: 0.35, locked: true }),
+    text(doc, { x: 3, y: 11.2, width: 6, height: 2.3, text: 'SIZE', fontSize: 1.9, bold: true }),
+    requiredText(doc, { x: 3, y: 13, width: 15.2, height: 4, text: '--', fontSize: 4.4, bold: true, align: 'center' }),
+    rect(doc, { x: 20.8, y: 10.8, width: 17.2, height: 7.2, shapeKind: 'rounded', lineWidth: 0.35, locked: true }),
+    text(doc, { x: 21.8, y: 11.2, width: 7, height: 2.3, text: 'COLOR', fontSize: 1.9, bold: true }),
+    requiredText(doc, { x: 21.8, y: 13, width: 15.2, height: 4, text: '色号', fontSize: 3.6, bold: true, align: 'center' }),
+    sampleBarcode(doc, {
+      x: 2.4, y: 19.4, width: 35.2, height: 8.3,
+      value: 'DEMO01', showText: false
+    })
+  ];
+  return finish(doc, '商跃尺码色号签', scenarioMeta('零售', '40×30', '服装珠宝'));
+}
+
+/** 商跃原创珠宝维修签 · 40×30 */
+function layoutShangyueJewelryRepair() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    ...scenarioFrame(doc, '珠宝维修'),
+    requiredText(doc, {
+      x: 2, y: 6.1, width: 36, height: 3.8,
+      text: '收件号｜请填写', fontSize: 3.15, bold: true
+    }),
+    requiredText(doc, { x: 2, y: 10.3, width: 36, height: 3, text: '物品特征｜请填写', fontSize: 2.25 }),
+    requiredText(doc, { x: 2, y: 13.6, width: 36, height: 3, text: '服务项｜请填写', fontSize: 2.25 }),
+    text(doc, { x: 2, y: 16.9, width: 36, height: 2.8, text: '状态  □ 待检  □ 维修中  □ 待取', fontSize: 2.1 }),
+    sampleBarcode(doc, {
+      x: 2.4, y: 20.7, width: 35.2, height: 7.1,
+      value: 'DEMO01', showText: false
+    })
+  ];
+  return finish(doc, '商跃珠宝维修签', scenarioMeta('零售', '40×30', '服装珠宝'));
+}
+
+/** 商跃原创面料卷标 · 40×30 */
+function layoutShangyueFabricRoll() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    ...scenarioFrame(doc, '面料卷标'),
+    requiredText(doc, {
+      x: 2, y: 6.1, width: 23, height: 4.1,
+      text: '面料编号｜请填写', fontSize: 3.1, bold: true
+    }),
+    requiredText(doc, { x: 2, y: 10.7, width: 23, height: 2.9, text: '成分｜请填写', fontSize: 2.2 }),
+    requiredText(doc, { x: 2, y: 14, width: 23, height: 2.9, text: '幅宽｜请填写', fontSize: 2.2 }),
+    requiredText(doc, { x: 2, y: 17.3, width: 23, height: 2.9, text: '缸号｜请填写', fontSize: 2.2 }),
+    sampleQr(doc, {
+      x: 26.2, y: 7, width: 11.7, height: 11.7,
+      value: 'SYDEMO:FABRIC'
+    }),
+    text(doc, { x: 26, y: 19.3, width: 12, height: 2.7, text: '扫码查卷', fontSize: 2.05, align: 'center' }),
+    requiredText(doc, { x: 2, y: 22.2, width: 36, height: 4, text: '当前剩余｜请填写', fontSize: 2.4, bold: true })
+  ];
+  return finish(doc, '商跃面料卷标', scenarioMeta('零售', '40×30', '服装珠宝'));
+}
+
+/** 商跃原创跳线双端签 · 40×12 */
+function layoutShangyueCablePair() {
+  const doc = createDocument(40, 12);
+  doc.elements = [
+    rect(doc, { x: 0.5, y: 0.5, width: 39, height: 11, shapeKind: 'rounded', lineWidth: 0.3, locked: true }),
+    rect(doc, { x: 1, y: 1, width: 7, height: 10, filled: true, lineWidth: 0.2, locked: true }),
+    text(doc, { x: 1.5, y: 2, width: 6, height: 3.1, text: 'A ↔ B', fontSize: 2.4, bold: true, reverse: true, align: 'center' }),
+    text(doc, { x: 1.5, y: 6.1, width: 6, height: 2.7, text: 'SY', fontSize: 2.1, reverse: true, align: 'center' }),
+    requiredText(doc, { x: 9, y: 1, width: 30, height: 4.2, text: 'A端｜请填写', fontSize: 2.9, bold: true }),
+    line(doc, { x: 9, y: 5.5, width: 29.5, height: 0.5, lineWidth: 0.25, locked: true }),
+    requiredText(doc, { x: 9, y: 6.2, width: 30, height: 4.2, text: 'B端｜请填写', fontSize: 2.9, bold: true })
+  ];
+  return finish(doc, '商跃跳线双端签', scenarioMeta(
+    '办公', '40×12', '线缆设备',
+    ['d110', 'd11-legacy', 'b1', 'b21', 'b21-c2b', 'b21s']
+  ));
+}
+
+/** 商跃原创端口标识签 · 40×12 */
+function layoutShangyuePanelPort() {
+  const doc = createDocument(40, 12);
+  doc.elements = [
+    rect(doc, { x: 0.5, y: 0.5, width: 39, height: 11, shapeKind: 'rounded', lineWidth: 0.3, locked: true }),
+    rect(doc, { x: 1, y: 1, width: 10.5, height: 10, filled: true, lineWidth: 0.2, locked: true }),
+    requiredText(doc, { x: 1.6, y: 1.7, width: 9.3, height: 5, text: 'P--', fontSize: 4, bold: true, reverse: true, align: 'center' }),
+    text(doc, { x: 1.6, y: 7.1, width: 9.3, height: 2.4, text: 'PORT', fontSize: 1.9, reverse: true, align: 'center' }),
+    requiredText(doc, { x: 13, y: 1.1, width: 25.5, height: 4.1, text: '机柜位｜请填写', fontSize: 2.75, bold: true }),
+    requiredText(doc, { x: 13, y: 6.2, width: 25.5, height: 4.1, text: 'VLAN/用途｜请填写', fontSize: 2.55 })
+  ];
+  return finish(doc, '商跃端口标识签', scenarioMeta(
+    '办公', '40×12', '线缆设备',
+    ['d110', 'd11-legacy', 'b1', 'b21', 'b21-c2b', 'b21s']
+  ));
+}
+
+/** 商跃原创设备维保签 · 40×30 */
+function layoutShangyueMaintenance() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    ...scenarioFrame(doc, '设备维保'),
+    requiredText(doc, {
+      x: 2, y: 6.1, width: 23, height: 4,
+      text: '设备位号｜请填写', fontSize: 3.1, bold: true
+    }),
+    requiredText(doc, { x: 2, y: 10.6, width: 23, height: 3, text: '本次维保｜请填写', fontSize: 2.25 }),
+    requiredText(doc, { x: 2, y: 14, width: 23, height: 3, text: '下次维保｜请填写', fontSize: 2.25, bold: true }),
+    requiredText(doc, { x: 2, y: 17.4, width: 23, height: 3, text: '维保人｜请填写', fontSize: 2.25 }),
+    sampleQr(doc, {
+      x: 26.2, y: 7, width: 11.7, height: 11.7,
+      value: 'SYDEMO:MAINT'
+    }),
+    text(doc, { x: 26, y: 19.3, width: 12, height: 2.7, text: '扫码工单', fontSize: 2.05, align: 'center' }),
+    rect(doc, { x: 2, y: 22.4, width: 36, height: 4.5, filled: true, lineWidth: 0.2, locked: true }),
+    text(doc, { x: 3, y: 23, width: 34, height: 3.2, text: '未完成维保请勿覆盖旧签', fontSize: 2.05, bold: true, reverse: true, align: 'center' })
+  ];
+  return finish(doc, '商跃设备维保签', scenarioMeta('行业', '40×30', '线缆设备'));
+}
+
+/** 商跃原创档案盒签 · 40×30 */
+function layoutShangyueArchiveBox() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    ...scenarioFrame(doc, '档案盒'),
+    requiredText(doc, {
+      x: 2, y: 6.1, width: 36, height: 4,
+      text: '档案题名｜请填写', fontSize: 3.2, bold: true
+    }),
+    text(doc, { x: 2, y: 10.6, width: 7, height: 2.8, text: '年度', fontSize: 2.1, bold: true }),
+    requiredText(doc, { x: 9, y: 10.5, width: 10, height: 3, text: '请填写', fontSize: 2.25 }),
+    text(doc, { x: 21, y: 10.6, width: 7, height: 2.8, text: '门类', fontSize: 2.1, bold: true }),
+    requiredText(doc, { x: 28, y: 10.5, width: 10, height: 3, text: '请填写', fontSize: 2.25, align: 'right' }),
+    text(doc, { x: 2, y: 14, width: 10, height: 2.8, text: '保管期限', fontSize: 2.1 }),
+    requiredText(doc, { x: 12, y: 13.9, width: 26, height: 3, text: '请填写', fontSize: 2.25, align: 'right' }),
+    requiredText(doc, { x: 2, y: 17.5, width: 36, height: 3, text: '档号｜请填写', fontSize: 2.3, bold: true }),
+    sampleBarcode(doc, {
+      x: 2.4, y: 21.5, width: 35.2, height: 6.3,
+      value: 'DEMO01', showText: false
+    })
+  ];
+  return finish(doc, '商跃档案盒签', scenarioMeta('办公', '40×30', '办公生活'));
+}
+
+/** 商跃原创收纳索引签 · 40×30 */
+function layoutShangyueStorageIndex() {
+  const doc = createDocument(40, 30);
+  doc.elements = [
+    ...scenarioFrame(doc, '收纳索引'),
+    requiredText(doc, {
+      x: 2, y: 6.1, width: 23, height: 4.1,
+      text: '箱号｜请填写', fontSize: 3.2, bold: true
+    }),
+    requiredText(doc, { x: 2, y: 10.7, width: 23, height: 4.7, text: '内容分类｜请填写', fontSize: 2.4, wordWrap: true, verticalAlign: 'top' }),
+    requiredText(doc, { x: 2, y: 15.8, width: 23, height: 3, text: '存放位置｜请填写', fontSize: 2.2 }),
+    sampleQr(doc, {
+      x: 26.2, y: 7, width: 11.7, height: 11.7,
+      value: 'SYDEMO:BOX'
+    }),
+    text(doc, { x: 26, y: 19.3, width: 12, height: 2.7, text: '扫码看清单', fontSize: 2.05, align: 'center' }),
+    rect(doc, { x: 2, y: 22.3, width: 36, height: 4.6, shapeKind: 'rounded', lineWidth: 0.3, locked: true }),
+    requiredText(doc, { x: 3, y: 22.9, width: 34, height: 3.4, text: '备注｜无 / 请填写', fontSize: 2.15 })
+  ];
+  return finish(doc, '商跃收纳索引签', scenarioMeta('生活', '40×30', '办公生活'));
+}
+
+/** 商跃原创图书借阅签 · 40×20 */
+function layoutShangyueBookLoan() {
+  const doc = createDocument(40, 20);
+  doc.elements = [
+    rect(doc, { x: 0.6, y: 0.6, width: 38.8, height: 18.8, shapeKind: 'rounded', lineWidth: 0.3, locked: true }),
+    rect(doc, { x: 1.2, y: 1.2, width: 2, height: 17.6, filled: true, lineWidth: 0.2, locked: true }),
+    requiredText(doc, { x: 4.2, y: 1.4, width: 21.2, height: 4.5, text: '书名｜请填写', fontSize: 3.2, bold: true }),
+    requiredText(doc, { x: 4.2, y: 6.2, width: 21.2, height: 3, text: '归属区｜请填写', fontSize: 2.25 }),
+    requiredText(doc, { x: 4.2, y: 9.6, width: 21.2, height: 3, text: '编号｜请填写', fontSize: 2.25 }),
+    text(doc, { x: 4.2, y: 14, width: 21.2, height: 3, text: '归还后请放回原区', fontSize: 2.05 }),
+    sampleQr(doc, {
+      x: 27, y: 2, width: 11, height: 11,
+      value: 'SYDEMO:BOOK'
+    }),
+    text(doc, { x: 26.5, y: 13.7, width: 12, height: 2.7, text: '扫码登记', fontSize: 2.05, align: 'center' })
+  ];
+  return finish(doc, '商跃图书借阅签', scenarioMeta('办公', '40×20', '办公生活'));
 }
 
 const LAYOUT_BUILDERS = {
@@ -1027,6 +2123,28 @@ const LAYOUT_BUILDERS = {
   'storage-code': layoutWarehouse,
   'cable-name': layoutCable,
   'home-date': layoutFoodDate,
+  'shangyue-wish-card': layoutShangyueWishCard,
+  'shangyue-price-tag': layoutShangyuePriceTag,
+  'shangyue-bin-label': layoutShangyueBinLabel,
+  'shangyue-name-sticker': layoutShangyueNameSticker,
+  'shangyue-fresh-date': layoutShangyueFreshDate,
+  'shangyue-wifi-card': layoutShangyueWifiCard,
+  'shangyue-promo-tag': layoutShangyuePromoTag,
+  'shangyue-jewelry-tag': layoutShangyueJewelryTag,
+  'shangyue-garment-tag': layoutShangyueGarmentTag,
+  'shangyue-ship-label': layoutShangyueShipLabel,
+  'shangyue-cable-tag': layoutShangyueCableTag,
+  'shangyue-asset-tag': layoutShangyueAssetTag,
+  'shangyue-biz-card': layoutShangyueBizCard,
+  'shangyue-kitchen-date': layoutShangyueKitchenDate,
+  'shangyue-med-label': layoutShangyueMedLabel,
+  'shangyue-seat-card': layoutShangyueSeatCard,
+  'shangyue-bakery-tag': layoutShangyueBakeryTag,
+  'shangyue-plant-tag': layoutShangyuePlantTag,
+  'shangyue-desk-plate': layoutShangyueDeskPlate,
+  'shangyue-lab-tag': layoutShangyueLabTag,
+  'shangyue-care-tag': layoutShangyueCareTag,
+  'shangyue-serial-cable': layoutShangyueSerialCable,
   'asset-card': layoutAsset,
   'medicine-box': layoutMedicine,
   'shipping-bin': layoutShipping,
@@ -1054,11 +2172,25 @@ const LAYOUT_BUILDERS = {
   'office-desk': layoutOfficeDesk,
   'lab-sample': layoutLabSample,
   'plant-care': layoutPlantCare,
-  'niim-product-r40x94': layoutFromImport('niim-product-r40x94'),
-  'niim-medicine-price': layoutFromImport('niim-medicine-price'),
-  'niim-state-grid': layoutFromImport('niim-state-grid'),
-  'niim-c1-default': layoutFromImport('niim-c1-default'),
-  ...onlineLayoutEntries
+  'shangyue-shelf-dual-price': layoutShangyueShelfDualPrice,
+  'shangyue-produce-origin': layoutShangyueProduceOrigin,
+  'shangyue-market-promo': layoutShangyueMarketPromo,
+  'shangyue-pick-wave': layoutShangyuePickWave,
+  'shangyue-return-check': layoutShangyueReturnCheck,
+  'shangyue-tool-asset': layoutShangyueToolAsset,
+  'shangyue-drink-cup': layoutShangyueDrinkCup,
+  'shangyue-thaw-window': layoutShangyueThawWindow,
+  'shangyue-allergen-check': layoutShangyueAllergenCheck,
+  'shangyue-size-color': layoutShangyueSizeColor,
+  'shangyue-jewelry-repair': layoutShangyueJewelryRepair,
+  'shangyue-fabric-roll': layoutShangyueFabricRoll,
+  'shangyue-cable-pair': layoutShangyueCablePair,
+  'shangyue-panel-port': layoutShangyuePanelPort,
+  'shangyue-maintenance': layoutShangyueMaintenance,
+  'shangyue-archive-box': layoutShangyueArchiveBox,
+  'shangyue-storage-index': layoutShangyueStorageIndex,
+  'shangyue-book-loan': layoutShangyueBookLoan,
+  ...CLEANROOM_LAYOUT_BUILDERS
 };
 
 function buildTemplateDocument(template) {

@@ -72,6 +72,8 @@ function main() {
   parts.push(' * Source: research/online-templates/raw/*.json');
   parts.push(' */');
   parts.push('');
+  parts.push("const { applyOnlineTemplateRuntimeFixes } = require('./online-template-runtime-fixes');");
+  parts.push('');
   parts.push('const ONLINE_TEMPLATES = ' + JSON.stringify(pack, null, 2) + ';');
   parts.push('');
   parts.push('function getOnlineTemplate(id) {');
@@ -80,8 +82,9 @@ function main() {
   parts.push('');
   parts.push('function buildOnlineDocument(id) {');
   parts.push('  const item = getOnlineTemplate(id);');
-  parts.push('  if (!item) return null;');
-  parts.push('  return JSON.parse(JSON.stringify(item.document));');
+  parts.push('  if (!item || !item.document) return null;');
+  parts.push('  const document = JSON.parse(JSON.stringify(item.document));');
+  parts.push('  return applyOnlineTemplateRuntimeFixes(id, document);');
   parts.push('}');
   parts.push('');
   parts.push('module.exports = {');

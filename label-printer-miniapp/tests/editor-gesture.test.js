@@ -3,7 +3,10 @@ const test = require('node:test');
 
 const {
   handleHitRegion,
-  longPressSelection
+  longPressSelection,
+  nextSelectionId,
+  selectionHitDecision,
+  selectionTargetSizeMm
 } = require('../miniprogram/core/editor-gesture');
 
 test('holding the sole selected element keeps ordinary single selection', () => {
@@ -24,4 +27,33 @@ test('large touch handles stay outside the content instead of stealing its cente
   assert.equal(handleHitRegion('e', 0, 0, 'touch'), true);
   assert.equal(handleHitRegion('rotate', -16.5, -16.5, 'touch'), false);
   assert.equal(handleHitRegion('rotate', 0, 0, 'touch'), true);
+});
+
+test('selection target converts the 44px touch area to label millimetres', () => {
+  const document = { widthMm: 40, heightMm: 20 };
+  const canvas = { width: 400, height: 200 };
+  assert.deepEqual(selectionTargetSizeMm(document, canvas, 'touch'), {
+    minWidthMm: 4.4,
+    minHeightMm: 4.4
+  });
+  assert.deepEqual(selectionTargetSizeMm(document, canvas, 'mouse'), {
+    minWidthMm: 2,
+    minHeightMm: 2
+  });
+});
+
+test('repeat taps preserve drag first, then cycle through overlap candidates', () => {
+  const candidates = [{ id: 'top' }, { id: 'middle' }, { id: 'bottom' }];
+  assert.deepEqual(selectionHitDecision(candidates, ''), {
+    element: candidates[0],
+    candidateIds: ['top', 'middle', 'bottom'],
+    cycleOnTap: false
+  });
+  assert.deepEqual(selectionHitDecision(candidates, 'middle'), {
+    element: candidates[1],
+    candidateIds: ['top', 'middle', 'bottom'],
+    cycleOnTap: true
+  });
+  assert.equal(nextSelectionId(['top', 'middle', 'bottom'], 'middle'), 'bottom');
+  assert.equal(nextSelectionId(['top', 'middle', 'bottom'], 'bottom'), 'top');
 });

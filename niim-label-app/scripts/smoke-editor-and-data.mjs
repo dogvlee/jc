@@ -32,10 +32,12 @@ function check(name, condition, detail) {
 
 await page.goto('http://127.0.0.1:4173/', { waitUntil: 'networkidle' });
 await page.locator('.home-hero').waitFor();
+const onboardingSkip = page.locator('[data-action="onboarding-skip"]');
+if (await onboardingSkip.count()) await onboardingSkip.click();
 
-// --- Editor: tap an already-selected text to edit it, and watch undo wake up ---
+// --- Editor: select text, use its visible edit action, and watch undo wake up ---
 await page.locator('.nav-item[data-route="templates"]').click();
-await page.locator('.template-card', { hasText: '商品价格标签' }).first().click();
+await page.locator('.template-card[data-id="shangyue-price-tag"]').click();
 await page.locator('.template-sheet').waitFor();
 await page.locator('[data-action="use-template"]').click();
 await page.locator('#label-canvas').waitFor();
@@ -44,18 +46,18 @@ check('undo starts disabled on a fresh template', await page.locator('[data-acti
 
 const canvas = page.locator('#selection-canvas');
 const box = await canvas.boundingBox();
-// The title text sits in the top band of the 40x30 label.
-const titlePoint = { x: box.x + box.width * 0.5, y: box.y + box.height * 0.12 };
+// The editable product title sits around y=6.2..11mm in the 40×30 design.
+const titlePoint = { x: box.x + box.width * 0.5, y: box.y + box.height * 0.285 };
 
 await page.mouse.click(titlePoint.x, titlePoint.y);
 await page.waitForTimeout(350);
 check('first tap selects and shows the float bar', await page.locator('.niim-float-bar').count() > 0);
 check('first tap does not hijack the screen with a keyboard', await page.locator('.niim-content-line').count() === 0);
 
-await page.mouse.click(titlePoint.x, titlePoint.y);
+await page.locator('[data-action="edit-element"]').click();
 await page.waitForTimeout(400);
 const contentInput = page.locator('.niim-content-line');
-check('second tap on the same text opens its content editor', await contentInput.count() > 0);
+check('selected text exposes a working content editor', await contentInput.count() > 0);
 await page.screenshot({ path: join(output, 'p0-tap-to-edit.png') });
 
 if (await contentInput.count() > 0) {
@@ -80,7 +82,7 @@ check('back kept us in the editor', await page.locator('#label-canvas').count() 
 
 await page.goBack();
 await page.waitForTimeout(500);
-check('back again leaves the editor for home', await page.locator('.home-hero').count() > 0);
+check('back again returns to the template library', await page.locator('.templates-page').count() > 0);
 check('the app is still alive', page.url().includes('127.0.0.1:4173'));
 
 // --- Batch data: typing must survive a page switch and a reload ---

@@ -97,16 +97,18 @@
 
 `promo-price` EAN-13 校验位错（应为 2）、`cable-name` 条码 13mm 装不下 `CABLE1206`（需 19.3mm）、`serial-cable` 条码宽度不足 —— 这三套此前**在任何机型上都渲染不出来**。另：`clothing-tag` 里装的是一张护肤乳液标签（首页快捷入口「服装款式」直指它），已换成真正的服装吊牌（款号/颜色尺码/面料/吊牌价/EAN-13）。
 
-### 遗留：50mm 宽模板无任何机型可打
+### 已解决：50mm 宽标签按方案 A 居中裁切打印（真机样张待验证）
 
-`promo-price` / `storage-code` / `shipping-bin` / `asset-card` / `business-card` / `state-grid` 共 6 套是 50mm 宽，而所有 profile 的 `printheadPixels` 都是 384 = **48.05mm**，`alignedCanvasSize` 直接拒绝。`STOCK_PRESETS` 里的 50×30 / 50×40 / 60×40 / 70×50 同理。
+`promo-price` / `storage-code` / `shipping-bin` / `asset-card` / `business-card` / `state-grid` 共 6 套 50mm 宽模板此前在所有机型上被 `alignedCanvasSize` 直接拒绝。根因是把「纸张尺寸」和「打印头可打宽度」当成了同一个值 —— 真机 B21 是能进 50mm 纸、只印得到中间 48.05mm 的。
 
-根因是把「纸张尺寸」和「打印头可打宽度」当成了同一个值 —— 真机 B21 是能进 50mm 纸、只印得到中间 48mm 的。两条路：
+现按方案 A 实现（2026-08-25）：
 
-- **A（推荐）**：让文档宽度可超过打印头，渲染/编码时按可打区裁切并居中，编辑器画布标出不可打印边距。改 `alignedCanvasSize` 语义 + `renderer`/`image-encoder`，需要真机验证。
-- **B（权宜）**：把这 6 套模板改成 48mm 宽并按 0.96 缩放坐标。当天可打，但与用户手上的 50mm 耗材有 2mm 落差，且 QR 元素会被压成非正方。
+- `core/profiles.js`：`alignedCanvasSize` 接受 ≤3.5mm 的超出量（覆盖 B 系 50mm 纸与 D 系 15mm 带），返回居中裁切窗口；超出容差仍硬拒绝。新增 `printableWindowMm` / `elementsCutByCrop`。
+- `main.js renderToCanvas`：按文档完整栅格渲染，打印在 `getImageData` 阶段取居中可打窗口。
+- 预检：条码/二维码伸入不可打边距时**阻止打印**（裁切后的码无法扫描，fail closed）；其余情况在打印面板显示蓝色提示条「将居中裁切打印，左右各约 X mm 不出墨」。
+- 打印预览：不可打边距画半透明遮罩 + 红色虚线可打边界。
 
-未做 B，因为它是拿"缩模板"掩盖建模问题；P0-1 的岔路已能让用户体面地换纸走出去。
+**发布门禁**：需在 B21/B1 真机用 50mm 纸打样张核对边距与居中偏差后，方可对外声明支持。D110 15mm 带同理。
 
 ## 尚未对齐（P2+）
 

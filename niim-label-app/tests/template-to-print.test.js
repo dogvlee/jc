@@ -9,7 +9,7 @@ global.localStorage = {
   removeItem: (key) => memory.delete(key)
 };
 
-const { templates } = require('../src/app/catalog');
+const { getTemplate, templates } = require('../src/app/catalog');
 const { buildTemplateDocument } = require('../src/app/template-layouts');
 const { initialState, openDocument } = require('../src/app/state');
 const { propertyPanel, renderMain, renderModal } = require('../src/app/views');
@@ -20,7 +20,7 @@ function freshState() {
 }
 
 function openTemplate(state, id) {
-  openDocument(state, buildTemplateDocument(templates.find((item) => item.id === id)));
+  openDocument(state, buildTemplateDocument(getTemplate(id)));
   return state;
 }
 
@@ -58,6 +58,17 @@ test('a label the current model cannot print still opens the print sheet with a 
   assert.ok(markup.includes('data-action="open-stock-sheet"'), 'should offer changing the stock');
   // The model picker lives in this sheet, so the sheet must never be withheld.
   assert.ok(markup.includes('id="print-profile"'));
+});
+
+test('a connected printer owns the active protocol and cannot be changed by the sheet', () => {
+  const state = openTemplate(freshState(), 'product-simple');
+  state.settings.defaultProfileId = 'b21';
+  state.device = { name: 'D110', profileId: 'd110', mtu: 247 };
+  state.modal = 'print';
+  const markup = renderModal(state);
+  assert.match(markup, /id="print-profile"[^>]*disabled/);
+  assert.match(markup, /value="d110" selected/);
+  assert.doesNotMatch(markup, /value="b21" selected/);
 });
 
 test('the print sheet cannot be dismissed while printing, and offers a stop', () => {

@@ -66,6 +66,8 @@ test('evaluatePrintability reports the blocker and a model that can print it', (
   const hopeless = evaluatePrintability({ widthMm: 60, heightMm: 60 }, getProfile('b1'));
   assert.equal(hopeless.ok, false);
   assert.equal(hopeless.suggestProfileId, '');
+  assert.match(hopeless.message, /最大已验证打印头约 48\.0 mm/);
+  assert.match(hopeless.message, /真机样张验证/);
 });
 
 test('profile selection distinguishes overlapping B-series names and model IDs', () => {

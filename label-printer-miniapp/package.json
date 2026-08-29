@@ -8,7 +8,11 @@
     "test": "node --test tests/*.test.js",
     "test:coverage": "node --test --experimental-test-coverage tests/*.test.js",
     "check": "node scripts/check-project.mjs",
-    "verify": "npm run check && npm test",
+    "plan:authorized-redesign": "node scripts/plan-authorized-redesign.mjs",
+    "redesign:batch": "node scripts/batch-redesign.mjs",
+    "redesign:install": "node scripts/install-approved-redesigns.mjs",
+    "release:shangyue": "node scripts/build-shangyue-release.mjs",
+    "verify": "npm run check && npm test && npm run release:shangyue",
     "assets:sync": "python scripts/optimize_assets.py"
   },
   "devDependencies": {

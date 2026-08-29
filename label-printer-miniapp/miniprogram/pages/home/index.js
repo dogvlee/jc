@@ -1,13 +1,32 @@
-const { categories, industries, templates } = require('../../app/catalog');
+const {
+  APPROVED_ORIGINAL_TEMPLATES,
+  BATCH_TEMPLATES,
+  categories,
+  industries,
+  templates
+} = require('../../app/catalog');
 const { applyRowToDocument } = require('../../app/data-bind');
 const { buildTemplateDocument } = require('../../app/template-layouts');
+const {
+  buildLibraryDocument,
+  catalogMeta,
+  getLibraryEntry,
+  librarySceneChips,
+  librarySizeChips,
+  libraryStats,
+  queryLibraryMeta
+} = require('../../app/shangyue-library/pack');
+const LIBRARY_SCENES = librarySceneChips();
+const LIBRARY_SIZES = librarySizeChips();
+const LIBRARY_TOTAL = libraryStats().total;
 const { STOCK_PRESETS } = require('../../app/stock-presets');
-const { createDocument } = require('../../core/document');
+const { createDocument, elementTypeLabel } = require('../../core/document');
 const { importNiimTemplate } = require('../../core/niim-template-import');
 const { getProfile } = require('../../core/profiles');
 const { buildScanDocument } = require('../../core/scan-label');
 const { validateDocument } = require('../../core/renderer');
 const { parseCsv, rowsToRecords, stringifyCsv } = require('../../services/csv');
+const { localizeDocumentImages } = require('../../services/remote-image-cache');
 const { KEYS, Repository, normalizeDocument } = require('../../services/repository');
 const { scanCode } = require('../../services/scanner');
 
@@ -16,15 +35,20 @@ const DATA_COLUMNS = ['name', 'code', 'price', 'date'];
 const MAX_CSV_IMPORT_BYTES = 2 * 1024 * 1024;
 const MAX_BACKUP_IMPORT_BYTES = 5 * 1024 * 1024;
 const MAX_TEMPLATE_IMPORT_BYTES = 2 * 1024 * 1024;
+const HOME_RECOMMENDED_TEMPLATES = APPROVED_ORIGINAL_TEMPLATES.slice(0, 6);
 const ROUTE_TITLES = {
-  home: '精臣标签',
-  templates: '行业模板',
+  home: '商跃标签',
+  templates: '商跃模板',
   projects: '我的标签',
   data: '批量数据',
   profile: '我的'
 };
 
 function templateView(item) {
+  const rawThumb = String(item.thumbSrc || '').trim();
+  const thumbSrc = rawThumb && /^(?:https?:\/\/|wxfile:\/\/|\/)/i.test(rawThumb)
+    ? rawThumb
+    : (rawThumb ? `/${rawThumb.replace(/^\/+/, '')}` : '');
   return {
     id: item.id,
     name: item.name,
@@ -33,9 +57,11 @@ function templateView(item) {
     sizeText: `${item.size[0]}×${item.size[1]} mm`,
     blurb: item.blurb || '我的本地模板',
     badge: item.badge || '',
+    copyright: item.copyright || '',
     kind: item.kind || 'accent',
-    source: item.source || 'catalog',
-    thumbSrc: item.thumbSrc ? `/${String(item.thumbSrc).replace(/^\/+/, '')}` : ''
+    source: item.source || 'unknown',
+    sceneLabel: item.sceneLabel || '',
+    thumbSrc
   };
 }
 
@@ -76,13 +102,27 @@ Page({
     industries,
     templateCategory: '全部',
     templateIndustry: '全部',
+    libraryScene: '全部',
+    libraryScenes: LIBRARY_SCENES,
+    librarySize: '全部',
+    librarySizes: LIBRARY_SIZES,
+    libraryTotal: LIBRARY_TOTAL,
     templateQuery: '',
     templateVisibleCount: PAGE_SIZE,
     templateTotal: templates.length,
     visibleTemplates: [],
+    remoteTemplatePage: 0,
+    remoteTemplateTotal: 0,
+    remoteTemplateLoaded: 0,
+    remoteTemplateScanned: 0,
+    remoteTemplateHasMore: false,
+    remoteTemplateLoading: false,
+    remoteTemplateError: '',
+    remoteTemplateStatusText: '公开货架仅含商跃原创、精诚授权改编和我的模板',
+    remoteAssetLoading: false,
     recentProjects: [],
     allProjects: [],
-    recommendedTemplates: templates.slice(0, 4).map(templateView),
+    recommendedTemplates: HOME_RECOMMENDED_TEMPLATES.map(templateView),
     userTemplateCount: 0,
     dataRows: [],
     printHistory: [],
@@ -102,13 +142,15 @@ Page({
     batchTemplateId: 'product-simple',
     labelTypeNames: ['间隙纸', '黑标纸', '连续纸', '定孔纸'],
     stockPresets: STOCK_PRESETS,
-    batchTemplateNames: templates.slice(0, 32).map((item) => item.name),
+    batchTemplateNames: BATCH_TEMPLATES.map((item) => item.name),
     batchTemplateIndex: 0
   },
 
   onLoad() {
+    this.pageActive = true;
     const info = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
     this.repository = new Repository(wx);
+    this.remoteTemplates = [];
     this.repository.migrate();
     this.setData({ safeTop: Number(info.safeArea && info.safeArea.top) || Number(info.statusBarHeight) || 24 });
     this.bindConnectionState();
@@ -116,10 +158,26 @@ Page({
   },
 
   onShow() {
-    if (this.repository) this.refresh();
+    if (!this.repository) return;
+    this.consumePendingRoute();
+    this.refresh();
+  },
+
+  consumePendingRoute() {
+    let route = '';
+    try {
+      route = String(wx.getStorageSync(KEYS.pendingHomeRoute) || '');
+      if (route) wx.removeStorageSync(KEYS.pendingHomeRoute);
+    } catch (error) {
+      route = '';
+    }
+    if (route && ROUTE_TITLES[route] && route !== this.data.route) {
+      this.setData({ route, routeTitle: ROUTE_TITLES[route] });
+    }
   },
 
   onUnload() {
+    this.pageActive = false;
     if (this.removeConnectionListener) this.removeConnectionListener();
   },
 
@@ -132,17 +190,21 @@ Page({
     const app = getApp();
     const manager = app && app.globalData && app.globalData.connectionManager;
     if (!manager || typeof manager.subscribe !== 'function') return;
-    this.removeConnectionListener = manager.subscribe((state) => {
+    const describe = (state) => {
       const connected = state.status === 'connected';
-      this.setData({
-        connected,
-        connectionLabel: connected ? ((state.device && (state.device.name || state.device.displayName)) || '已连接') : '未连接'
-      });
+      let connectionLabel = '未连接';
+      if (connected) {
+        connectionLabel = (state.device && (state.device.name || state.device.displayName)) || '已连接';
+      } else if (state.status === 'connecting') {
+        connectionLabel = '连接中…';
+      }
+      return { connected, connectionLabel };
+    };
+    this.removeConnectionListener = manager.subscribe((state) => {
+      this.setData(describe(state));
     });
     if (typeof manager.getState === 'function') {
-      const state = manager.getState();
-      const connected = state.status === 'connected';
-      this.setData({ connected, connectionLabel: connected ? ((state.device && (state.device.name || state.device.displayName)) || '已连接') : '未连接' });
+      this.setData(describe(manager.getState()));
     }
   },
 
@@ -185,8 +247,24 @@ Page({
   refreshTemplates() {
     const category = this.data.templateCategory;
     const industry = this.data.templateIndustry;
+    const libraryScene = this.data.libraryScene;
+    const librarySize = this.data.librarySize;
     const query = String(this.data.templateQuery || '').trim().toLowerCase();
-    const systemItems = templates.map((item) => Object.assign({ source: item.source || 'catalog' }, item));
+    if (industry === '行业库') {
+      const page = queryLibraryMeta({
+        sceneLabel: libraryScene,
+        size: librarySize,
+        query,
+        limit: this.data.templateVisibleCount
+      });
+      this.filteredTemplates = page.items;
+      this.setData({
+        templateTotal: page.total,
+        visibleTemplates: page.items.map(templateView)
+      });
+      return;
+    }
+    const systemItems = templates.slice();
     const userItems = (this.userTemplates || []).map((item) => ({
       id: item.id,
       name: item.name,
@@ -197,12 +275,16 @@ Page({
       blurb: '保存在本机的自定义模板',
       source: 'user'
     }));
-    const source = industry === '我的' ? userItems : systemItems.concat(userItems);
+    const source = industry === '我的'
+        ? userItems
+        : systemItems.concat(userItems);
     const filtered = source.filter((item) => {
-      if (category !== '全部' && item.category !== category) return false;
-      if (industry !== '全部' && industry !== '我的' && item.industry !== industry) return false;
+      if (category !== '全部' && item.category !== category) {
+        return false;
+      }
+      if (industry !== '全部' && industry !== '我的' && industry !== '行业库' && item.industry !== industry) return false;
       if (!query) return true;
-      return [item.name, item.category, item.industry, item.blurb].some((value) => String(value || '').toLowerCase().includes(query));
+      return [item.name, item.category, item.industry, item.blurb, item.sceneLabel].some((value) => String(value || '').toLowerCase().includes(query));
     });
     this.filteredTemplates = filtered;
     this.setData({
@@ -215,13 +297,29 @@ Page({
     const route = event.currentTarget.dataset.route;
     if (!ROUTE_TITLES[route]) return;
     this.setData({ route, routeTitle: ROUTE_TITLES[route] }, () => {
-      if (route === 'templates') this.refreshTemplates();
+      if (route === 'templates') {
+        this.refreshTemplates();
+      }
       if (route === 'projects') this.setData({ allProjects: this.filteredProjectViews(this.projects) });
     });
   },
 
   openIndustry() {
-    this.setData({ route: 'templates', routeTitle: ROUTE_TITLES.templates, templateIndustry: '全部' }, () => this.refreshTemplates());
+    this.setData({ route: 'templates', routeTitle: ROUTE_TITLES.templates, templateIndustry: '全部' }, () => {
+      this.refreshTemplates();
+    });
+  },
+
+  ensureRemoteTemplateCatalog() {
+    return Promise.resolve();
+  },
+
+  loadRemoteTemplatePage() {
+    return Promise.resolve();
+  },
+
+  loadMoreRemoteTemplates() {
+    return Promise.resolve();
   },
 
   setTemplateCategory(event) {
@@ -229,7 +327,26 @@ Page({
   },
 
   setTemplateIndustry(event) {
-    this.setData({ templateIndustry: event.currentTarget.dataset.value, templateVisibleCount: PAGE_SIZE }, () => this.refreshTemplates());
+    this.setData({
+      templateIndustry: event.currentTarget.dataset.value,
+      libraryScene: '全部',
+      librarySize: '全部',
+      templateVisibleCount: PAGE_SIZE
+    }, () => this.refreshTemplates());
+  },
+
+  setLibraryScene(event) {
+    this.setData({
+      libraryScene: event.currentTarget.dataset.value,
+      templateVisibleCount: PAGE_SIZE
+    }, () => this.refreshTemplates());
+  },
+
+  setLibrarySize(event) {
+    this.setData({
+      librarySize: event.currentTarget.dataset.value,
+      templateVisibleCount: PAGE_SIZE
+    }, () => this.refreshTemplates());
   },
 
   onTemplateSearch(event) {
@@ -237,7 +354,14 @@ Page({
   },
 
   resetTemplateFilters() {
-    this.setData({ templateCategory: '全部', templateIndustry: '全部', templateQuery: '', templateVisibleCount: PAGE_SIZE }, () => this.refreshTemplates());
+    this.setData({
+      templateCategory: '全部',
+      templateIndustry: '全部',
+      libraryScene: '全部',
+      librarySize: '全部',
+      templateQuery: '',
+      templateVisibleCount: PAGE_SIZE
+    }, () => this.refreshTemplates());
   },
 
   loadMoreTemplates() {
@@ -245,6 +369,12 @@ Page({
   },
 
   resolveTemplate(id) {
+    if (String(id || '').startsWith('sy-lib-')) {
+      const entry = getLibraryEntry(id);
+      if (!entry) return null;
+      const meta = catalogMeta(entry);
+      return { meta: templateView(meta), document: buildLibraryDocument(id) };
+    }
     const user = (this.userTemplates || []).find((item) => item.id === id);
     if (user) return { meta: templateView({
       id: user.id,
@@ -255,6 +385,8 @@ Page({
       kind: projectView(user).kind,
       source: 'user'
     }), document: user.document };
+    const remote = (this.remoteTemplates || []).find((item) => item.id === id);
+    if (remote) return { meta: templateView(remote), document: remote.document };
     const meta = templates.find((item) => item.id === id);
     if (!meta) return null;
     return { meta: templateView(meta), document: buildTemplateDocument(meta) };
@@ -265,7 +397,7 @@ Page({
     if (!resolved) return;
     const counts = {};
     (resolved.document.elements || []).forEach((element) => { counts[element.type] = (counts[element.type] || 0) + 1; });
-    resolved.meta.elementSummary = Object.keys(counts).map((key) => `${key}×${counts[key]}`).join(' · ');
+    resolved.meta.elementSummary = Object.keys(counts).map((key) => `${elementTypeLabel(key)}×${counts[key]}`).join(' · ');
     resolved.meta.elementCount = resolved.document.elements.length;
     this.previewDocument = resolved.document;
     this.setData({ showTemplatePreview: true, previewTemplate: resolved.meta });
@@ -276,9 +408,29 @@ Page({
     this.setData({ showTemplatePreview: false, previewTemplate: null });
   },
 
-  usePreviewTemplate() {
-    if (!this.previewDocument) return;
-    this.openEditor(this.previewDocument, '');
+  async usePreviewTemplate() {
+    if (!this.previewDocument || this.data.remoteAssetLoading) return;
+    if (!this.data.previewTemplate || this.data.previewTemplate.source !== 'remote-niim') {
+      this.openEditor(this.previewDocument, '');
+      return;
+    }
+    const document = this.previewDocument;
+    const previewId = this.data.previewTemplate.id;
+    this.setData({ remoteAssetLoading: true });
+    try {
+      const localized = await localizeDocumentImages(wx, document);
+      if (!this.data.showTemplatePreview || !this.data.previewTemplate || this.data.previewTemplate.id !== previewId) return;
+      this.previewDocument = localized;
+      this.openEditor(localized, '');
+    } catch (error) {
+      wx.showModal({
+        title: '模板图片加载失败',
+        content: `${error && error.message ? error.message : '请检查网络后重试'}。仅支持你自己导入的图片。`,
+        showCancel: false
+      });
+    } finally {
+      if (this.pageActive !== false) this.setData({ remoteAssetLoading: false });
+    }
   },
 
   deletePreviewTemplate() {
@@ -397,8 +549,8 @@ Page({
   updateStockField(event) {
     const field = event.currentTarget.dataset.field;
     const value = Number(event.detail.value);
-    if (!Number.isFinite(value) || value < 5 || value > 150) {
-      wx.showToast({ title: '标签尺寸须在 5-150 mm', icon: 'none' });
+    if (!Number.isFinite(value) || value < 5 || value > 500) {
+      wx.showToast({ title: '标签尺寸须在 5-500 mm', icon: 'none' });
       this.setData({ settings: this.repository.getSettings() });
       return;
     }
@@ -460,12 +612,20 @@ Page({
 
   onBatchTemplateChange(event) {
     const index = Number(event.detail.value) || 0;
-    const item = templates.slice(0, 32)[index];
+    const item = BATCH_TEMPLATES[index];
     this.setData({ batchTemplateIndex: index, batchTemplateId: item ? item.id : 'product-simple' });
   },
 
   runBatch() {
-    const meta = templates.find((item) => item.id === this.data.batchTemplateId) || templates[0];
+    const meta = BATCH_TEMPLATES.find((item) => item.id === this.data.batchTemplateId);
+    if (!meta) {
+      wx.showModal({
+        title: '该模板不支持批量生成',
+        content: '请重新选择一个内置基础模板。',
+        showCancel: false
+      });
+      return;
+    }
     const rows = this.data.dataRows.filter((row) => DATA_COLUMNS.some((field) => String(row[field] || '').trim()));
     if (!rows.length) {
       wx.showToast({ title: '请先填写至少一行数据', icon: 'none' });
@@ -600,11 +760,17 @@ Page({
         wx.getFileSystemManager().readFile({
           filePath: file.path,
           encoding: 'utf8',
-          success: (readResult) => {
+          success: async (readResult) => {
             try {
               const payload = JSON.parse(readResult.data);
+              if (payload && Array.isArray(payload.templates)) {
+                this.importTemplatePack(payload);
+                return;
+              }
               let document = normalizeDocument(payload.document || payload);
-              if (!document) document = importNiimTemplate(payload).document;
+              if (!document) document = importNiimTemplate(payload, { allowRemoteImages: true }).document;
+              document = await localizeDocumentImages(wx, document);
+              if (this.pageActive === false) return;
               const template = this.repository.saveUserTemplate(document, payload.name || document.name || file.name);
               this.refresh();
               wx.showToast({ title: `已导入“${template.name}”`, icon: 'success' });
@@ -615,6 +781,29 @@ Page({
           fail: () => wx.showToast({ title: '读取模板失败', icon: 'none' })
         });
       }
+    });
+  },
+
+  importTemplatePack(payload) {
+    const result = this.repository.importUserTemplates(payload.templates);
+    this.refresh();
+    if (!result.imported) {
+      wx.showModal({
+        title: '模板包未导入',
+        content: result.overflow
+          ? '「我的模板」已满（上限 80 个），请先删除部分模板后再导入。'
+          : '模板包里没有可用的模板数据。',
+        showCancel: false
+      });
+      return;
+    }
+    const parts = [`已导入 ${result.imported} 个模板到「我的模板」`];
+    if (result.overflow) parts.push(`${result.overflow} 个超出 80 个上限未导入`);
+    if (result.invalid) parts.push(`${result.invalid} 个数据无效已跳过`);
+    wx.showModal({
+      title: '模板包导入完成',
+      content: `${parts.join('；')}。`,
+      showCancel: false
     });
   },
 

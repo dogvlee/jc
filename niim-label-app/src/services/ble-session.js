@@ -2,6 +2,8 @@ const { sleep } = require('../core/bytes');
 const { PacketParser, RESPONSE, encodePacket } = require('../core/protocol');
 
 const PRIMARY_SERVICE = 'e7810a71-73ae-499d-8c15-faa9aef0c3f2';
+const WRITE_CHARACTERISTIC = 'bef8d6c9-9c21-4c9e-b632-bd58c1009f9f';
+const NOTIFY_CHARACTERISTIC = 'bef8d6c9-9c21-4c9e-b632-bd58c1009f9e';
 const PRINTER_ERRORS = {
   0x01: '打印机上盖未关闭',
   0x02: '打印机缺纸',
@@ -60,6 +62,23 @@ function supportsWrite(characteristic) {
 function supportsNotify(characteristic) {
   const properties = characteristic.properties || {};
   return properties.notify || properties.indicate;
+}
+
+function normalizedUuid(value) {
+  return String(value || '').toLowerCase();
+}
+
+function selectTrustedChannel(services, characteristicsByService) {
+  const service = (services || []).find((item) => normalizedUuid(item.uuid) === PRIMARY_SERVICE);
+  if (!service) return null;
+  const characteristics = (characteristicsByService && characteristicsByService(service)) || [];
+  const write = characteristics.find((item) => (
+    normalizedUuid(item.uuid) === WRITE_CHARACTERISTIC && supportsWrite(item)
+  ));
+  const notify = characteristics.find((item) => (
+    normalizedUuid(item.uuid) === NOTIFY_CHARACTERISTIC && supportsNotify(item)
+  ));
+  return write && notify ? { serviceId: service.uuid, write, notify } : null;
 }
 
 class BleSession {
@@ -161,37 +180,20 @@ class BleSession {
     }
 
     const serviceResult = await callWx(this.api, 'getBLEDeviceServices', { deviceId: this.deviceId });
-    const services = (serviceResult.services || []).slice().sort((left, right) => {
-      const leftKnown = String(left.uuid).toLowerCase() === PRIMARY_SERVICE;
-      const rightKnown = String(right.uuid).toLowerCase() === PRIMARY_SERVICE;
-      return Number(rightKnown) - Number(leftKnown);
-    });
-
+    const services = serviceResult.services || [];
+    const trustedService = services.find((item) => normalizedUuid(item.uuid) === PRIMARY_SERVICE);
     let channel = null;
-    for (let index = 0; index < services.length; index += 1) {
-      const service = services[index];
-      let result;
-      try {
-        result = await callWx(this.api, 'getBLEDeviceCharacteristics', {
-          deviceId: this.deviceId,
-          serviceId: service.uuid
-        });
-      } catch (error) {
-        continue;
-      }
-      const characteristics = result.characteristics || [];
-      const sameChannel = characteristics.find((item) => supportsWrite(item) && supportsNotify(item));
-      const write = sameChannel || characteristics.find(supportsWrite);
-      const notify = sameChannel || characteristics.find(supportsNotify);
-      if (write && notify) {
-        channel = { serviceId: service.uuid, write, notify };
-        break;
-      }
+    if (trustedService) {
+      const result = await callWx(this.api, 'getBLEDeviceCharacteristics', {
+        deviceId: this.deviceId,
+        serviceId: trustedService.uuid
+      });
+      channel = selectTrustedChannel(services, () => result.characteristics || []);
     }
 
     if (!channel) {
       await this.disconnect();
-      throw new Error('设备没有可用的 BLE 写入/通知特征，可能不是支持的 BLE 打印机');
+      throw new Error('设备未提供可验证的 NIIMBOT BLE 服务/特征，已拒绝连接');
     }
     this.serviceId = channel.serviceId;
     this.writeCharacteristic = channel.write;
@@ -438,4 +440,12 @@ class BleSession {
   }
 }
 
-module.exports = { BleSession, PRIMARY_SERVICE, callWx, withTimeout };
+module.exports = {
+  BleSession,
+  NOTIFY_CHARACTERISTIC,
+  PRIMARY_SERVICE,
+  WRITE_CHARACTERISTIC,
+  callWx,
+  selectTrustedChannel,
+  withTimeout
+};

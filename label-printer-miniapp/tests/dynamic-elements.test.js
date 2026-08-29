@@ -76,7 +76,7 @@ test('editor elements expose transform and advanced style defaults', () => {
   assert.equal(text.verticalAlign, 'middle');
   assert.equal(text.autoFit, true);
   assert.equal(text.underline, false);
-  assert.equal(text.text, '双击编辑');
+  assert.equal(text.text, '点击后编辑文字');
   assert.equal(text.color, '#000000');
   assert.equal(text.wordWrap, false);
   assert.equal(barcode.textPosition, 'bottom');

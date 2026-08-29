@@ -1,27 +1,17 @@
 /** Built-in monochrome materials for thermal labels (vector, 0..1 unit box). */
-const ORIGINAL_MATERIAL_MANIFEST = require('../data/original-materials.json');
+const {
+  SHANGYUE_MATERIAL_SYMBOL_IDS,
+  drawShangyueMaterialSymbol
+} = require('./material-symbols-v2');
 
-// The reference screen used a paid-only tab. Product acceptance removes that
-// tab entirely, so the imported reference set lands on the ordinary 最新 tab.
+const SHANGYUE_MATERIAL_SYMBOL_SET = new Set(SHANGYUE_MATERIAL_SYMBOL_IDS);
+
 const DEFAULT_MATERIAL_CHIP = '最新';
-
-const ORIGINAL_MATERIAL_CATALOG = ORIGINAL_MATERIAL_MANIFEST.items.map((item) => ({
-  id: item.id,
-  remoteId: item.remoteId,
-  label: item.label,
-  category: item.category,
-  tags: item.tags.slice(),
-  sourceTier: item.sourceTier,
-  asset: item.asset,
-  sourceUrl: item.sourceUrl,
-  format: item.format,
-  width: item.width,
-  height: item.height,
-  sha256: item.sha256
-}));
+const ORIGINAL_MATERIAL_MANIFEST = { items: [] };
+const ORIGINAL_MATERIAL_CATALOG = [];
 
 const MATERIAL_CHIPS = [
-  '最新', '热门', '可爱', '饰品', '祝福', '园艺',
+  '最新', '商跃', '热门', '可爱', '饰品', '祝福', '园艺',
   '标记', '警示', '物流', '箭头', '联系', '餐饮', '零售', '形状'
 ];
 
@@ -155,7 +145,16 @@ const MATERIAL_CATALOG = ORIGINAL_MATERIAL_CATALOG.concat([
   { id: 'refresh', label: '刷新', category: '箭头', tags: ['箭头','最新'] },
   { id: 'download', label: '下载', category: '箭头', tags: ['箭头'] },
   { id: 'upload', label: '上传', category: '箭头', tags: ['箭头'] }
-]);
+]).map((item) => {
+  if (!SHANGYUE_MATERIAL_SYMBOL_SET.has(item.id)) return item;
+  return {
+    ...item,
+    tags: Array.from(new Set([...(item.tags || []), '商跃'])),
+    source: 'shangyue-vector-v2',
+    vector: true,
+    raster: false
+  };
+});
 
 function materialById(id) {
   return MATERIAL_CATALOG.find((item) => item.id === id) || MATERIAL_CATALOG[0];
@@ -184,9 +183,9 @@ function materialsForChip(chip, query) {
   let list = MATERIAL_CATALOG.slice();
   const c = chip || '';
   if (c && c !== '搜索' && c !== '全部') {
-    list = list.filter((item) =>
-      (item.tags && item.tags.includes(c)) || item.category === c
-    );
+    list = list.filter((item) => c === '商跃'
+      ? SHANGYUE_MATERIAL_SYMBOL_SET.has(item.id)
+      : (item.tags && item.tags.includes(c)) || item.category === c);
   }
   const q = String(query || '').trim().toLowerCase();
   if (q) {
@@ -234,6 +233,14 @@ function drawMaterialSymbol(context, symbol, x, y, w, h, lineWidthPx) {
   context.fillStyle = '#000000';
 
   const id = symbol || 'check';
+
+  // V2 glyphs replace the early catalog's repeated placeholder geometry with
+  // distinct Shangyue-owned vector drawings. Legacy primitives remain below as
+  // a compatibility fallback for existing documents and the basic symbol set.
+  if (drawShangyueMaterialSymbol(context, id, x, y, w, h, lw)) {
+    context.restore();
+    return;
+  }
 
   if (id === 'check') {
     context.beginPath();

@@ -1,12 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { templates } = require('../src/app/catalog');
+const { getTemplate, templates } = require('../src/app/catalog');
 const { buildTemplateDocument, LAYOUT_BUILDERS } = require('../src/app/template-layouts');
 const { formatDateValue } = require('../src/core/renderer');
 
 function documentFor(id) {
-  return buildTemplateDocument(templates.find((item) => item.id === id));
+  return buildTemplateDocument(getTemplate(id));
 }
 
 test('every catalog template has a layout builder and valid geometry', () => {
@@ -26,13 +26,13 @@ test('every catalog template has a layout builder and valid geometry', () => {
 });
 
 test('product price template includes barcode and dual prices', () => {
-  const document = buildTemplateDocument(templates.find((item) => item.id === 'product-simple'));
+  const document = buildTemplateDocument(getTemplate('product-simple'));
   assert.ok(document.elements.some((item) => item.type === 'barcode'));
   assert.ok(document.elements.some((item) => String(item.text || '').includes('¥')));
 });
 
 test('wifi template encodes WIFI QR payload', () => {
-  const document = buildTemplateDocument(templates.find((item) => item.id === 'wifi-code'));
+  const document = buildTemplateDocument(getTemplate('wifi-code'));
   const qr = document.elements.find((item) => item.type === 'qrcode');
   assert.ok(qr);
   assert.match(qr.value, /^WIFI:/);

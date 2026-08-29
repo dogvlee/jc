@@ -4,10 +4,10 @@ const STOCK_PRESETS = [
   { id: '30x12', widthMm: 30, heightMm: 12, name: 'T30×12 线号' },
   { id: '40x20', widthMm: 40, heightMm: 20, name: 'T40×20 药签' },
   { id: '40x30', widthMm: 40, heightMm: 30, name: 'T40×30 价签' },
-  { id: '50x30', widthMm: 50, heightMm: 30, name: 'T50×30 常用' },
-  { id: '50x40', widthMm: 50, heightMm: 40, name: 'T50×40 物流' },
-  { id: '60x40', widthMm: 60, heightMm: 40, name: 'T60×40 货架' },
-  { id: '70x50', widthMm: 70, heightMm: 50, name: 'T70×50 大标' }
+  { id: '50x30', widthMm: 50, heightMm: 30, name: 'T50×30 宽幅（需适配机型）' },
+  { id: '50x40', widthMm: 50, heightMm: 40, name: 'T50×40 宽幅（需适配机型）' },
+  { id: '60x40', widthMm: 60, heightMm: 40, name: 'T60×40 宽幅（需适配机型）' },
+  { id: '70x50', widthMm: 70, heightMm: 50, name: 'T70×50 宽幅（需适配机型）' }
 ];
 
 function stockLabel(widthMm, heightMm, dpi) {

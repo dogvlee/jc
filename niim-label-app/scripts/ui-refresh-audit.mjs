@@ -39,7 +39,7 @@ for (const viewport of viewports) {
   });
 
   await page.goto('http://127.0.0.1:4173/', { waitUntil: 'networkidle' });
-  await page.locator('h1').filter({ hasText: '标签工坊' }).waitFor();
+  await page.locator('h1').filter({ hasText: '商跃标签' }).waitFor();
   const pages = {};
   pages.home = await pageMetrics(page);
   await page.screenshot({ path: join(output, `${key}-home.png`) });

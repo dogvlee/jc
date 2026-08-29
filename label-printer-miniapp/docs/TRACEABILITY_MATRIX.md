@@ -29,9 +29,9 @@
 | UAT-JOURNEY | 首次/回访/扫码/批量/恢复主旅程 | 待验 | 体验版、Android/iOS 权限与录屏、实物码和缺陷记录 |
 | HW-MATRIX | D11/D110/B1/B21 系列打印矩阵 | 待验 | 需手机、固件、耗材、诊断和样张 |
 | DATA-DESTRUCT | 存储满、恢复中断、回滚演练 | 待验 | Node 有失败注入；微信真机破坏性演练缺失 |
-| PERF-DEVICE | 低端机、189 模板、300 张性能 | 待验 | 需时间/内存/失败率原始记录 |
+| PERF-DEVICE | 低端机、190 模板、300 张性能 | 待验 | 需时间/内存/失败率原始记录 |
 | PRIVACY-APPROVAL | 隐私、权限、类目和用户文本 | 外部阻断 | 正式 AppID/平台配置/负责人签字缺失 |
-| CONTENT-RIGHTS | 品牌、189 模板与冻结候选包内全部资源授权 | 外部阻断 | 授权台账和法务签字缺失；资源数以候选 `npm run verify` 为准 |
+| CONTENT-RIGHTS | 品牌、157 套第三方模板与冻结候选包内全部资源授权 | 外部阻断 | 授权台账和法务签字缺失；资源数以候选 `npm run verify` 为准 |
 | RELEASE-ROLLBACK | 上一稳定版与回滚演练 | 待验 | 当前无生产版本/平台演练记录 |
 
 ## 3. 功能需求矩阵
@@ -40,7 +40,7 @@
 | --- | --- | --- | --- | --- | --- |
 | FR-01 | 首次引导可跳过并持久化；用户能进入新建/模板/批量 | `pages/home/index.*`、`services/repository.js` 设置 | 静态 WXML/handler；repository 设置间接覆盖 | 部分通过 | 清数据后 UAT-JOURNEY；产品/QA |
 | FR-02 | 首页展示设备、快捷入口、耗材和最近标签，无死路 | `pages/home/index.*` | 静态页面完整性和 handler 检查 | 部分通过 | Android/iOS 布局、空/错态与所有点击；QA |
-| FR-03 | 系统模板恰为 189，ID 唯一、可构建、资源存在；筛选/分页/预览可用 | `app/catalog.js`、`imported-templates.js`、`online-templates-pack.js`、`template-layouts.js`、home 页 | `online-templates.test.js`、`template-layouts.test.js`、`niim-template-import.test.js`、静态资源检查 | 自动核心通过；UI 部分 | 搜索/分类/行业/24 项分页、缺图占位；QA |
+| FR-03 | 系统模板恰为 190，ID 唯一、可构建、资源存在；筛选/分页/预览可用 | `app/catalog.js`、`imported-templates.js`、`online-templates-pack.js`、`template-layouts.js`、home 页 | `online-templates.test.js`、`template-layouts.test.js`、`niim-template-import.test.js`、静态资源检查 | 自动核心通过；UI 部分 | 搜索/分类/行业/24 项分页、缺图占位；QA |
 | FR-04 | 项目最多 120、我的模板最多 80，可保存/打开/删除，系统模板不写入用户仓储 | `services/repository.js`、home/editor 页 | `repository.test.js` | 自动仓储通过；UI 部分 | 删除确认、存储失败、重进恢复；QA |
 | FR-05 | CSV 支持引号/逗号/换行，字段绑定和批量生成；坏行在打印前定位 | `services/csv.js`、`app/data-bind.js`、home 页 | `csv.test.js`、`data-bind.test.js`、`repository.test.js` 批量原子写 | 部分通过 | 文件选择、BOM/编码、大文件、100/1000 行、坏行 UI；QA/安全 |
 | FR-06 | JSON 备份/恢复覆盖项目、模板、设置、数据、历史；失败保留原数据 | `services/repository.js`、home 页 | `repository.test.js` 版本、往返、中途失败回滚 | 自动核心通过；真机待验 | DATA-DESTRUCT、覆盖确认、明文告知；QA/隐私 |
@@ -69,7 +69,7 @@
 | NFR-02 | 包体与资源：主包低于限制并预留 ≥10%，无断链 | `check-project.mjs`；AUT-PKG-CANDIDATE | 冻结提交待归档；微信上传待验 | WX-UPLOAD；每次资源刷新重新测；发布 |
 | NFR-03 | 离线可编辑/浏览模板，无静默上传 | 当前未调用运行时网络 API；资源本地 | 代码观察，非平台证明 | 飞行模式主旅程、包内上游 URL 最小化；QA/隐私 |
 | NFR-04 | BLE 可靠性：超时、低 MTU、僵尸、断线、自动重连不假成功 | BLE/session/client/manager 测试 | mock 自动通过 | HW-MATRIX，统计连接/重连基线；硬件 |
-| NFR-05 | 性能：189 模板、小屏编辑、低端机和 300 张无卡死 | 分页视图、本地资源压缩 | 待手工/真机 | PERF-DEVICE；产品定义数值阈值；QA/硬件 |
+| NFR-05 | 性能：190 模板、小屏编辑、低端机和 300 张无卡死 | 分页视图、本地资源压缩 | 待手工/真机 | PERF-DEVICE；产品定义数值阈值；QA/硬件 |
 | NFR-06 | 兼容性：目标基础库、Android/iOS、D 系/B 系固件 | 基础库配置 `2.32.3`、profiles | 待平台/真机 | 最低基础库决策、WX-COMPILE、HW-MATRIX；产品/QA |
 | NFR-07 | 安全：不执行动态输入、秘密不入包、导入有界 | 无 `eval`、文档归一化、模板 2 MiB、lock 文件 | 部分通过 | 秘密扫描；CSV/备份/图片限制；BLE 认证评审；安全/开发 |
 | NFR-08 | 隐私：最小权限、本地数据透明、可导出/删除、日志脱敏 | 本地优先、忘记设备、导出、简短 UI 说明 | 外部阻断 | PRIVACY-APPROVAL、清理入口、导出告知；隐私/产品 |
@@ -100,7 +100,7 @@
 1. 正式 AppID、微信开发者工具编译/预览、上传包体和审核未完成。
 2. Android/iOS × D11/D110/B1/B21 系列 BLE 与实体打印矩阵无证据。
 3. 隐私保护指引、权限用途、类目、用户协议/隐私政策未完成。
-4. 品牌、189 模板和冻结候选包内全部资源的再分发授权无证据。
+4. 品牌、157 套第三方模板和冻结候选包内全部资源的再分发授权无证据。
 5. 发布秘密治理、正式秘密扫描、上传/回滚双人流程未建立。
 6. schema v2 对上一版本的真实回滚和存储中途失败真机演练未完成。
 
@@ -108,7 +108,7 @@
 
 1. CSV/备份/图片缺少统一大小与复杂度限制，CSV 公式防护待补。
 2. 用户图片和导出文件没有安全清理/用量管理。
-3. 低端 Android、iOS 大字体、189 模板性能和 300 张压力测试未执行。
+3. 低端 Android、iOS 大字体、190 模板性能和 300 张压力测试未执行。
 4. BLE 设备真实性/配对能力没有硬件安全结论。
 5. 无远程遥测/远程 kill switch；事故阈值、联系表和人工汇总流程未填。
 6. Node、Pillow、DevTools 工具版本和 CI 证据归档未完全固定。

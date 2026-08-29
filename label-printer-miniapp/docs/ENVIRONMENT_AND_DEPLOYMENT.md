@@ -18,7 +18,7 @@
 
 ## 2. 环境模型
 
-小程序当前没有后端、账号或云同步，业务数据均在微信本地存储。环境隔离主要依赖版本通道、AppID/成员权限、测试手机、测试打印机和测试数据，而不是服务器配置。
+小程序当前不自建后端、账号或云同步，业务数据均在微信本地存储。模板页、素材库和边框面板会匿名、只读访问已获授权的 NIIMBOT 公开目录；请求不携带用户正文、项目、设备标识或账号凭据。环境隔离主要依赖版本通道、AppID/成员权限、测试手机、测试打印机和测试数据，以及微信平台的合法域名配置。
 
 | 环境 | 用途 | 版本载体 | 数据与设备 | 准入条件 | 当前状态 |
 | --- | --- | --- | --- | --- | --- |
@@ -39,11 +39,27 @@
 | AppID | `project.config.json`：`touristappid` | QA/UAT/prod 必须换成已授权 AppID，并记录变更者 |
 | 基础库 | `project.config.json`：`2.32.3` | 候选版冻结；升级必须重新编译和跑真机矩阵 |
 | 项目根 | `miniprogram/` | 不得把工作区提取物或源应用资源目录打入包中 |
-| URL 检查 | `urlCheck: false` | 当前代码无运行时网络请求；生产候选需重新评估并记录是否可开启 |
+| URL 检查 | `urlCheck: false` | 仅用于本地开发；生产候选必须开启域名检查并完成下述 request/download 合法域名配置 |
+| 第三方目录（内部） | `services/authorized-template-catalog.js` | 只用于内部来源核验；书面再分发授权缺失时，公开包必须连同 157 套来源模板、第三方图片/素材一起物理排除，并对实际上传根运行版权门禁 |
 | 本地 schema | `2` | 回滚前验证旧版本读取与备份恢复兼容性 |
 | BLE kill switch | 本地键 `ble_reconnect_off` | 只用于受控设备止住自动重连；不是远程全量开关 |
 
-### 3.2 凭据分类
+### 3.2 在线模板域名
+
+正式 AppID 必须在微信公众平台配置以下 HTTPS 合法域名，并用冻结候选版逐页抽样验证。开发者工具里的 `urlCheck: false` 不能替代生产配置。
+
+| 微信域名类型 | 域名 | 用途 |
+| --- | --- | --- |
+| request 合法域名 | `https://print.niimbot.com` | `POST /api/industryTemplate/page`、`/api/materialLib/page`、`/api/material-borders/page`，请求公开目录分页 |
+| downloadFile / 图片合法域名 | `https://oss-print.niimbot.com` | 模板缩略图、公开模板图片 |
+| downloadFile / 图片合法域名 | `https://oss-niimbot-print.niimbot.com` | 历史公开素材图片 |
+| downloadFile / 图片合法域名 | `https://jc-print.oss-cn-hangzhou.aliyuncs.com` | 部分历史模板图片 |
+| downloadFile / 图片合法域名 | `https://niimbot-bison.oss-cn-hangzhou.aliyuncs.com` | 部分历史模板图片 |
+| downloadFile 合法域名 | `https://cdn.jsdelivr.net` | 开源 CJK 字体（Noto / 站酷 / 霞鹜文楷 / Google OFL），`wx.loadFontFace` |
+
+目录请求体只包含模板所需的 `languageCode`、固定尺寸占位值和分页参数，素材/边框只包含分页参数；搜索只过滤已加载项，不上传查询词。用户选择含图片的在线模板、素材或边框时，图片经 `wx.downloadFile` 按需写入本地缓存，再交给 Canvas 渲染；在线边框作为文档最底层图片元素插入。因此必须同时验证缩略图、素材/边框面板、编辑器画布、保存后重开和打印输出。若上游将资源迁移到新域名，客户端会明确显示图片加载失败，发布团队需先完成域名与授权审查再更新白名单。
+
+### 3.3 凭据分类
 
 - AppID 是环境标识，不等同于密钥，但仍由发布负责人管理配置变更。
 - AppSecret、代码上传私钥、平台登录会话和任何签名材料均为秘密，不得写入 `miniprogram`、文档、日志、聊天记录或 Git 历史。

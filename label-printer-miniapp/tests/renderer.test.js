@@ -148,6 +148,17 @@ test('all six text modes preserve the native layout axes and per-script rotation
   }
 });
 
+test('unsupported imported barcode renders an explicit notice instead of guessed Code128 bars', () => {
+  const context = createCanvasContext();
+  const element = {
+    id: 'unknown-code', type: 'barcode', x: 1, y: 1, width: 24, height: 8,
+    value: 'ABC-16', format: 'unsupported', unsupportedCodeType: true
+  };
+  renderDocument(context, { elements: [element] }, { width: 40, height: 20 }, 25.4, {});
+  assert.ok(context.textCalls.some((call) => call.value === '码制待确认'));
+  assert.equal(context.fillRects.length, 1, 'only the white canvas background is filled');
+});
+
 test('arc angle zero falls back to a straight line without curved glyph rotations', () => {
   const context = createCanvasContext();
   const element = {
@@ -158,6 +169,20 @@ test('arc angle zero falls back to a straight line without curved glyph rotation
   renderDocument(context, { elements: [element] }, { width: 30, height: 8 }, 25.4, {});
   assert.equal(context.textCalls.length, 1);
   assert.ok(context.rotations.every((value) => Math.abs(value) < 1e-9));
+});
+
+test('renderer never passes an unavailable imported font id to Canvas', () => {
+  const context = createCanvasContext();
+  renderDocument(context, {
+    elements: [{
+      id: 'font-fallback', type: 'text', x: 0, y: 0, width: 20, height: 6,
+      text: '字体', fontSize: 4, fontFamily: 'ZT201', autoFit: true
+    }]
+  }, { width: 20, height: 6 }, 25.4, {});
+  assert.ok(context.textCalls.length > 0);
+  assert.match(context.textCalls[0].font, /Noto Sans SC/);
+  assert.match(context.textCalls[0].font, /sans-serif$/);
+  assert.doesNotMatch(context.textCalls[0].font, /ZT201/);
 });
 
 test('QR validation supports UTF-8 content and rejects undersized elements', () => {
@@ -175,10 +200,10 @@ test('QR validation supports UTF-8 content and rejects undersized elements', () 
   assert.doesNotThrow(() => validateDocument(document, 203));
   document.elements[0].width = 1;
   document.elements[0].height = 1;
-  assert.throws(() => validateDocument(document, 203), /二维码元素过小/);
+  assert.throws(() => validateDocument(document, 203), /二维码清晰度不足/);
 });
 
-test('barcode validation requires at least one printer dot per module', () => {
+test('barcode validation requires at least two printer dots per module', () => {
   const document = {
     elements: [{
       id: 'barcode',
@@ -189,8 +214,8 @@ test('barcode validation requires at least one printer dot per module', () => {
       value: '1234567890'
     }]
   };
-  assert.throws(() => validateDocument(document, 203), /条码元素过窄/);
-  document.elements[0].width = 30;
+  assert.throws(() => validateDocument(document, 203), /条码清晰度不足/);
+  document.elements[0].width = 42;
   assert.doesNotThrow(() => validateDocument(document, 203));
 });
 
@@ -265,7 +290,7 @@ test('empty text renders the editor placeholder instead of an empty box', () => 
     }]
   }, { width: 24, height: 8 }, 25.4, {});
 
-  assert.ok(context.textCalls.some((call) => call.value === '双击编辑'));
+  assert.ok(context.textCalls.some((call) => call.value === '点击后编辑文字'));
 });
 
 test('image binarization composites transparency onto white and honors the element threshold', (t) => {
@@ -341,22 +366,23 @@ test('QR rendering and validation reserve four quiet modules on every side', () 
   code.addData(value, 'Byte');
   code.make();
   const requiredDots = code.getModuleCount() + 8;
+  const minimumPrintDots = requiredDots * 2;
   const document = {
     elements: [{
       id: 'qr',
       type: 'qrcode',
       x: 0,
       y: 0,
-      width: requiredDots + 0.5,
-      height: requiredDots + 0.5,
+      width: minimumPrintDots + 0.5,
+      height: minimumPrintDots + 0.5,
       value
     }]
   };
 
   assert.doesNotThrow(() => validateDocument(document, 25.4));
-  document.elements[0].width = requiredDots - 0.5;
-  document.elements[0].height = requiredDots - 0.5;
-  assert.throws(() => validateDocument(document, 25.4), /二维码元素过小/);
+  document.elements[0].width = minimumPrintDots - 0.5;
+  document.elements[0].height = minimumPrintDots - 0.5;
+  assert.throws(() => validateDocument(document, 25.4), /二维码清晰度不足/);
 
   document.elements[0].width = requiredDots;
   document.elements[0].height = requiredDots;

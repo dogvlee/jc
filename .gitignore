@@ -25,3 +25,29 @@ keystore.properties
 *.log
 .DS_Store
 Thumbs.db
+
+# Local agent/tooling caches
+.codex/
+.opencode/
+.playwright-cli/
+**/.playwright-cli/
+
+# Generated screenshots, dumps, and scratch files
+output/
+outputs/
+**/output/
+.tmp_competitor_template/
+_niim_ux_baseline/
+NIIMBOT-print-template-align/
+NIIMBOT-print-template-align.zip
+label-printer-miniapp/scripts/.library-thumb-work/
+label-printer-miniapp/scripts/.thumb-work/
+_b64_builder.txt
+_t.py
+_t4.txt
+_test_write.txt
+_wire1.py
+_wire2.py
+_write_fetch.py
+_write_fetch_b64.py
+app-test-baseline.txt
