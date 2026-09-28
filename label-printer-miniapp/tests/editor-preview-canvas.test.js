@@ -5,6 +5,7 @@ const path = require('node:path');
 
 const { createDocument, createElement } = require('../miniprogram/core/document');
 const { getProfile } = require('../miniprogram/core/profiles');
+const { Repository } = require('../miniprogram/services/repository');
 
 let pageDefinition = null;
 global.Page = (definition) => { pageDefinition = definition; };
@@ -46,6 +47,46 @@ function fakeContext() {
     getImageData(x, y, width, height) { return { x, y, width, height, data: [] }; }
   };
 }
+
+test('separate editor pages publish unique native Canvas identities with their actual paper height', (t) => {
+  t.after(() => { delete global.wx; delete global.getApp; });
+  function loadPaper(heightMm) {
+    const values = new Map();
+    global.wx = {
+      getWindowInfo: () => ({ windowWidth: 390, pixelRatio: 3 }),
+      getStorageSync: (key) => values.get(key) || '',
+      setStorageSync: (key, value) => values.set(key, structuredClone(value)),
+      removeStorageSync: (key) => values.delete(key)
+    };
+    const repository = new Repository(wx);
+    repository.saveEditorDraft({ document: createDocument(40, heightMm), projectId: '', dirtySinceSave: true });
+    global.getApp = () => ({ globalData: {
+      repository,
+      bleSession: { onConnectionStateChange: () => () => {} },
+      printerClient: {}
+    } });
+    const publishedFrames = [];
+    const editor = editorFor(null, {
+      data: { ...pageDefinition.data },
+      setData(patch, callback) {
+        if (patch.canvasInstanceId) publishedFrames.push(patch);
+        Object.assign(this.data, patch);
+        if (callback) callback();
+      }
+    });
+    assert.equal(editor.data.canvasInstanceId, '', 'native canvases must not mount with a shared initial identity');
+    editor.onLoad({});
+    assert.equal(editor.data.loadError, '');
+    assert.equal(publishedFrames.length, 1);
+    assert.ok(Math.abs(publishedFrames[0].previewHeightPx - 390 * 672 / 750 * heightMm / 40) < 0.0001);
+    return editor.data.canvasInstanceId;
+  }
+  const blankId = loadPaper(12);
+  const templateId = loadPaper(30);
+  assert.ok(blankId);
+  assert.ok(templateId);
+  assert.notEqual(blankId, templateId, 'a new editor must not reuse the previous native surface');
+});
 
 test('portrait preview keeps the document aspect ratio without a height cap', () => {
   const documentValue = createDocument(12, 75);
@@ -101,6 +142,59 @@ test('preview canvases use measured CSS pixels times devicePixelRatio', () => {
   assert.deepEqual(editor.touchPoint({ touches: [{ x: 168, y: 420 }] }), { x: 20, y: 50 });
   assert.equal(rendered, 1);
   delete global.wx;
+});
+
+test('preview waits for the view update and current native Canvas frame before becoming ready', (t) => {
+  const ticks = [];
+  const frames = [];
+  let queries = 0;
+  let rendered = 0;
+  const labelCanvas = {
+    getContext() { return {}; },
+    requestAnimationFrame(callback) { frames.push(callback); }
+  };
+  const selectionCanvas = { getContext() { return {}; } };
+  global.wx = {
+    nextTick(callback) { ticks.push(callback); },
+    getWindowInfo() { return { windowWidth: 390, pixelRatio: 3 }; },
+    createSelectorQuery() {
+      queries += 1;
+      return {
+        in() { return this; },
+        select() { return this; },
+        fields() { return this; },
+        exec(callback) {
+          callback([
+            { node: labelCanvas, width: 349, height: 262.078 },
+            { node: selectionCanvas, width: 349, height: 262.078 }
+          ]);
+        }
+      };
+    }
+  };
+  t.after(() => { delete global.wx; });
+  const editor = editorFor(createDocument(40, 30), {
+    loadDocumentImages() { return []; },
+    renderAll() { rendered += 1; }
+  });
+
+  editor.initCanvas();
+  assert.equal(editor.data.canvasReady, false);
+  assert.equal(queries, 0, 'measurement must wait for the pending view update');
+  ticks.shift()();
+  assert.deepEqual(editor.canvasSize, { width: 1047, height: 786 });
+  assert.equal(rendered, 0, 'the native surface must be ready before painting');
+  assert.equal(editor.data.canvasReady, false);
+
+  // A newer layout can be requested before the previous native frame arrives.
+  editor.initCanvas();
+  frames.shift()();
+  assert.equal(rendered, 0, 'a stale initialization must not paint or report ready');
+  assert.equal(editor.data.canvasReady, false);
+  ticks.shift()();
+  frames.shift()();
+  assert.equal(rendered, 1);
+  assert.equal(editor.data.canvasReady, true);
 });
 
 test('print raster stays on the printer profile dpi instead of preview dpi', () => {

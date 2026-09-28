@@ -1,7 +1,9 @@
 const { clampElement, cloneDocument, createDocument, createElement } = require('../core/document');
 const { normalizeElementFont } = require('../core/font-family');
+const { RecoverableStorage, storageError } = require('./recoverable-storage');
 
 const STORAGE_VERSION = 2;
+const MAX_PROJECTS = 120;
 const MAX_USER_TEMPLATES = 80;
 const MIN_LABEL_MM = 5;
 // The editor may inspect unusually long industrial labels. Hardware support is
@@ -37,6 +39,7 @@ const KEYS = Object.freeze({
   lastDevice: 'niim-label:last-device',
   editorDraft: 'niim-label:editor-draft',
   editorAutosave: 'niim-label:editor-autosave',
+  recoveryJournal: 'niim-label:recovery-journal',
   pendingHomeRoute: 'niim-label:pending-home-route'
 });
 
@@ -57,8 +60,8 @@ function defaultSettings() {
     density: 2,
     threshold: 180,
     labelType: 1,
-    stockWidthMm: 50,
-    stockHeightMm: 30,
+    stockWidthMm: 40,
+    stockHeightMm: 12,
     onboardingDone: false,
     unit: 'mm'
   };
@@ -234,50 +237,74 @@ function cloneList(value) {
   return cloneDocument(Array.isArray(value) ? value : []);
 }
 
+function normalizeStoredList(value, key) {
+  if (!Array.isArray(value)) {
+    throw storageError('STORAGE_DATA_INVALID', '本地标签列表损坏，已停止操作以保护原数据', null, key);
+  }
+  const ids = new Set();
+  return value.map((item) => {
+    const document = normalizeDocument(item && item.document);
+    const id = item && item.id !== undefined && item.id !== null ? String(item.id) : '';
+    if (!document || !id || ids.has(id)) {
+      throw storageError('STORAGE_DATA_INVALID', '本地标签数据损坏，已停止操作以保护原数据', null, key);
+    }
+    ids.add(id);
+    return Object.assign({}, item, { id, document });
+  });
+}
+
+function uniqueId(prefix, existing) {
+  const occupied = new Set(existing.map((item) => String(item.id)));
+  const base = `${prefix}-${Date.now().toString(36)}`;
+  let id = base;
+  let suffix = 0;
+  while (occupied.has(id)) id = `${base}-${++suffix}`;
+  return id;
+}
+
+function requireCapacity(count, maximum, label) {
+  if (count > maximum) {
+    throw storageError('STORAGE_CAPACITY_REACHED', `${label}最多保存 ${maximum} 个，请先备份并删除不再使用的内容，已有数据未被覆盖`);
+  }
+}
+
+function normalizeDraft(value, defaultDirty) {
+  if (value === null) return null;
+  const document = normalizeDocument(value && (value.document || value));
+  if (!document) throw storageError('STORAGE_DATA_INVALID', '本地编辑草稿损坏，已停止操作以保护原数据');
+  return {
+    document,
+    projectId: String(value.projectId || ''),
+    dirtySinceSave: typeof value.dirtySinceSave === 'boolean' ? value.dirtySinceSave : defaultDirty,
+    updatedAt: Number(value.updatedAt) || Date.now()
+  };
+}
+
 class Repository {
   constructor(api) {
     this.api = api || wx;
+    this.storage = new RecoverableStorage(this.api, KEYS.recoveryJournal,
+      Object.values(KEYS).filter((key) => key !== KEYS.recoveryJournal));
   }
 
   read(key, fallback) {
-    try {
-      const value = this.api.getStorageSync(key);
-      return value === '' || value === undefined || value === null ? cloneDocument(fallback) : value;
-    } catch (error) {
-      const wrapped = new Error('本地数据读取失败，为避免覆盖原数据，本次操作已停止');
-      wrapped.code = 'STORAGE_READ_FAILED';
-      wrapped.key = key;
-      wrapped.cause = error;
-      throw wrapped;
-    }
+    return cloneDocument(this.storage.read(key, fallback));
   }
 
   write(key, value) {
-    try {
-      this.api.setStorageSync(key, value);
-      return value;
-    } catch (error) {
-      const wrapped = new Error('本地存储空间不足，请先备份并删除不再使用的标签');
-      wrapped.code = 'STORAGE_WRITE_FAILED';
-      wrapped.cause = error;
-      throw wrapped;
-    }
+    return this.storage.write(key, value);
   }
 
   remove(key) {
-    try {
-      this.api.removeStorageSync(key);
-    } catch (error) {
-      // Removing a missing legacy key is harmless.
-    }
+    this.storage.remove(key);
   }
 
   migrate() {
     const currentVersion = Number(this.read(KEYS.version, 0)) || 0;
     if (currentVersion >= STORAGE_VERSION) return false;
 
-    const existingProjects = this.read(KEYS.projects, []);
-    const existingTemplates = this.read(KEYS.templates, []);
+    const existingProjects = normalizeStoredList(this.read(KEYS.projects, []), KEYS.projects);
+    const existingTemplates = normalizeStoredList(this.read(KEYS.templates, []), KEYS.templates);
     const settings = normalizeSettings(this.read(KEYS.settings, {}));
     const legacyDocument = normalizeDocument(this.read(LEGACY_KEYS.document, null));
     const legacyTemplates = this.read(LEGACY_KEYS.templates, []);
@@ -305,33 +332,61 @@ class Repository {
     }
     if (legacyProfile) settings.defaultProfileId = legacyProfile;
 
-    this.write(KEYS.projects, existingProjects.slice(0, 120));
-    this.write(KEYS.templates, existingTemplates.slice(0, 80));
-    this.write(KEYS.settings, settings);
-    this.write(KEYS.version, STORAGE_VERSION);
-    Object.values(LEGACY_KEYS).forEach((key) => this.remove(key));
+    this.storage.transact([
+      [KEYS.projects, existingProjects],
+      [KEYS.templates, existingTemplates],
+      [KEYS.settings, settings],
+      [KEYS.version, STORAGE_VERSION]
+    ]);
+    Object.values(LEGACY_KEYS).forEach((key) => {
+      try { this.remove(key); } catch (error) { /* migration is committed; legacy cleanup may retry later */ }
+    });
     return true;
   }
 
   getProjects() {
-    return this.read(KEYS.projects, []).map((item) => {
-      const document = normalizeDocument(item && item.document);
-      return document ? Object.assign({}, item, { document }) : null;
-    }).filter(Boolean).sort((left, right) => Number(right.updatedAt) - Number(left.updatedAt));
+    return normalizeStoredList(this.read(KEYS.projects, []), KEYS.projects)
+      .sort((left, right) => Number(right.updatedAt) - Number(left.updatedAt));
   }
 
-  saveProject(documentValue, projectId) {
+  prepareProjectSave(documentValue, projectId) {
     const document = normalizeDocument(documentValue);
     if (!document) throw new Error('标签数据损坏，无法保存');
     const projects = this.getProjects();
-    const id = projectId || `project-${Date.now().toString(36)}`;
+    const id = projectId ? String(projectId) : uniqueId('project', projects);
+    const retained = projects.filter((item) => item.id !== id);
+    requireCapacity(retained.length + 1, MAX_PROJECTS, '标签');
     const project = {
       id,
       name: document.name,
       document,
       updatedAt: Date.now()
     };
-    this.write(KEYS.projects, [project, ...projects.filter((item) => item.id !== id)].slice(0, 120));
+    return { project, projects: [project, ...retained] };
+  }
+
+  saveProject(documentValue, projectId) {
+    const { project, projects } = this.prepareProjectSave(documentValue, projectId);
+    this.write(KEYS.projects, projects);
+    return cloneDocument(project);
+  }
+
+  saveEditorProject(documentValue, projectId) {
+    const { project, projects } = this.prepareProjectSave(documentValue, projectId);
+    const autosave = {
+      document: project.document,
+      projectId: project.id,
+      dirtySinceSave: false,
+      updatedAt: project.updatedAt
+    };
+    // A saved project and its session identity must commit together. Otherwise
+    // retrying an unnamed draft creates duplicates, or an old dirty autosave
+    // can later replace the project that was just saved successfully.
+    this.storage.transact([
+      [KEYS.projects, projects],
+      [KEYS.editorAutosave, autosave],
+      [KEYS.editorDraft, null]
+    ]);
     return cloneDocument(project);
   }
 
@@ -343,14 +398,17 @@ class Repository {
       return document;
     });
     if (!normalized.length) return [];
+    const existing = this.getProjects();
+    requireCapacity(existing.length + normalized.length, MAX_PROJECTS, '标签');
     const now = Date.now();
-    const projects = normalized.map((document, index) => ({
-      id: `project-${now.toString(36)}-${index}`,
+    const projects = [];
+    normalized.forEach((document, index) => projects.push({
+      id: uniqueId('project', existing.concat(projects)),
       name: document.name,
       document,
       updatedAt: now + normalized.length - index
     }));
-    this.write(KEYS.projects, projects.concat(this.getProjects()).slice(0, 120));
+    this.write(KEYS.projects, projects.concat(existing));
     return cloneDocument(projects);
   }
 
@@ -360,10 +418,8 @@ class Repository {
   }
 
   getUserTemplates() {
-    return this.read(KEYS.templates, []).map((item) => {
-      const document = normalizeDocument(item && item.document);
-      return document ? Object.assign({}, item, { document }) : null;
-    }).filter(Boolean).sort((left, right) => Number(right.updatedAt) - Number(left.updatedAt));
+    return normalizeStoredList(this.read(KEYS.templates, []), KEYS.templates)
+      .sort((left, right) => Number(right.updatedAt) - Number(left.updatedAt));
   }
 
   saveUserTemplate(documentValue, name, templateId) {
@@ -371,9 +427,11 @@ class Repository {
     if (!document) throw new Error('模板数据损坏，无法保存');
     document.name = String(name || document.name || '我的模板').trim().slice(0, 80) || '我的模板';
     const templates = this.getUserTemplates();
-    const id = templateId || `user-template-${Date.now().toString(36)}`;
+    const id = templateId ? String(templateId) : uniqueId('user-template', templates);
+    const retained = templates.filter((entry) => entry.id !== id);
+    requireCapacity(retained.length + 1, MAX_USER_TEMPLATES, '模板');
     const item = { id, name: document.name, document, updatedAt: Date.now(), source: 'user' };
-    this.write(KEYS.templates, [item, ...templates.filter((entry) => entry.id !== id)].slice(0, MAX_USER_TEMPLATES));
+    this.write(KEYS.templates, [item, ...retained]);
     return cloneDocument(item);
   }
 
@@ -398,15 +456,16 @@ class Repository {
     });
     const accepted = valid.slice(0, capacity);
     const now = Date.now();
-    const created = accepted.map((document, index) => ({
-      id: `user-template-${now.toString(36)}-${index}`,
+    const created = [];
+    accepted.forEach((document, index) => created.push({
+      id: uniqueId('user-template', existing.concat(created)),
       name: document.name,
       document,
       updatedAt: now + accepted.length - index,
       source: 'user'
     }));
     if (created.length) {
-      this.write(KEYS.templates, created.concat(existing).slice(0, MAX_USER_TEMPLATES));
+      this.write(KEYS.templates, created.concat(existing));
     }
     return {
       imported: created.length,
@@ -471,6 +530,35 @@ class Repository {
     return safe;
   }
 
+  getEditorDraft() {
+    const draft = this.read(KEYS.editorDraft, null);
+    return normalizeDraft(draft, Boolean(draft && !draft.projectId));
+  }
+
+  saveEditorDraft(draft) {
+    const normalized = normalizeDraft(draft || {}, !(draft && draft.projectId));
+    this.write(KEYS.editorDraft, normalized);
+    return normalized;
+  }
+
+  clearEditorDraft() {
+    this.remove(KEYS.editorDraft);
+  }
+
+  getEditorAutosave() {
+    return normalizeDraft(this.read(KEYS.editorAutosave, null), true);
+  }
+
+  saveEditorAutosave(draft) {
+    const normalized = normalizeDraft(draft || {}, true);
+    this.write(KEYS.editorAutosave, normalized);
+    return normalized;
+  }
+
+  clearEditorAutosave() {
+    this.remove(KEYS.editorAutosave);
+  }
+
   backup() {
     return {
       schemaVersion: STORAGE_VERSION,
@@ -491,14 +579,12 @@ class Repository {
     if (incomingVersion > STORAGE_VERSION) {
       throw new Error('备份版本过新，请升级小程序后再恢复');
     }
-    const projects = (Array.isArray(payload.projects) ? payload.projects : []).map((item) => {
-      const document = normalizeDocument(item && item.document);
-      return document ? Object.assign({}, item, { document }) : null;
-    }).filter(Boolean).slice(0, 120);
-    const templates = (Array.isArray(payload.templates) ? payload.templates : []).map((item) => {
-      const document = normalizeDocument(item && item.document);
-      return document ? Object.assign({}, item, { document }) : null;
-    }).filter(Boolean).slice(0, 80);
+    // Reject incomplete/corrupt backups rather than silently discarding their
+    // invalid records and replacing good local collections with the remainder.
+    const projects = normalizeStoredList(payload.projects, KEYS.projects);
+    const templates = normalizeStoredList(payload.templates, KEYS.templates);
+    requireCapacity(projects.length, MAX_PROJECTS, '标签');
+    requireCapacity(templates.length, MAX_USER_TEMPLATES, '模板');
     const settings = normalizeSettings(payload.settings || {});
     const dataRows = cloneList(Array.isArray(payload.dataRows) ? payload.dataRows : defaultRows()).slice(0, 1000);
     const printHistory = cloneList(Array.isArray(payload.printHistory) ? payload.printHistory : []).slice(0, 80);
@@ -510,42 +596,7 @@ class Repository {
       [KEYS.printHistory, printHistory],
       [KEYS.version, STORAGE_VERSION]
     ];
-    const snapshot = changes.map(([key]) => {
-      let value;
-      try {
-        value = this.api.getStorageSync(key);
-      } catch (error) {
-        const wrapped = new Error('无法读取现有本地数据，恢复操作已取消');
-        wrapped.code = 'STORAGE_READ_FAILED';
-        wrapped.key = key;
-        wrapped.cause = error;
-        throw wrapped;
-      }
-      return { key, existed: value !== '' && value !== undefined && value !== null, value };
-    });
-    try {
-      changes.forEach(([key, value]) => this.write(key, value));
-    } catch (error) {
-      let rollbackFailed = false;
-      snapshot.forEach((item) => {
-        try {
-          if (item.existed) this.api.setStorageSync(item.key, item.value);
-          else this.api.removeStorageSync(item.key);
-        } catch (rollbackError) {
-          rollbackFailed = true;
-        }
-      });
-      if (rollbackFailed) {
-        const critical = new Error('恢复中断且本地回滚失败，请不要继续编辑，并联系支持人员处理备份');
-        critical.code = 'RESTORE_ROLLBACK_FAILED';
-        critical.cause = error;
-        throw critical;
-      }
-      const restored = new Error('恢复未完成，原有本地数据已保留');
-      restored.code = 'RESTORE_FAILED';
-      restored.cause = error;
-      throw restored;
-    }
+    this.storage.transact(changes);
     return {
       projects: projects.length,
       templates: templates.length,
@@ -559,6 +610,8 @@ module.exports = {
   DOCUMENT_LIMITS,
   KEYS,
   LEGACY_KEYS,
+  MAX_PROJECTS,
+  MAX_USER_TEMPLATES,
   Repository,
   STORAGE_VERSION,
   defaultRows,

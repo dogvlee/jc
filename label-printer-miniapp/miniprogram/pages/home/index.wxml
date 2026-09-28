@@ -1,6 +1,13 @@
+<view wx:if="{{storageError}}" class="storage-recovery" role="alert">
+  <text class="empty-title">本地标签暂时无法读取</text>
+  <text>{{storageError}}</text>
+  <text>请重试。不要清除小程序数据，以免丢失本机标签。</text>
+  <button class="primary-button" bindtap="refresh">重新读取</button>
+</view>
+<block wx:else>
 <view class="app-shell route-{{route}}">
   <block wx:if="{{route == 'home'}}">
-    <view class="home-hero" style="padding-top: {{safeTop + 12}}px;">
+    <view class="home-hero" style="padding-top: {{headerTop}}px;">
       <view class="brand-row">
         <view class="brand-lockup">
           <view class="brand-mark">商</view>
@@ -14,6 +21,11 @@
     </view>
 
     <view class="home-content">
+      <view wx:if="{{recoveryDraft}}" class="draft-recovery" role="status">
+        <text class="card-title">继续上次未完成的标签</text>
+        <text class="muted">{{recoveryDraft.name}} · {{recoveryDraft.updatedText}}</text>
+        <view class="empty-actions"><button class="primary-button" bindtap="resumeDraft">继续编辑</button><button class="outline-button" bindtap="discardDraft">放弃草稿</button></view>
+      </view>
       <view class="section-block">
         <view class="section-heading">
           <view class="heading-with-icon"><text class="heading-icon">▧</text><text class="section-title">最近标签</text></view>
@@ -60,7 +72,7 @@
   </block>
 
   <block wx:if="{{route == 'templates'}}">
-    <view class="plain-header" style="padding-top: {{safeTop + 12}}px;">
+    <view class="plain-header" style="padding-top: {{headerTop}}px;">
       <view><text class="plain-title">{{templateIndustry == '行业库' ? '场景预设' : '商跃模板'}}</text><text class="plain-subtitle">{{templateIndustry == '行业库' ? '按场景和纸张生成的商跃预设，可改字后打印' : '常用场景模板与我的模板'}}</text></view>
       <button class="outline-button" bindtap="importTemplateFile">导入模板</button>
     </view>
@@ -104,7 +116,7 @@
   </block>
 
   <block wx:if="{{route == 'projects'}}">
-    <view class="plain-header" style="padding-top: {{safeTop + 12}}px;"><view><text class="plain-title">我的标签</text><text class="plain-subtitle">{{allProjects.length}} 个本地项目</text></view><button class="primary-small" bindtap="createBlank">新建</button></view>
+    <view class="plain-header" style="padding-top: {{headerTop}}px;"><view><text class="plain-title">我的标签</text><text class="plain-subtitle">{{allProjects.length}} 个本地项目</text></view><button class="primary-small" bindtap="createBlank">新建</button></view>
     <view class="route-content">
       <view class="search-box"><text>⌕</text><input value="{{projectQuery}}" bindinput="onProjectSearch" placeholder="搜索标签名称" /></view>
       <view wx:if="{{allProjects.length}}" class="project-grid projects-page-grid">
@@ -121,7 +133,7 @@
   </block>
 
   <block wx:if="{{route == 'data'}}">
-    <view class="plain-header" style="padding-top: {{safeTop + 12}}px;"><view><text class="plain-title">批量数据</text><text class="plain-subtitle">编辑表格后，按行生成标签</text></view><button class="outline-button" bindtap="addDataRow">添加行</button></view>
+    <view class="plain-header" style="padding-top: {{headerTop}}px;"><view><text class="plain-title">批量数据</text><text class="plain-subtitle">编辑表格后，按行生成标签</text></view><button class="outline-button" bindtap="addDataRow">添加行</button></view>
     <view class="route-content data-content">
       <view class="data-toolbar"><button class="outline-button" bindtap="importCsv">导入 CSV</button><button class="outline-button" bindtap="exportCsv">导出 CSV</button></view>
       <scroll-view wx:if="{{dataRows.length}}" class="data-table-scroll" scroll-x="true">
@@ -146,7 +158,7 @@
   </block>
 
   <block wx:if="{{route == 'profile'}}">
-    <view class="profile-hero" style="padding-top: {{safeTop + 12}}px;"><view class="avatar">商</view><view><text class="plain-title">商跃标签</text><text class="plain-subtitle">无需登录，数据只保存在当前设备</text></view></view>
+    <view class="profile-hero" style="padding-top: {{headerTop}}px;"><view class="avatar">商</view><view><text class="plain-title">商跃标签</text><text class="plain-subtitle">无需登录，数据只保存在当前设备</text></view></view>
     <view class="route-content profile-content">
       <view class="stats-row"><view><text>{{allProjects.length}}</text><text>我的标签</text></view><view><text>{{userTemplateCount}}</text><text>我的模板</text></view><view><text>{{printHistory.length}}</text><text>打印记录</text></view></view>
       <view class="menu-section">
@@ -163,7 +175,7 @@
       <view class="menu-section">
         <button bindtap="openHelp"><text class="menu-icon">?</text><view><text>使用帮助与关于</text><text class="menu-note">商跃独立标签制作工具</text></view><text>›</text></button>
       </view>
-      <text class="privacy-note">标签正文、模板和打印记录默认不上传网络。蓝牙、相机和相册仅在你主动使用对应功能时请求。</text>
+      <text class="privacy-note">标签正文、模板和打印记录默认不上传网络。首次连接打印机、扫码和选择图片由你主动开启；已记忆的打印机会在启动或蓝牙恢复时尝试重连，可在设备面板中忘记设备。</text>
     </view>
   </block>
 
@@ -238,3 +250,4 @@
     <view class="onboarding-actions"><button class="outline-button" bindtap="skipOnboarding">跳过</button><button class="primary-button" bindtap="nextOnboarding">{{onboardingStep == 2 ? '开始使用' : '下一步'}}</button></view>
   </view>
 </view>
+</block>

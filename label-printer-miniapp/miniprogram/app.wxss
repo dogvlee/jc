@@ -18,3 +18,10 @@ picker {
 button::after {
   border: 0;
 }
+
+/* style v2 gives non-mini buttons a 184px width. Reset it at the same
+   specificity so flex/grid controls size to their content or their page rule. */
+button:not([size="mini"]) {
+  width: auto;
+  min-width: 0;
+}

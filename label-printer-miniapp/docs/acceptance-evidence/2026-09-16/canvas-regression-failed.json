@@ -1,0 +1,203 @@
+{
+  "startedAt": "2026-09-16T05:37:12.391Z",
+  "environment": "WeChat DevTools simulator / isolated tourist project",
+  "requestedLibrary": "2.32.3",
+  "projectRoot": "D:\\vibecode\\jc\\label-printer-miniapp\\artifacts\\wechat-smoke\\run-vMOi7D\\project",
+  "status": "failed",
+  "cases": [
+    {
+      "name": "首次编译、首页与引导",
+      "status": "passed"
+    },
+    {
+      "name": "首页导航与小屏布局",
+      "status": "passed"
+    },
+    {
+      "name": "新建、Canvas、真实输入与保存",
+      "status": "passed"
+    },
+    {
+      "name": "系统返回后首页可恢复未保存草稿",
+      "status": "passed"
+    },
+    {
+      "name": "保存重开、打印预检与原稿一致",
+      "status": "passed"
+    },
+    {
+      "name": "模板浏览、预览与进入编辑器",
+      "status": "failed",
+      "error": "template 屏幕内容与点阵比例不符（top）：{\"stage\":\"template\",\"document\":{\"widthMm\":40,\"heightMm\":30},\"paper\":{\"width\":349,\"height\":262},\"paperOffset\":{\"left\":20.5,\"top\":171.9609375},\"canvas\":{\"width\":349,\"height\":262},\"selection\":{\"width\":349,\"height\":262},\"runtime\":{\"canvasSize\":{\"width\":1047,\"height\":786},\"canvasRect\":{\"width\":349,\"height\":262.078125},\"previewDpi\":664.845,\"backing\":{\"width\":1047,\"height\":786},\"ink\":{\"left\":0.01623686723973257,\"top\":0.021628498727735368,\"right\":0.9837631327602674,\"bottom\":0.9783715012722646}},\"screenshotInk\":{\"left\":0.018796992481203006,\"top\":0.2656641604010025,\"right\":0.9830827067669173,\"bottom\":0.6466165413533834}}"
+    }
+  ],
+  "exceptions": [],
+  "exceptionObservation": "After automation connection; startup output is recorded separately in devtools.log",
+  "limitations": [
+    "No physical printer or mobile permission validation",
+    "Tourist AppID does not validate production domain or publishing permissions",
+    "No upload or publish performed"
+  ],
+  "bundle": {
+    "files": 78,
+    "bytes": 1523939,
+    "sha256": "da3c3a94df63fe2e6e180bb462816ddc4a6930c7a37fa6c58bd1b1b19e1cd001"
+  },
+  "devtoolsVersion": "2.02.2608060",
+  "system": {
+    "batteryLevel": 96,
+    "benchmarkLevel": -1,
+    "brand": "devtools",
+    "memorySize": 2048,
+    "model": "iPhone 12/13 (Pro)",
+    "system": "iOS 10.0.1",
+    "platform": "devtools",
+    "pixelRatio": 3,
+    "safeArea": {
+      "top": 47,
+      "left": 0,
+      "right": 390,
+      "bottom": 810,
+      "width": 390,
+      "height": 763
+    },
+    "screenWidth": 390,
+    "screenHeight": 844,
+    "screenTop": 0,
+    "windowWidth": 390,
+    "windowHeight": 844,
+    "statusBarHeight": 47,
+    "version": "8.0.5",
+    "language": "zh_CN",
+    "SDKVersion": "2.32.3",
+    "enableDebug": false,
+    "fontSizeScaleFactor": 0.76,
+    "fontSizeSetting": 16,
+    "mode": "default",
+    "host": {
+      "env": "WeChat"
+    },
+    "bluetoothEnabled": true,
+    "locationEnabled": true,
+    "wifiEnabled": true,
+    "locationReducedAccuracy": true,
+    "albumAuthorized": true,
+    "bluetoothAuthorized": true,
+    "cameraAuthorized": true,
+    "locationAuthorized": true,
+    "microphoneAuthorized": true,
+    "notificationAuthorized": true,
+    "notificationAlertAuthorized": true,
+    "notificationBadgeAuthorized": true,
+    "notificationSoundAuthorized": true,
+    "phoneCalendarAuthorized": true,
+    "deviceOrientation": "portrait",
+    "devicePixelRatio": 3
+  },
+  "menuRect": {
+    "width": 87,
+    "height": 32,
+    "left": 296,
+    "top": 51,
+    "right": 383,
+    "bottom": 83
+  },
+  "canvases": [
+    {
+      "stage": "blank-saved",
+      "document": {
+        "widthMm": 40,
+        "heightMm": 12
+      },
+      "paper": {
+        "width": 349,
+        "height": 105
+      },
+      "paperOffset": {
+        "left": 20.5,
+        "top": 266.3828125
+      },
+      "canvas": {
+        "width": 349,
+        "height": 105
+      },
+      "selection": {
+        "width": 349,
+        "height": 105
+      },
+      "runtime": {
+        "canvasSize": {
+          "width": 1047,
+          "height": 314
+        },
+        "canvasRect": {
+          "width": 349,
+          "height": 104.828125
+        },
+        "previewDpi": 664.845,
+        "backing": {
+          "width": 1047,
+          "height": 314
+        },
+        "ink": {
+          "left": 0.05348615090735435,
+          "top": 0.1592356687898089,
+          "right": 0.4680038204393505,
+          "bottom": 0.42356687898089174
+        }
+      }
+    },
+    {
+      "stage": "template",
+      "document": {
+        "widthMm": 40,
+        "heightMm": 30
+      },
+      "paper": {
+        "width": 349,
+        "height": 262
+      },
+      "paperOffset": {
+        "left": 20.5,
+        "top": 171.9609375
+      },
+      "canvas": {
+        "width": 349,
+        "height": 262
+      },
+      "selection": {
+        "width": 349,
+        "height": 262
+      },
+      "runtime": {
+        "canvasSize": {
+          "width": 1047,
+          "height": 786
+        },
+        "canvasRect": {
+          "width": 349,
+          "height": 262.078125
+        },
+        "previewDpi": 664.845,
+        "backing": {
+          "width": 1047,
+          "height": 786
+        },
+        "ink": {
+          "left": 0.01623686723973257,
+          "top": 0.021628498727735368,
+          "right": 0.9837631327602674,
+          "bottom": 0.9783715012722646
+        }
+      },
+      "screenshotInk": {
+        "left": 0.018796992481203006,
+        "top": 0.2656641604010025,
+        "right": 0.9830827067669173,
+        "bottom": 0.6466165413533834
+      }
+    }
+  ],
+  "error": "AssertionError [ERR_ASSERTION]: template 屏幕内容与点阵比例不符（top）：{\"stage\":\"template\",\"document\":{\"widthMm\":40,\"heightMm\":30},\"paper\":{\"width\":349,\"height\":262},\"paperOffset\":{\"left\":20.5,\"top\":171.9609375},\"canvas\":{\"width\":349,\"height\":262},\"selection\":{\"width\":349,\"height\":262},\"runtime\":{\"canvasSize\":{\"width\":1047,\"height\":786},\"canvasRect\":{\"width\":349,\"height\":262.078125},\"previewDpi\":664.845,\"backing\":{\"width\":1047,\"height\":786},\"ink\":{\"left\":0.01623686723973257,\"top\":0.021628498727735368,\"right\":0.9837631327602674,\"bottom\":0.9783715012722646}},\"screenshotInk\":{\"left\":0.018796992481203006,\"top\":0.2656641604010025,\"right\":0.9830827067669173,\"bottom\":0.6466165413533834}}\n    at canvasScreenshot (D:\\vibecode\\jc\\label-printer-miniapp\\scripts\\wechat-smoke.cjs:225:12)\n    at async D:\\vibecode\\jc\\label-printer-miniapp\\scripts\\wechat-smoke.cjs:332:7\n    at async check (D:\\vibecode\\jc\\label-printer-miniapp\\scripts\\wechat-smoke.cjs:116:9)\n    at async D:\\vibecode\\jc\\label-printer-miniapp\\scripts\\wechat-smoke.cjs:319:5",
+  "finishedAt": "2026-09-16T05:37:52.769Z"
+}

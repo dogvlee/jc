@@ -1,0 +1,276 @@
+{
+  "startedAt": "2026-09-16T05:44:53.615Z",
+  "environment": "WeChat DevTools simulator / isolated tourist project",
+  "requestedLibrary": "3.17.2",
+  "projectRoot": "D:\\vibecode\\jc\\label-printer-miniapp\\artifacts\\wechat-smoke\\run-5FZTcM\\project",
+  "status": "passed",
+  "cases": [
+    {
+      "name": "首次编译、首页与引导",
+      "status": "passed"
+    },
+    {
+      "name": "首页导航与小屏布局",
+      "status": "passed"
+    },
+    {
+      "name": "新建、Canvas、真实输入与保存",
+      "status": "passed"
+    },
+    {
+      "name": "系统返回后首页可恢复未保存草稿",
+      "status": "passed"
+    },
+    {
+      "name": "保存重开、打印预检与原稿一致",
+      "status": "passed"
+    },
+    {
+      "name": "模板浏览、预览与进入编辑器",
+      "status": "passed"
+    },
+    {
+      "name": "连接后未观察到运行时异常",
+      "status": "passed"
+    }
+  ],
+  "exceptions": [],
+  "consoleEvents": [
+    {
+      "type": "warn",
+      "args": [
+        "wx.getSystemInfoSync is deprecated.Please use wx.getSystemSetting/wx.getAppAuthorizeSetting/wx.getDeviceInfo/wx.getWindowInfo/wx.getAppBaseInfo instead."
+      ]
+    },
+    {
+      "type": "info",
+      "args": [
+        "Lazy code loading is enabled. Only injecting required components."
+      ]
+    },
+    {
+      "type": "warn",
+      "args": [
+        "wx.getSystemInfoSync is deprecated.Please use wx.getSystemSetting/wx.getAppAuthorizeSetting/wx.getDeviceInfo/wx.getWindowInfo/wx.getAppBaseInfo instead."
+      ]
+    },
+    {
+      "type": "error",
+      "args": [
+        {}
+      ]
+    },
+    {
+      "type": "error",
+      "args": [
+        {}
+      ]
+    },
+    {
+      "type": "error",
+      "args": [
+        {}
+      ]
+    },
+    {
+      "type": "error",
+      "args": [
+        {}
+      ]
+    },
+    {
+      "type": "error",
+      "args": [
+        {}
+      ]
+    },
+    {
+      "type": "warn",
+      "args": [
+        "[Perf][pages/editor/index] Page.onLoad took 104ms"
+      ]
+    },
+    {
+      "type": "warn",
+      "args": [
+        "[Perf][pages/editor/index] Page.onLoad took 84ms"
+      ]
+    },
+    {
+      "type": "warn",
+      "args": [
+        "[Perf][pages/editor/index] Page.onLoad took 89ms"
+      ]
+    },
+    {
+      "type": "warn",
+      "args": [
+        "[Perf][pages/editor/index] Page.onLoad took 81ms"
+      ]
+    }
+  ],
+  "exceptionObservation": "After automation connection; startup output is recorded separately in devtools.log",
+  "limitations": [
+    "No physical printer or mobile permission validation",
+    "Tourist AppID does not validate production domain or publishing permissions",
+    "No upload or publish performed"
+  ],
+  "bundle": {
+    "files": 78,
+    "bytes": 1524307,
+    "sha256": "4906598d491c139242ec9ea231259c97c4ee466b043e94f69ec5950621b4397b"
+  },
+  "devtoolsVersion": "2.02.2608060",
+  "automationPort": 55459,
+  "system": {
+    "brand": "devtools",
+    "model": "iPhone 12/13 (Pro)",
+    "system": "iOS 10.0.1",
+    "platform": "devtools",
+    "benchmarkLevel": -1,
+    "pixelRatio": 3,
+    "screenWidth": 390,
+    "screenHeight": 844,
+    "windowWidth": 390,
+    "windowHeight": 844,
+    "statusBarHeight": 47,
+    "safeArea": {
+      "top": 47,
+      "left": 0,
+      "right": 390,
+      "bottom": 810,
+      "width": 390,
+      "height": 763
+    },
+    "language": "zh_CN",
+    "version": "8.0.5",
+    "fontSizeSetting": 16,
+    "SDKVersion": "3.17.2",
+    "host": {
+      "env": "WeChat"
+    },
+    "enableDebug": false,
+    "mode": "default",
+    "deviceOrientation": "portrait",
+    "bluetoothEnabled": true,
+    "locationEnabled": true,
+    "wifiEnabled": true,
+    "albumAuthorized": true,
+    "cameraAuthorized": true,
+    "locationAuthorized": true,
+    "microphoneAuthorized": true,
+    "notificationAuthorized": true,
+    "notificationAlertAuthorized": true,
+    "notificationBadgeAuthorized": true,
+    "notificationSoundAuthorized": true,
+    "phoneCalendarAuthorized": true,
+    "bluetoothAuthorized": true,
+    "locationReducedAccuracy": true,
+    "devicePixelRatio": 3
+  },
+  "menuRect": {
+    "width": 87,
+    "height": 32,
+    "left": 296,
+    "top": 51,
+    "right": 383,
+    "bottom": 83
+  },
+  "canvases": [
+    {
+      "stage": "blank-saved",
+      "document": {
+        "widthMm": 40,
+        "heightMm": 12
+      },
+      "paper": {
+        "width": 349,
+        "height": 104.828125
+      },
+      "paperOffset": {
+        "left": 20.5,
+        "top": 266.3828125
+      },
+      "canvas": {
+        "width": 349,
+        "height": 104.828125
+      },
+      "selection": {
+        "width": 349,
+        "height": 104.828125
+      },
+      "runtime": {
+        "canvasSize": {
+          "width": 1047,
+          "height": 314
+        },
+        "canvasRect": {
+          "width": 349,
+          "height": 104.828125
+        },
+        "previewDpi": 664.845,
+        "backing": {
+          "width": 1047,
+          "height": 314
+        },
+        "ink": {
+          "left": 0.05348615090735435,
+          "top": 0.1592356687898089,
+          "right": 0.4680038204393505,
+          "bottom": 0.42356687898089174
+        }
+      }
+    },
+    {
+      "stage": "template",
+      "document": {
+        "widthMm": 40,
+        "heightMm": 30
+      },
+      "paper": {
+        "width": 349,
+        "height": 262.078125
+      },
+      "paperOffset": {
+        "left": 20.5,
+        "top": 171.9609375
+      },
+      "canvas": {
+        "width": 349,
+        "height": 262.078125
+      },
+      "selection": {
+        "width": 349,
+        "height": 262.078125
+      },
+      "runtime": {
+        "canvasSize": {
+          "width": 1047,
+          "height": 786
+        },
+        "canvasRect": {
+          "width": 349,
+          "height": 262.078125
+        },
+        "previewDpi": 664.845,
+        "backing": {
+          "width": 1047,
+          "height": 786
+        },
+        "ink": {
+          "left": 0.01623686723973257,
+          "top": 0.021628498727735368,
+          "right": 0.9837631327602674,
+          "bottom": 0.9783715012722646
+        }
+      },
+      "screenshotInk": {
+        "left": 0.018796992481203006,
+        "top": 0.022556390977443608,
+        "right": 0.9830827067669173,
+        "bottom": 0.9774436090225563
+      }
+    }
+  ],
+  "finishedAt": "2026-09-16T05:45:36.238Z"
+}

@@ -5,12 +5,16 @@ const { createDocument, createElement } = require('../miniprogram/core/document'
 const { getTemplate } = require('../miniprogram/app/catalog');
 const { buildTemplateDocument } = require('../miniprogram/app/template-layouts');
 const { fitText } = require('../miniprogram/core/renderer');
+const { evaluatePrintability, getProfile } = require('../miniprogram/core/profiles');
 const {
   DOCUMENT_LIMITS,
   KEYS,
   LEGACY_KEYS,
+  MAX_PROJECTS,
+  MAX_USER_TEMPLATES,
   Repository,
   STORAGE_VERSION,
+  defaultSettings,
   normalizeSettings,
   normalizeDocument
 } = require('../miniprogram/services/repository');
@@ -369,4 +373,344 @@ test('restore aborts before its first write when the rollback snapshot cannot be
     (error) => error.code === 'STORAGE_READ_FAILED'
   );
   assert.equal(writes, 0);
+});
+
+test('first launch creates stock dimensions supported by the default printer', () => {
+  const settings = defaultSettings();
+  const profile = getProfile(settings.defaultProfileId);
+  assert.deepEqual([settings.stockWidthMm, settings.stockHeightMm], profile.defaultSize);
+  assert.equal(evaluatePrintability(createDocument(settings.stockWidthMm, settings.stockHeightMm), profile).ok, true);
+  const repository = new Repository(storage({
+    [KEYS.settings]: { stockWidthMm: 50, stockHeightMm: 30 }
+  }));
+  assert.equal(repository.getSettings().stockWidthMm, 50, 'an existing user choice is preserved');
+});
+
+function storedDocuments(count, prefix) {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `${prefix}-${index}`,
+    name: `原有标签 ${index}`,
+    document: { ...createDocument(40, 12), name: `原有标签 ${index}` },
+    updatedAt: index
+  }));
+}
+
+test('capacity limits never evict saved projects or templates, and existing records remain editable', () => {
+  const api = storage({
+    [KEYS.projects]: storedDocuments(MAX_PROJECTS, 'project'),
+    [KEYS.templates]: storedDocuments(MAX_USER_TEMPLATES, 'template')
+  });
+  const repository = new Repository(api);
+  const beforeProjects = JSON.stringify(api.values.get(KEYS.projects));
+  const beforeTemplates = JSON.stringify(api.values.get(KEYS.templates));
+  const document = createDocument(40, 12);
+  assert.throws(() => repository.saveProject(document), { code: 'STORAGE_CAPACITY_REACHED' });
+  assert.throws(() => repository.saveProjects([document]), { code: 'STORAGE_CAPACITY_REACHED' });
+  assert.throws(() => repository.saveUserTemplate(document, '新模板'), { code: 'STORAGE_CAPACITY_REACHED' });
+  assert.equal(JSON.stringify(api.values.get(KEYS.projects)), beforeProjects);
+  assert.equal(JSON.stringify(api.values.get(KEYS.templates)), beforeTemplates);
+  document.name = '原位更新';
+  repository.saveProject(document, 'project-0');
+  repository.saveUserTemplate(document, '原位更新', 'template-0');
+  assert.equal(repository.getProjects().length, MAX_PROJECTS);
+  assert.equal(repository.getUserTemplates().length, MAX_USER_TEMPLATES);
+  assert.equal(repository.getProjects().find((item) => item.id === 'project-0').name, '原位更新');
+});
+
+test('single and batch creations within one millisecond retain distinct IDs', (context) => {
+  context.mock.method(Date, 'now', () => 123456789);
+  const repository = new Repository(storage());
+  const document = createDocument(40, 12);
+  repository.saveProject(document);
+  repository.saveProject(document);
+  repository.saveProjects([document, document]);
+  repository.saveProjects([document, document]);
+  const projects = repository.getProjects();
+  assert.equal(projects.length, 6);
+  assert.equal(new Set(projects.map((item) => item.id)).size, 6);
+  repository.saveUserTemplate(document, '模板一');
+  repository.saveUserTemplate(document, '模板二');
+  repository.importUserTemplates([document, document]);
+  repository.importUserTemplates([document, document]);
+  const templates = repository.getUserTemplates();
+  assert.equal(templates.length, 6);
+  assert.equal(new Set(templates.map((item) => item.id)).size, 6);
+});
+
+test('corrupt collections cannot be silently pruned by a later save', () => {
+  const original = storedDocuments(1, 'project');
+  original.push({ id: 'broken', document: { widthMm: 0, heightMm: 12 } });
+  const api = storage({ [KEYS.projects]: original });
+  const before = JSON.stringify(original);
+  const repository = new Repository(api);
+  assert.throws(() => repository.saveProject(createDocument(40, 12)), { code: 'STORAGE_DATA_INVALID' });
+  assert.equal(JSON.stringify(api.values.get(KEYS.projects)), before);
+  api.values.set(KEYS.templates, { invalid: 'collection' });
+  assert.throws(() => repository.saveUserTemplate(createDocument(40, 12)), { code: 'STORAGE_DATA_INVALID' });
+});
+
+test('incomplete, corrupt and overflowing backups leave all local data intact', () => {
+  const api = storage({ [KEYS.projects]: storedDocuments(1, 'local') });
+  const repository = new Repository(api);
+  const before = JSON.stringify(Array.from(api.values));
+  const invalidBackups = [
+    { schemaVersion: 2 },
+    { schemaVersion: 2, projects: [{ id: 'bad', document: {} }], templates: [] },
+    { schemaVersion: 2, projects: storedDocuments(MAX_PROJECTS + 1, 'large'), templates: [] }
+  ];
+  invalidBackups.forEach((payload) => {
+    assert.throws(() => repository.restore(payload));
+    assert.equal(JSON.stringify(Array.from(api.values)), before);
+  });
+});
+
+test('a pending transaction from a killed process rolls back before reads or writes', () => {
+  const originals = storedDocuments(1, 'original');
+  const api = storage({
+    [KEYS.projects]: storedDocuments(2, 'partially-restored'),
+    [KEYS.templates]: storedDocuments(1, 'new-template'),
+    [KEYS.recoveryJournal]: {
+      version: 1,
+      status: 'pending',
+      entries: [
+        { key: KEYS.projects, existed: true, value: originals },
+        { key: KEYS.templates, existed: false }
+      ]
+    }
+  });
+  const repository = new Repository(api);
+  assert.equal(repository.getProjects()[0].id, 'original-0');
+  assert.equal(repository.getProjects().length, 1);
+  assert.equal(api.values.has(KEYS.templates), false);
+  assert.equal(api.values.has(KEYS.recoveryJournal), false);
+  repository.saveProject(createDocument(40, 12));
+  assert.equal(repository.getProjects().length, 2);
+});
+
+test('a committed transaction surviving cleanup never reverts successfully restored data', () => {
+  const api = storage({
+    [KEYS.projects]: storedDocuments(1, 'committed'),
+    [KEYS.recoveryJournal]: {
+      version: 1,
+      status: 'committed',
+      entries: [{ key: KEYS.projects, existed: true, value: storedDocuments(1, 'old') }]
+    }
+  });
+  const repository = new Repository(api);
+  assert.equal(repository.getProjects()[0].id, 'committed-0');
+  assert.equal(api.values.has(KEYS.recoveryJournal), false);
+});
+
+test('a rollback write failure retains its journal and a fresh repository recovers on retry', () => {
+  const api = storage({
+    [KEYS.projects]: storedDocuments(1, 'original'),
+    [KEYS.templates]: []
+  });
+  const originalSet = api.setStorageSync.bind(api);
+  let projectWrites = 0;
+  api.setStorageSync = (key, value) => {
+    if (key === KEYS.projects) {
+      projectWrites += 1;
+      if (projectWrites >= 2) throw new Error('rollback quota');
+    }
+    if (key === KEYS.templates) throw new Error('restore quota');
+    originalSet(key, value);
+  };
+  const repository = new Repository(api);
+  assert.throws(() => repository.restore({
+    schemaVersion: 2, projects: storedDocuments(1, 'incoming'), templates: []
+  }), { code: 'RESTORE_ROLLBACK_FAILED' });
+  assert.ok(api.values.has(KEYS.recoveryJournal));
+  assert.throws(() => repository.getProjects(), { code: 'STORAGE_RECOVERY_FAILED' });
+  assert.throws(() => repository.saveSettings({ density: 5 }), { code: 'STORAGE_RECOVERY_FAILED' });
+  api.setStorageSync = originalSet;
+  const restarted = new Repository(api);
+  assert.equal(restarted.getProjects()[0].id, 'original-0');
+  assert.equal(api.values.has(KEYS.recoveryJournal), false);
+});
+
+test('failure to persist the recovery journal changes no original keys', () => {
+  const api = storage({ [KEYS.projects]: storedDocuments(1, 'original') });
+  const before = JSON.stringify(Array.from(api.values));
+  const originalSet = api.setStorageSync.bind(api);
+  api.setStorageSync = (key, value) => {
+    if (key === KEYS.recoveryJournal) throw new Error('journal quota');
+    originalSet(key, value);
+  };
+  const repository = new Repository(api);
+  assert.throws(() => repository.restore({ schemaVersion: 2, projects: [], templates: [] }),
+    { code: 'STORAGE_WRITE_FAILED' });
+  assert.equal(JSON.stringify(Array.from(api.values)), before);
+});
+
+test('migration failure retains legacy data and can be retried without duplicates', () => {
+  const legacyDocument = createDocument(40, 12);
+  legacyDocument.name = '旧版工作';
+  const api = storage({ [LEGACY_KEYS.document]: legacyDocument });
+  const originalSet = api.setStorageSync.bind(api);
+  let failOnce = true;
+  api.setStorageSync = (key, value) => {
+    if (failOnce && key === KEYS.settings) {
+      failOnce = false;
+      throw new Error('migration failure');
+    }
+    originalSet(key, value);
+  };
+  const repository = new Repository(api);
+  assert.throws(() => repository.migrate(), { code: 'RESTORE_FAILED' });
+  assert.equal(api.values.has(KEYS.version), false);
+  assert.equal(api.values.has(KEYS.projects), false);
+  assert.equal(api.values.get(LEGACY_KEYS.document).name, '旧版工作');
+  assert.equal(repository.migrate(), true);
+  assert.equal(repository.getProjects().length, 1);
+  assert.equal(repository.getProjects()[0].name, '旧版工作');
+});
+
+test('failed commit marker rolls all changed keys back instead of claiming success', () => {
+  const api = storage({ [KEYS.projects]: storedDocuments(1, 'original') });
+  const before = JSON.stringify(Array.from(api.values));
+  const originalSet = api.setStorageSync.bind(api);
+  api.setStorageSync = (key, value) => {
+    if (key === KEYS.recoveryJournal && value.status === 'committed') throw new Error('commit quota');
+    originalSet(key, value);
+  };
+  const repository = new Repository(api);
+  assert.throws(() => repository.restore({ schemaVersion: 2, projects: [], templates: [] }),
+    { code: 'RESTORE_FAILED' });
+  assert.equal(JSON.stringify(Array.from(api.values)), before);
+});
+
+test('recovery rejects corrupt journals and keys outside the repository', () => {
+  const api = storage({
+    'another-app:secret': 'preserved',
+    [KEYS.recoveryJournal]: {
+      version: 1, status: 'pending',
+      entries: [{ key: 'another-app:secret', existed: false }]
+    }
+  });
+  assert.throws(() => new Repository(api).getSettings(), { code: 'STORAGE_RECOVERY_INVALID' });
+  assert.equal(api.values.get('another-app:secret'), 'preserved');
+});
+
+test('draft APIs preserve project identity, dirty state and non-destructive reads', () => {
+  const api = storage();
+  const repository = new Repository(api);
+  const document = createDocument(40, 12);
+  document.name = '尚未保存的工作';
+  repository.saveEditorDraft({ document, projectId: 'project-1', dirtySinceSave: false, updatedAt: 10 });
+  assert.equal(repository.getEditorDraft().projectId, 'project-1');
+  assert.equal(repository.getEditorDraft().dirtySinceSave, false);
+  assert.equal(repository.getEditorDraft().updatedAt, 10);
+  repository.saveEditorAutosave({ document, projectId: 'project-1', dirtySinceSave: true });
+  document.name = '外部修改';
+  assert.equal(repository.getEditorAutosave().document.name, '尚未保存的工作');
+  assert.equal(repository.getEditorAutosave().dirtySinceSave, true);
+  repository.clearEditorDraft();
+  assert.equal(repository.getEditorDraft(), null);
+  assert.ok(repository.getEditorAutosave());
+  repository.clearEditorAutosave();
+  assert.equal(repository.getEditorAutosave(), null);
+});
+
+test('legacy autosaves are recovered as unsaved work and failed draft reads never return empty', () => {
+  const api = storage({ [KEYS.editorAutosave]: createDocument(40, 12) });
+  const repository = new Repository(api);
+  assert.equal(repository.getEditorAutosave().dirtySinceSave, true);
+  api.values.set(KEYS.editorAutosave, { document: createDocument(40, 12), projectId: 'existing' });
+  assert.equal(repository.getEditorAutosave().projectId, 'existing');
+  assert.equal(repository.getEditorAutosave().dirtySinceSave, true);
+  const originalGet = api.getStorageSync.bind(api);
+  api.getStorageSync = (key) => {
+    if (key === KEYS.editorAutosave) throw new Error('read failure');
+    return originalGet(key);
+  };
+  assert.throws(() => repository.getEditorAutosave(), { code: 'STORAGE_READ_FAILED' });
+  api.removeStorageSync = () => { throw new Error('remove failure'); };
+  assert.throws(() => repository.clearEditorAutosave(), { code: 'STORAGE_REMOVE_FAILED' });
+});
+
+test('editor project save commits project identity and clean autosave together', () => {
+  const api = storage();
+  const repository = new Repository(api);
+  const document = createDocument(40, 12);
+  document.name = '保存后的工作';
+  repository.saveEditorDraft({ document, dirtySinceSave: true });
+  repository.saveEditorAutosave({ document, dirtySinceSave: true });
+  const project = repository.saveEditorProject(document, '');
+  const autosave = repository.getEditorAutosave();
+  assert.equal(repository.getProjects().length, 1);
+  assert.equal(autosave.projectId, project.id);
+  assert.equal(autosave.dirtySinceSave, false);
+  assert.deepEqual(autosave.document, project.document);
+  assert.equal(repository.getEditorDraft(), null, 'the stale navigation handoff cannot resurrect');
+  project.document.name = '外部修改';
+  assert.equal(repository.getProjects()[0].name, '保存后的工作');
+});
+
+test('retrying a failed new draft save does not create duplicate projects', () => {
+  const api = storage();
+  const repository = new Repository(api);
+  const document = createDocument(40, 12);
+  repository.saveEditorAutosave({ document, dirtySinceSave: true });
+  const originalSet = api.setStorageSync.bind(api);
+  let failCleanAutosave = true;
+  api.setStorageSync = (key, value) => {
+    if (failCleanAutosave && key === KEYS.editorAutosave && value.dirtySinceSave === false) {
+      throw new Error('clean autosave write failed');
+    }
+    originalSet(key, value);
+  };
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const draft = repository.getEditorAutosave();
+    assert.throws(() => repository.saveEditorProject(draft.document, draft.projectId), { code: 'RESTORE_FAILED' });
+    assert.equal(repository.getProjects().length, 0);
+    assert.equal(repository.getEditorAutosave().dirtySinceSave, true);
+    assert.equal(repository.getEditorAutosave().projectId, '');
+  }
+  failCleanAutosave = false;
+  const saved = repository.saveEditorProject(document, '');
+  assert.equal(repository.getProjects().length, 1);
+  assert.equal(repository.getEditorAutosave().projectId, saved.id);
+});
+
+test('failed existing-project saves retain both the old saved version and latest dirty work', () => {
+  const api = storage();
+  const repository = new Repository(api);
+  const original = createDocument(40, 12);
+  original.name = '已保存版本';
+  const project = repository.saveProject(original);
+  const edited = { ...original, name: '最新编辑版本' };
+  repository.saveEditorAutosave({ document: edited, projectId: project.id, dirtySinceSave: true });
+  repository.saveEditorDraft({ document: edited, projectId: project.id, dirtySinceSave: true });
+  const originalSet = api.setStorageSync.bind(api);
+  let failHandoffClear = true;
+  api.setStorageSync = (key, value) => {
+    if (failHandoffClear && key === KEYS.editorDraft && value === null) throw new Error('handoff write failed');
+    originalSet(key, value);
+  };
+  assert.throws(() => repository.saveEditorProject(edited, project.id), { code: 'RESTORE_FAILED' });
+  assert.equal(repository.getProjects()[0].name, '已保存版本');
+  assert.equal(repository.getEditorAutosave().document.name, '最新编辑版本');
+  assert.equal(repository.getEditorAutosave().dirtySinceSave, true);
+  assert.ok(repository.getEditorDraft());
+  failHandoffClear = false;
+  repository.saveEditorProject(edited, project.id);
+  assert.equal(repository.getProjects()[0].name, '最新编辑版本');
+  assert.equal(repository.getEditorAutosave().document.name, '最新编辑版本');
+  assert.equal(repository.getEditorAutosave().dirtySinceSave, false);
+  assert.equal(repository.getEditorDraft(), null);
+});
+
+test('editor project save at capacity leaves the unsaved draft intact', () => {
+  const api = storage({ [KEYS.projects]: storedDocuments(MAX_PROJECTS, 'existing') });
+  const repository = new Repository(api);
+  const document = createDocument(40, 12);
+  repository.saveEditorAutosave({ document, dirtySinceSave: true });
+  const before = JSON.stringify(Array.from(api.values));
+  assert.throws(() => repository.saveEditorProject(document, ''), { code: 'STORAGE_CAPACITY_REACHED' });
+  assert.equal(JSON.stringify(Array.from(api.values)), before);
+  const saved = repository.saveEditorProject(document, 'existing-0');
+  assert.equal(saved.id, 'existing-0');
+  assert.equal(repository.getProjects().length, MAX_PROJECTS);
+  assert.equal(repository.getEditorAutosave().dirtySinceSave, false);
 });

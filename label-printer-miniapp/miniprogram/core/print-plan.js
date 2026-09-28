@@ -6,6 +6,11 @@ function step(command, data, expect, extra) {
   return Object.assign({ command, data: data || [], expect }, extra || {});
 }
 
+function normalizeCopies(value) {
+  const copies = Number(value);
+  return Number.isFinite(copies) ? Math.max(1, Math.min(99, Math.trunc(copies))) : 1;
+}
+
 function imageSteps(encoded, profile, useChecks) {
   return encoded.rowsData.map((row) => rowToCommand(row, {
     printheadPixels: profile.printheadPixels,
@@ -27,7 +32,7 @@ function pageSizeData(profile, encoded, copies) {
 
 function buildPrintPlan(encoded, profile, options) {
   options = options || {};
-  const copies = Math.max(1, Math.min(99, Number(options.copies) || 1));
+  const copies = normalizeCopies(options.copies);
   const requestedDensity = Number(options.density);
   const density = Number.isFinite(requestedDensity)
     ? Math.max(profile.densityMin, Math.min(profile.densityMax, requestedDensity))
@@ -63,4 +68,4 @@ function buildPrintPlan(encoded, profile, options) {
   return steps;
 }
 
-module.exports = { buildPrintPlan, pageSizeData };
+module.exports = { buildPrintPlan, normalizeCopies, pageSizeData };

@@ -29,6 +29,7 @@ const { parseCsv, rowsToRecords, stringifyCsv } = require('../../services/csv');
 const { localizeDocumentImages } = require('../../services/remote-image-cache');
 const { KEYS, Repository, normalizeDocument } = require('../../services/repository');
 const { scanCode } = require('../../services/scanner');
+const { EditorSession } = require('../../services/editor-session');
 
 const PAGE_SIZE = 24;
 const DATA_COLUMNS = ['name', 'code', 'price', 'date'];
@@ -94,8 +95,11 @@ function formatRelativeTime(value) {
 Page({
   data: {
     route: 'home',
+    storageError: '',
+    recoveryDraft: null,
     routeTitle: ROUTE_TITLES.home,
     safeTop: 24,
+    headerTop: 68,
     connected: false,
     connectionLabel: '未连接',
     categories,
@@ -148,16 +152,35 @@ Page({
 
   onLoad() {
     this.pageActive = true;
-    const info = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
-    this.repository = new Repository(wx);
+    let info = {};
+    try {
+      info = (wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync()) || {};
+    } catch (error) {
+      // Keep the custom header usable when device metrics are unavailable.
+    }
+    const safeTop = Number(info.safeArea && info.safeArea.top) || Number(info.statusBarHeight) || 24;
+    // Put the whole header below the native capsule, preserving its full width.
+    let headerTop = safeTop + 44;
+    try {
+      const menu = wx.getMenuButtonBoundingClientRect && wx.getMenuButtonBoundingClientRect();
+      const menuBottom = Number(menu && menu.bottom);
+      if (Number.isFinite(menuBottom) && menuBottom > 0) {
+        headerTop = Math.max(safeTop + 12, menuBottom + 12);
+      }
+    } catch (error) {
+      // Older clients can throw here; reserve a navigation row below the status bar.
+    }
+    const app = getApp();
+    this.repository = app && app.globalData && app.globalData.repository || new Repository(wx);
+    this.editorSession = new EditorSession(this.repository);
     this.remoteTemplates = [];
-    this.repository.migrate();
-    this.setData({ safeTop: Number(info.safeArea && info.safeArea.top) || Number(info.statusBarHeight) || 24 });
+    this.setData({ safeTop, headerTop });
     this.bindConnectionState();
     this.refresh();
   },
 
   onShow() {
+    this.editorOpening = false;
     if (!this.repository) return;
     this.consumePendingRoute();
     this.refresh();
@@ -209,16 +232,31 @@ Page({
   },
 
   refresh() {
+    try {
+      this.repository.migrate();
+      this.refreshStoredData();
+      this.setData({ storageError: '' });
+    } catch (error) {
+      this.setData({ storageError: error.message || '本地数据读取失败，请重试', showOnboarding: false });
+    }
+  },
+
+  refreshStoredData() {
     const projects = this.repository.getProjects();
     const userTemplates = this.repository.getUserTemplates();
     const settings = this.repository.getSettings();
     const profile = getProfile(settings.defaultProfileId);
     const dataRows = this.repository.getDataRows();
     const printHistory = this.repository.getPrintHistory();
+    const recovery = this.editorSession.recoverable();
     this.projects = projects;
     this.userTemplates = userTemplates;
     this.printHistoryRecords = printHistory;
     this.setData({
+      recoveryDraft: recovery ? {
+        name: recovery.document.name || '未命名标签',
+        updatedText: formatRelativeTime(recovery.updatedAt)
+      } : null,
       settings,
       densityMin: profile.densityMin,
       densityMax: profile.densityMax,
@@ -494,17 +532,70 @@ Page({
   },
 
   openEditor(document, projectId) {
+    if (this.editorOpening) return;
     try {
-      wx.setStorageSync(KEYS.editorDraft, {
-        document,
-        projectId: projectId || '',
-        returnRoute: this.data.route,
-        openedAt: Date.now()
-      });
-      wx.navigateTo({ url: '/pages/editor/index' });
+      const recovery = this.editorSession.recoverable();
+      if (recovery) {
+        if (projectId && recovery.projectId === projectId) return this.resumeDraft();
+        this.editorOpening = true;
+        wx.showActionSheet({
+          alertText: `“${recovery.document.name || '未命名标签'}”还有未保存的草稿`,
+          itemList: ['继续编辑草稿', '保存草稿并打开新标签'],
+          success: (result) => {
+            this.editorOpening = false;
+            if (result.tapIndex === 0) this.resumeDraft();
+            else if (result.tapIndex === 1) {
+              try {
+                this.editorSession.saveRecovery();
+                this.openEditor(document, projectId);
+              } catch (error) {
+                wx.showModal({ title: '草稿保存失败', content: error.message, showCancel: false });
+              }
+            }
+          },
+          fail: () => { this.editorOpening = false; }
+        });
+        return;
+      }
+      this.editorSession.stage(document, projectId);
+      this.navigateEditor();
     } catch (error) {
       wx.showModal({ title: '无法打开编辑器', content: error.message || '本地存储空间不足', showCancel: false });
     }
+  },
+
+  navigateEditor() {
+    this.editorOpening = true;
+    wx.navigateTo({
+      url: '/pages/editor/index',
+      fail: () => {
+        this.editorOpening = false;
+        wx.showToast({ title: '编辑器未打开，请重试', icon: 'none' });
+      }
+    });
+  },
+
+  resumeDraft() {
+    if (this.editorOpening) return;
+    try {
+      if (this.editorSession.resume()) this.navigateEditor();
+      else this.refresh();
+    } catch (error) {
+      wx.showModal({ title: '无法恢复草稿', content: error.message, showCancel: false });
+    }
+  },
+
+  discardDraft() {
+    wx.showModal({
+      title: '放弃未保存的草稿？',
+      content: '草稿中的修改将被删除，之前手动保存的标签不受影响。',
+      confirmText: '放弃草稿',
+      success: (result) => {
+        if (!result.confirm) return;
+        try { this.editorSession.discard(); this.refresh(); }
+        catch (error) { wx.showModal({ title: '草稿未删除', content: error.message, showCancel: false }); }
+      }
+    });
   },
 
   deleteProject(event) {

@@ -1,7 +1,7 @@
 const { readU16be, sleep } = require('../core/bytes');
 const { encodeImageData } = require('../core/image-encoder');
-const { buildPrintPlan } = require('../core/print-plan');
-const { COMMAND, RESPONSE } = require('../core/protocol');
+const { buildPrintPlan, normalizeCopies } = require('../core/print-plan');
+const { COMMAND, RESPONSE, encodePacket } = require('../core/protocol');
 
 class PrinterClient {
   constructor(session) {
@@ -24,17 +24,23 @@ class PrinterClient {
     if (this.session.onTransportReset) {
       this.session.onTransportReset(() => this.invalidateConnection());
     }
+    this.wait = sleep;
+    this.connectionRevision = 0;
+    this.activePrint = null;
   }
 
   invalidateConnection() {
+    this.connectionRevision += 1;
     this.ready = false;
     this.deviceId = '';
     this.protocolVersion = 0;
     this.latestPageIndex = 0;
-    this.wait = sleep;
   }
 
   async connect(device, options) {
+    if (this.printing || this.jobPhase === 'printing') {
+      throw new Error('打印任务进行中，暂不能连接或重连');
+    }
     if (this.connecting) {
       throw new Error('打印机正在连接');
     }
@@ -134,20 +140,23 @@ class PrinterClient {
   }
 
   async print(imageData, profile, options, onProgress) {
+    options = Object.assign({}, options || {}, { copies: normalizeCopies(options && options.copies) });
     if (!this.ready || this.connecting) {
       throw new Error('打印机尚未完成协议协商');
     }
-    if (this.printing) {
+    if (this.printing || (this.jobToken && options.jobToken !== this.jobToken)) {
       throw new Error('已有打印任务正在进行');
     }
     this.printing = true;
     this.cancelled = false;
     this.latestPageIndex = 0;
-    const progress = typeof onProgress === 'function' ? onProgress : () => {};
+    const job = { revision: this.connectionRevision, started: false, cancelPromise: null };
+    this.activePrint = job;
+    const progress = (value, message) => {
+      if (typeof onProgress !== 'function') return;
+      try { onProgress(value, message); } catch (error) { /* UI must not change the printer result. */ }
+    };
     try {
-      if (profile.task === 'b1' && this.protocolVersion >= 3) {
-        await this.session.request(COMMAND.HEARTBEAT, [4], RESPONSE.HEARTBEAT, 2200);
-      }
       const encoded = encodeImageData(imageData, {
         direction: profile.printDirection,
         threshold: Number(options.threshold) || 180,
@@ -157,27 +166,51 @@ class PrinterClient {
         throw new Error(`位图宽度 ${encoded.columns}px 超过打印头 ${profile.printheadPixels}px`);
       }
       const plan = buildPrintPlan(encoded, profile, options);
-      for (let index = 0; index < plan.length; index += 1) {
-        if (this.cancelled) {
-          throw new Error('打印已取消');
+      // Check every frame before PRINT_START can advance any paper.
+      if (Number(this.session.maxWriteSize) > 0) {
+        const largestFrame = plan.reduce((size, item) => Math.max(size, encodePacket(item.command, item.data).length), 0);
+        if (largestFrame > this.session.maxWriteSize) {
+          throw new Error(`当前蓝牙载荷仅 ${this.session.maxWriteSize} 字节，完整打印帧需要 ${largestFrame} 字节；请重新连接打印机后重试`);
         }
+      }
+      this.assertPrintActive(job);
+      if (profile.task === 'b1' && this.protocolVersion >= 3) {
+        await this.session.request(COMMAND.HEARTBEAT, [4], RESPONSE.HEARTBEAT, 2200);
+        this.assertPrintActive(job);
+      }
+      for (let index = 0; index < plan.length; index += 1) {
+        this.assertPrintActive(job);
         const item = plan[index];
+        if (item.command === COMMAND.PRINT_START) job.started = true;
         await this.session.request(item.command, item.data, item.oneWay ? null : item.expect, item.oneWay ? 1500 : 3500);
+        this.assertPrintActive(job);
         progress(Math.round((index + 1) / (plan.length + 2) * 90), '正在发送标签数据');
       }
-      await this.waitUntilFinished(profile, Number(options.copies) || 1, progress);
+      await this.waitUntilFinished(profile, options.copies, progress);
+      this.assertPrintActive(job);
       progress(100, '打印完成');
-      return { rows: encoded.rows, columns: encoded.columns, packets: plan.length };
+      return { rows: encoded.rows, columns: encoded.columns, packets: plan.length, completedCopies: options.copies };
     } catch (error) {
-      try {
-        await this.session.request(COMMAND.CANCEL_PRINT, [1], RESPONSE.CANCEL_PRINT, 1000);
-      } catch (cancelError) {
-        // Preserve the original failure.
-      }
+      error.possiblyPrinted = job.started;
+      await this.cancelDeviceJob(job);
       throw error;
     } finally {
       this.printing = false;
       this.cancelled = false;
+      this.activePrint = null;
+    }
+  }
+
+  assertPrintActive(job) {
+    if (this.cancelled) {
+      const error = new Error('打印已取消');
+      error.code = 'PRINT_CANCELLED';
+      throw error;
+    }
+    if (!this.session.connected || (job && job.revision !== this.connectionRevision)) {
+      const error = new Error('打印机连接已变化，已停止当前任务');
+      error.code = 'TRANSPORT_RESET';
+      throw error;
     }
   }
 
@@ -191,7 +224,9 @@ class PrinterClient {
           throw new Error('打印已取消');
         }
         await this.wait(350);
+        this.assertPrintActive(this.activePrint);
         const response = await this.session.request(COMMAND.PRINT_END, [1], RESPONSE.PRINT_END, 1600);
+        this.assertPrintActive(this.activePrint);
         if (response.data[0] === 1) {
           return;
         }
@@ -212,7 +247,8 @@ class PrinterClient {
         }
         if (this.latestPageIndex >= copies) {
           const response = await this.session.request(COMMAND.PRINT_END, [1], RESPONSE.PRINT_END, 2200);
-          if (response.data.length && response.data[0] !== 1) {
+          this.assertPrintActive(this.activePrint);
+          if (!response.data.length || response.data[0] !== 1) {
             throw new Error('打印机尚未完成当前任务');
           }
           return;
@@ -237,8 +273,10 @@ class PrinterClient {
         throw new Error('打印已取消');
       }
       await this.wait(300);
+      this.assertPrintActive(this.activePrint);
       try {
         const status = await this.session.request(COMMAND.PRINT_STATUS, [1], RESPONSE.PRINT_STATUS, 1600);
+        this.assertPrintActive(this.activePrint);
         const currentPage = status.data.length >= 2 ? readU16be(status.data, 0) : 0;
         if (currentPage > lastPage) {
           lastPage = currentPage;
@@ -259,20 +297,25 @@ class PrinterClient {
       throw new Error('等待打印状态超时');
     }
     const response = await this.session.request(COMMAND.PRINT_END, [1], RESPONSE.PRINT_END, 2200);
-    if (response.data.length && response.data[0] !== 1) {
+    this.assertPrintActive(this.activePrint);
+    if (!response.data.length || response.data[0] !== 1) {
       throw new Error('打印机尚未完成当前任务');
     }
   }
 
-  async cancel() {
-    this.cancelled = true;
-    if (this.session.connected) {
-      try {
-        await this.session.request(COMMAND.CANCEL_PRINT, [1], RESPONSE.CANCEL_PRINT, 1200);
-      } catch (error) {
-        // Local cancellation still prevents more rows from being queued.
-      }
+  async cancelDeviceJob(job) {
+    if (!job || !job.started || !this.session.connected || job.revision !== this.connectionRevision) return;
+    if (!job.cancelPromise) {
+      job.cancelPromise = this.session.request(COMMAND.CANCEL_PRINT, [1], RESPONSE.CANCEL_PRINT, 1200)
+        .catch(() => undefined);
     }
+    await job.cancelPromise;
+  }
+
+  async cancel() {
+    if (!this.activePrint) return;
+    this.cancelled = true;
+    await this.cancelDeviceJob(this.activePrint);
   }
 }
 

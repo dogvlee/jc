@@ -52,6 +52,8 @@ const { applyScanToElement } = require('../../core/scan-label');
 const { localizeUrl } = require('../../services/remote-image-cache');
 const { KEYS, Repository, normalizeDocument } = require('../../services/repository');
 const { scanCode } = require('../../services/scanner');
+const { EditorSession } = require('../../services/editor-session');
+const { PrintJobService } = require('../../services/print-job-service');
 const { fontFallbackInfo, listFontCatalog, resolveFontId } = require('../../core/font-family');
 const { ensureDocumentFonts } = require('../../core/font-loader');
 const { resizeCodeElementToMinimum } = require('../../core/code-quality');
@@ -64,9 +66,9 @@ const EDITOR_FONT_CATALOG = listFontCatalog();
 const EDITOR_REMOTE_FONT_COUNT = EDITOR_FONT_CATALOG.filter((font) => font.remote).length;
 const EDITOR_FONT_CATALOG_NOTE = `${EDITOR_FONT_CATALOG.length} 款字体 · ${EDITOR_REMOTE_FONT_COUNT} 款 OFL 开源字体按需加载`;
 
-const STORAGE_DOCUMENT = 'label-printer:last-document';
 const MILLIMETERS_PER_INCH = 25.4;
 const PREVIEW_WIDTH_RPX = 672;
+let previewCanvasInstanceSequence = 0;
 const SIZE_OPTIONS = [
   { label: '30 x 12 mm', width: 30, height: 12 },
   { label: '40 x 12 mm', width: 40, height: 12 },
@@ -279,7 +281,10 @@ Page({
     densityMax: 3,
     threshold: 180,
     copies: 1,
+    loadError: '',
+    saveState: '',
     previewHeightPx: 104,
+    canvasInstanceId: '',
     canvasReady: false,
     document: null,
     selected: null,
@@ -365,7 +370,9 @@ Page({
   },
 
   onLoad(options) {
+    this.loadOptions = options;
     this.pageActive = true;
+    this.canvasInstanceId = `preview-${Date.now().toString(36)}-${++previewCanvasInstanceSequence}`;
     this.remoteMaterials = [];
     this.remoteBorders = [];
     this.devicePickerGeneration = 0;
@@ -375,23 +382,25 @@ Page({
     this.repository = app && app.globalData && app.globalData.repository
       ? app.globalData.repository
       : new Repository(wx);
-    this.repository.migrate();
-    const settings = this.repository.getSettings();
+    this.editorSession = new EditorSession(this.repository);
+    let settings;
+    let state;
+    try {
+      this.repository.migrate();
+      settings = this.repository.getSettings();
+      state = this.editorSession.open(settings);
+      this.loadTemplates();
+    } catch (error) {
+      this.setData({ loadError: error.message || '本地标签读取失败，请重试' });
+      return;
+    }
+    this.setData({ loadError: '' });
     let storedProfileId = settings.defaultProfileId || 'd110';
     this.profile = getProfile(storedProfileId);
     this.profileConfirmed = true;
-    let draft = null;
-    try {
-      draft = wx.getStorageSync(KEYS.editorDraft) || null;
-      wx.removeStorageSync(KEYS.editorDraft);
-    } catch (error) {
-      draft = null;
-    }
-    this.projectId = draft && draft.projectId ? String(draft.projectId) : '';
-    this.dirtySinceSave = false;
-    const storedDocument = draft && normalizeDocument(draft.document);
-    this.document = storedDocument || this.loadLastDocument()
-      || createDocument(Number(settings.stockWidthMm) || 50, Number(settings.stockHeightMm) || 30);
+    this.projectId = state.projectId || '';
+    this.dirtySinceSave = state.dirtySinceSave;
+    this.document = state.document;
     this.selectedId = this.document.elements.length ? this.document.elements[0].id : '';
     this.selectedIds = this.selectedId ? [this.selectedId] : [];
     this.multiSelect = false;
@@ -451,7 +460,6 @@ Page({
       safeTop: Number(info.safeArea && info.safeArea.top) || Number(info.statusBarHeight) || 24,
       menuSafeRightPx: this.headerRightInset(info)
     });
-    this.loadTemplates();
     this.syncPageData();
     if (options && options.devices === '1') {
       this.deviceOpenTimer = setTimeout(() => {
@@ -461,13 +469,23 @@ Page({
   },
 
   onReady() {
-    this.initCanvas();
+    if (!this.data.loadError) this.initCanvas();
+  },
+
+  retryEditorLoad() {
+    this.onLoad(this.loadOptions);
+    if (!this.data.loadError) this.initCanvas();
+  },
+
+  returnHome() {
+    wx.navigateBack({ fail: () => wx.reLaunch({ url: '/pages/home/index' }) });
   },
 
   async onUnload() {
     // A system navigation can unload the page before the focused input emits
     // blur. Persist the latest live preview so typed text is never discarded.
-    this.commitFieldEditDraft();
+    const fieldCommitted = this.commitFieldEditDraft();
+    if (!fieldCommitted && this.document && !this.discardedSession && !this.data.loadError) this.persistDocument();
     this.pageActive = false;
     this.printCancelRequested = true;
     this.printTaskGeneration = (this.printTaskGeneration || 0) + 1;
@@ -482,7 +500,9 @@ Page({
       this.removeManagerListener();
       this.removeManagerListener = null;
     }
-    if (this.printer && this.printer.printing) {
+    if (this.printJobService && this.printJobService.running) {
+      await this.printJobService.cancel();
+    } else if (this.printer && this.printer.printing) {
       await this.printer.cancel();
     }
     if (this.session && this.ownsSession) {
@@ -491,6 +511,9 @@ Page({
   },
 
   onHide() {
+    if (this.document && !this.discardedSession && !this.data.loadError) {
+      if (!this.commitFieldEditDraft()) this.persistDocument();
+    }
     if (this.data.scanning) {
       this.devicePickerGeneration += 1;
       this.session.stopScan();
@@ -507,31 +530,15 @@ Page({
     }, 100);
   },
 
-  loadLastDocument() {
-    try {
-      const autosave = wx.getStorageSync(KEYS.editorAutosave);
-      const normalized = normalizeDocument(autosave && (autosave.document || autosave));
-      if (normalized) {
-        if (!this.projectId && autosave.projectId) this.projectId = String(autosave.projectId);
-        return normalized;
-      }
-      const stored = wx.getStorageSync(STORAGE_DOCUMENT);
-      return normalizeDocument(stored);
-    } catch (error) {
-      // A fresh document is used when local storage is unavailable.
-    }
-    return null;
-  },
-
   persistDocument() {
     try {
-      wx.setStorageSync(KEYS.editorAutosave, {
-        document: this.document,
-        projectId: this.projectId || '',
-        updatedAt: Date.now()
-      });
+      const session = this.editorSession || new EditorSession(this.repository);
+      session.checkpoint(this.document, this.projectId, this.dirtySinceSave);
+      this.setData({ saveState: this.projectId && !this.dirtySinceSave ? '已保存到标签' : '草稿已保存到本机' });
+      return true;
     } catch (error) {
-      wx.showToast({ title: '本地保存失败', icon: 'none' });
+      this.setData({ saveState: '草稿保存失败，请勿退出，点此重试' });
+      return false;
     }
   },
 
@@ -607,6 +614,7 @@ Page({
       selectedTypeLabel: selected ? elementTypeLabel(selected.type) : '',
       selectionCount: this.selectedIds.length,
       multiSelect: this.multiSelect,
+      canvasInstanceId: this.canvasInstanceId || '',
       previewHeightPx,
       sizeIndex: sizeIndex >= 0 ? sizeIndex : 0,
       currentSizeLabel: `${this.document.widthMm} x ${this.document.heightMm} mm`,
@@ -627,50 +635,69 @@ Page({
   },
 
   initCanvas() {
-    wx.createSelectorQuery()
-      .in(this)
-      .select('#labelCanvas')
-      .fields({ node: true, size: true })
-      .select('#selectionCanvas')
-      .fields({ node: true, size: true })
-      .exec((result) => {
-        if (!result || !result[0] || !result[1]) {
-          return;
-        }
-        try {
-          const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
-          const metrics = previewCanvasMetrics(this.document, {
-            width: result[1].width,
-            height: result[1].height
-          }, windowInfo.pixelRatio);
-          this.canvasSize = metrics.canvasSize;
-          this.previewDpi = metrics.dpi;
-          this.previewPixelRatio = metrics.devicePixelRatio;
-        } catch (error) {
-          this.context = null;
-          this.selectionContext = null;
-          this.canvasSize = null;
-          this.previewDpi = 0;
-          this.previewPixelRatio = 1;
-          this.setData({ canvasReady: false });
-          wx.showToast({ title: error.message, icon: 'none' });
-          return;
-        }
-        this.canvas = result[0].node;
-        this.selectionCanvas = result[1].node;
-        // Touch events are bound to the selection canvas, so its measured CSS
-        // box is the source of truth for px -> mm conversion.
-        this.canvasRect = { width: result[1].width, height: result[1].height };
-        [this.canvas, this.selectionCanvas].forEach((canvas) => {
-          canvas.width = this.canvasSize.width;
-          canvas.height = this.canvasSize.height;
+    const generation = (this.canvasInitGeneration || 0) + 1;
+    this.canvasInitGeneration = generation;
+    this.setData({ canvasReady: false });
+    const isCurrent = () => this.canvasInitGeneration === generation && this.pageActive !== false;
+    const initialize = () => {
+      if (!isCurrent()) return;
+      wx.createSelectorQuery()
+        .in(this)
+        .select('#labelCanvas')
+        .fields({ node: true, size: true })
+        .select('#selectionCanvas')
+        .fields({ node: true, size: true })
+        .exec((result) => {
+          if (!isCurrent() || !result || !result[0] || !result[1]) {
+            return;
+          }
+          try {
+            const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+            const metrics = previewCanvasMetrics(this.document, {
+              width: result[1].width,
+              height: result[1].height
+            }, windowInfo.pixelRatio);
+            this.canvasSize = metrics.canvasSize;
+            this.previewDpi = metrics.dpi;
+            this.previewPixelRatio = metrics.devicePixelRatio;
+          } catch (error) {
+            this.context = null;
+            this.selectionContext = null;
+            this.canvasSize = null;
+            this.previewDpi = 0;
+            this.previewPixelRatio = 1;
+            this.setData({ canvasReady: false });
+            wx.showToast({ title: error.message, icon: 'none' });
+            return;
+          }
+          this.canvas = result[0].node;
+          this.selectionCanvas = result[1].node;
+          // Touch events are bound to the selection canvas, so its measured CSS
+          // box is the source of truth for px -> mm conversion.
+          this.canvasRect = { width: result[1].width, height: result[1].height };
+          [this.canvas, this.selectionCanvas].forEach((canvas) => {
+            canvas.width = this.canvasSize.width;
+            canvas.height = this.canvasSize.height;
+          });
+          this.context = this.canvas.getContext('2d');
+          this.selectionContext = this.selectionCanvas.getContext('2d');
+          const paintFirstFrame = () => {
+            if (!isCurrent()) return;
+            this.loadDocumentImages();
+            this.renderAll();
+            this.setData({ canvasReady: true });
+          };
+          if (typeof this.canvas.requestAnimationFrame === 'function') {
+            this.canvas.requestAnimationFrame(paintFirstFrame);
+          } else {
+            paintFirstFrame();
+          }
         });
-        this.context = this.canvas.getContext('2d');
-        this.selectionContext = this.selectionCanvas.getContext('2d');
-        this.setData({ canvasReady: true });
-        this.loadDocumentImages();
-        this.renderAll();
-      });
+    };
+    // Native Canvas surfaces can retain the initial height until the view update
+    // is flushed. Measure after that update, then draw on their first frame.
+    if (typeof wx.nextTick === 'function') wx.nextTick(initialize);
+    else initialize();
   },
 
   paintCanvases() {
@@ -1726,13 +1753,13 @@ Page({
   },
 
   saveProjectSilently() {
+    this.commitFieldEditDraft();
     try {
       const isNew = !this.projectId;
-      const project = this.repository.saveProject(this.document, this.projectId);
+      const project = this.repository.saveEditorProject(this.document, this.projectId);
       this.projectId = project.id;
       this.dirtySinceSave = false;
-      this.persistDocument();
-      this.setData({ projectId: project.id });
+      this.setData({ projectId: project.id, saveState: '已保存到标签' });
       return { ok: true, isNew };
     } catch (error) {
       wx.showModal({ title: '保存失败', content: error.message, showCancel: false });
@@ -1748,29 +1775,40 @@ Page({
   },
 
   exitEditor() {
-    if (!this.projectId && this.document.elements.length) this.persistDocument();
-    wx.navigateBack({
-      fail: () => wx.reLaunch({ url: '/pages/home/index' })
-    });
+    if (this.dirtySinceSave && !this.discardedSession && !this.persistDocument()) return;
+    this.returnHome();
   },
 
   closeEditor() {
     // Leaving without an explicit save must never silently drop edits made to
     // an existing project (autosave only survives until the next editor open).
     this.commitFieldEditDraft();
-    if (!this.dirtySinceSave || !this.document.elements.length) {
+    if (this.data.printing) {
+      wx.showToast({ title: '请先取消打印，再退出编辑器', icon: 'none' });
+      return;
+    }
+    if (!this.dirtySinceSave) {
       this.exitEditor();
       return;
     }
     wx.showActionSheet({
       alertText: '标签有未保存的修改',
-      itemList: ['保存并退出', '不保存退出'],
+      itemList: ['保存并退出', '保留草稿退出', '放弃修改退出'],
       success: (result) => {
         if (result.tapIndex === 0) {
           const saved = this.saveProjectSilently();
           if (saved.ok) this.exitEditor();
         } else if (result.tapIndex === 1) {
           this.exitEditor();
+        } else if (result.tapIndex === 2) {
+          try {
+            this.editorSession.discard();
+            this.discardedSession = true;
+            this.dirtySinceSave = false;
+            this.exitEditor();
+          } catch (error) {
+            wx.showModal({ title: '无法放弃草稿', content: error.message, showCancel: false });
+          }
         }
       }
     });
@@ -1823,6 +1861,7 @@ Page({
   },
 
   closeDevices() {
+    this.returnToPrintAfterConnect = false;
     this.devicePickerGeneration += 1;
     this.session.stopScan();
     this.setData({ showDevices: false, scanning: false });
@@ -1864,6 +1903,10 @@ Page({
         connectedDetails: details
       });
       this.syncPageData(() => this.initCanvas());
+      if (this.returnToPrintAfterConnect) {
+        this.returnToPrintAfterConnect = false;
+        this.openPrintSheet();
+      }
       if (!guessed || this.candidateProfileVerificationRequired) {
         wx.showModal({
           title: this.candidateProfileVerificationRequired ? '请确认候选机型参数' : '需要选择打印机型号',
@@ -1927,15 +1970,15 @@ Page({
     return guessed;
   },
 
-  evaluatePrintBlock() {
+  evaluatePrintBlock(documentValue = this.document, profile = this.profile) {
     if (!this.profileConfirmed) {
       return { kind: 'model', message: '请先确认准确的打印机型号，再开始打印。', suggestProfileId: '' };
     }
-    if (!this.document.elements.length) {
+    if (!documentValue.elements.length) {
       return { kind: 'empty', message: '请先添加至少一个标签元素。', suggestProfileId: '' };
     }
-    for (let index = 0; index < this.document.elements.length; index += 1) {
-      const element = this.document.elements[index];
+    for (let index = 0; index < documentValue.elements.length; index += 1) {
+      const element = documentValue.elements[index];
       const message = placeholderPrintBlock(element);
       if (message) {
         return {
@@ -1947,10 +1990,10 @@ Page({
         };
       }
     }
-    const fit = evaluatePrintability(this.document, this.profile);
+    const fit = evaluatePrintability(documentValue, profile);
     if (!fit.ok) return { kind: 'size', message: fit.message, suggestProfileId: fit.suggestProfileId || '' };
     try {
-      validateDocument(this.document, this.profile.dpi);
+      validateDocument(documentValue, profile.dpi);
     } catch (error) {
       return {
         kind: 'element',
@@ -1978,6 +2021,7 @@ Page({
   },
 
   openPrintSheet() {
+    this.commitFieldEditDraft();
     this.refreshPrintBlock();
     const patch = { showPrintSheet: true };
     if (!this.data.printing) {
@@ -2103,8 +2147,22 @@ Page({
     }
   },
 
-  createPrintImageData(documentValue) {
-    const size = alignedCanvasSize(documentValue, this.profile);
+  async preparePrintImages(documentValue) {
+    const images = {};
+    await Promise.all(documentValue.elements.filter((element) => (
+      (element.type === 'image' || element.type === 'material') && element.path
+    )).map((element) => new Promise((resolve, reject) => {
+      const image = this.canvas.createImage();
+      const timer = setTimeout(() => reject(new Error('标签图片加载超时，请重新选择图片后重试')), 15000);
+      image.onload = () => { clearTimeout(timer); images[element.id] = image; resolve(); };
+      image.onerror = () => { clearTimeout(timer); reject(new Error('标签图片加载失败，请重新选择图片后重试')); };
+      image.src = this.resolveImagePath(element.path);
+    })));
+    return images;
+  },
+
+  createPrintImageData(documentValue, profile = this.profile, images = this.images) {
+    const size = alignedCanvasSize(documentValue, profile);
     let canvas = null;
     if (wx.createOffscreenCanvas) {
       canvas = wx.createOffscreenCanvas({ type: '2d', width: size.width, height: size.height });
@@ -2115,7 +2173,7 @@ Page({
     canvas.width = size.width;
     canvas.height = size.height;
     const context = canvas.getContext('2d');
-    renderDocument(context, documentValue, size, this.profile.dpi, this.images);
+    renderDocument(context, documentValue, size, profile.dpi, images);
     return context.getImageData(0, 0, size.width, size.height);
   },
 
@@ -2129,7 +2187,7 @@ Page({
 
   async startPrint() {
     if (this.data.printing) return;
-    if (this.refreshPrintBlock()) return;
+    this.commitFieldEditDraft();
     if (!this.context || !this.canvasSize || !this.data.canvasReady) {
       wx.showToast({ title: '画布尚未就绪', icon: 'none' });
       return;
@@ -2138,79 +2196,84 @@ Page({
       ? this.connectionManager.getSavedDevice()
       : null;
     if (this.connectionManager && !savedDevice) {
+      this.returnToPrintAfterConnect = true;
       this.setData({ showPrintSheet: false });
       this.openDevices();
       return;
     }
     if (!this.connectionManager && !this.session.connected) {
+      this.returnToPrintAfterConnect = true;
       this.setData({ showPrintSheet: false });
       this.openDevices();
       return;
     }
+    // Model/size preflight is definitive only after the selected device has
+    // been checked below. Never prevent first-time device selection with a
+    // remembered or default profile.
 
     const taskGeneration = (this.printTaskGeneration || 0) + 1;
     this.printTaskGeneration = taskGeneration;
     this.printCancelRequested = false;
     this.setData({ printing: true, printProgress: 2, printMessage: '正在确认打印机连接', printError: '' });
     let blockedAfterConnect = false;
+    const projectId = this.projectId || '';
+    const requestedDocument = cloneDocument(this.document);
+    let printImages = {};
+    this.printJobService = this.printJobService || new PrintJobService({ printer: this.printer });
     try {
-      if (this.connectionManager) {
-        const result = await this.connectionManager.ensureReady(savedDevice);
-        this.assertPrintActive(taskGeneration);
-        this.applyConnectionResult(result);
-      }
-      this.assertPrintActive(taskGeneration);
-      const block = this.evaluatePrintBlock();
-      if (block) {
-        blockedAfterConnect = true;
-        const suggested = block.suggestProfileId ? getProfile(block.suggestProfileId) : null;
-        this.setData({ printBlock: block, suggestedProfileName: suggested ? suggested.name : '' });
-        return;
-      }
-
-      this.setData({ printProgress: 5, printMessage: '正在生成打印点阵' });
-      await ensureDocumentFonts(this.document, fontRuntime());
-      await this.ensureImagesReady();
-      this.assertPrintActive(taskGeneration);
-      const serialElements = this.document.elements.filter((element) => element.type === 'serial');
-      const printDocuments = serialElements.length
-        ? Array.from({ length: this.data.copies }, (item, copyIndex) => {
-          const next = cloneDocument(this.document);
-          next.elements.filter((element) => element.type === 'serial').forEach((element) => {
-            element.currentValue = (Number(element.start) || 0) + copyIndex * (Number(element.step) || 1);
-          });
-          return next;
-        })
-        : [this.document];
-
-      for (let index = 0; index < printDocuments.length; index += 1) {
-        this.assertPrintActive(taskGeneration);
-        const documentValue = printDocuments[index];
-        validateDocument(documentValue, this.profile.dpi);
-        const imageData = this.createPrintImageData(documentValue);
-        await this.printer.print(imageData, this.profile, {
-          copies: serialElements.length ? 1 : this.data.copies,
+      const completed = await this.printJobService.run({
+        document: requestedDocument,
+        profile: this.profile,
+        options: {
+          copies: this.data.copies,
           density: this.data.density,
           threshold: this.data.threshold,
           labelType: this.data.labelTypeIndex + 1
-        }, (progress, message) => {
+        },
+        prepare: async (snapshot, controls) => {
+          if (this.connectionManager) {
+            const result = await this.connectionManager.ensureReady(savedDevice);
+            controls.assertActive();
+            this.assertPrintActive(taskGeneration);
+            this.applyConnectionResult(result);
+          }
+          this.assertPrintActive(taskGeneration);
+          const profile = Object.assign({}, this.profile);
+          const block = this.evaluatePrintBlock(snapshot.document, profile);
+          if (block) {
+            blockedAfterConnect = true;
+            const suggested = block.suggestProfileId ? getProfile(block.suggestProfileId) : null;
+            this.setData({ printBlock: block, suggestedProfileName: suggested ? suggested.name : '' });
+            const error = new Error(block.message);
+            error.code = 'PRINT_PREFLIGHT_BLOCKED';
+            throw error;
+          }
+          this.setData({ printProgress: 5, printMessage: '正在生成打印点阵' });
+          await ensureDocumentFonts(snapshot.document, fontRuntime());
+          controls.assertActive();
+          printImages = await this.preparePrintImages(snapshot.document);
+          this.assertPrintActive(taskGeneration);
+          return { profile };
+        },
+        render: (documentValue, profile) => {
+          this.assertPrintActive(taskGeneration);
+          validateDocument(documentValue, profile.dpi);
+          return this.createPrintImageData(documentValue, profile, printImages);
+        },
+        onProgress: (progress, message) => {
           if (!this.pageActive || taskGeneration !== this.printTaskGeneration) return;
-          const printProgress = serialElements.length
-            ? Math.round((index * 100 + progress) / printDocuments.length)
-            : progress;
-          this.setData({ printProgress, printMessage: message });
-        });
-        this.assertPrintActive(taskGeneration);
-      }
+          this.setData({ printProgress: progress, printMessage: message });
+        }
+      });
       if (this.connectionManager) this.connectionManager.touch(savedDevice);
       const historySaved = this.recordPrintSafely({
-        name: this.document.name,
-        projectId: this.projectId || '',
+        name: completed.document.name,
+        projectId,
         result: 'success',
-        message: '',
-        profileId: this.profile.id,
+        message: `已完成 ${completed.completedCopies} 份`,
+        profileId: completed.profile.id,
         deviceName: this.data.connectedDevice,
-        document: cloneDocument(this.document)
+        document: completed.document
       });
       if (this.pageActive && taskGeneration === this.printTaskGeneration) {
         this.setData({ printProgress: 100, printMessage: '打印完成', printError: '' });
@@ -2220,18 +2283,23 @@ Page({
         });
       }
     } catch (error) {
+      if (blockedAfterConnect) return;
       const cancelled = this.printCancelRequested || !this.pageActive
         || taskGeneration !== this.printTaskGeneration
         || /已取消/.test(String(error && error.message || ''));
-      const message = cancelled ? '' : friendlyPrintError(error);
+      const job = error.printJob;
+      const paperNotice = job && job.possiblyPrinted
+        ? `已确认完成 ${job.completedCopies}/${job.totalCopies} 份，可能仍有标签出纸。请核对实物后再打印，避免重复。`
+        : '';
+      const message = [cancelled ? '' : friendlyPrintError(error), paperNotice].filter(Boolean).join('；');
       this.recordPrintSafely({
-        name: this.document.name,
-        projectId: this.projectId || '',
+        name: requestedDocument.name,
+        projectId,
         result: cancelled ? 'cancelled' : 'failed',
-        message: error && error.message || '打印失败',
-        profileId: this.profile.id,
+        message: [error && error.message || '打印失败', paperNotice].filter(Boolean).join('；'),
+        profileId: job ? job.profile.id : this.profile.id,
         deviceName: this.data.connectedDevice,
-        document: cloneDocument(this.document)
+        document: job ? job.document : requestedDocument
       });
       if (this.pageActive && taskGeneration === this.printTaskGeneration) {
         this.setData({
@@ -2261,7 +2329,8 @@ Page({
     this.printCancelRequested = true;
     this.setData({ printMessage: '正在停止打印…' });
     try {
-      await this.printer.cancel();
+      if (this.printJobService) await this.printJobService.cancel();
+      else await this.printer.cancel();
     } catch (error) {
       // PrinterClient will surface the original task result to startPrint.
     }

@@ -117,6 +117,21 @@ test('writeBytes preserves a full protocol frame and rejects an insufficient MTU
   assert.equal(writes, 0);
 });
 
+test('queued commands and an in-flight write cannot cross into a replacement transport', async () => {
+  const writes = [];
+  const session = readySession((options) => writes.push(options));
+  const first = session.request(COMMAND.PRINT_EMPTY_ROW, [0, 0, 1], null, 100);
+  const queued = session.request(COMMAND.PAGE_END, [1], RESPONSE.PAGE_END, 100);
+  const firstFailure = assert.rejects(first, { code: 'TRANSPORT_RESET' });
+  const queuedFailure = assert.rejects(queued, { code: 'TRANSPORT_RESET' });
+  while (!writes.length) await new Promise((resolve) => setImmediate(resolve));
+  session.transportGeneration += 1;
+  session.deviceId = 'replacement-device';
+  writes[0].success({});
+  await Promise.all([firstFailure, queuedFailure]);
+  assert.equal(writes.length, 1);
+});
+
 function transportApi(options) {
   const config = options || {};
   const calls = {

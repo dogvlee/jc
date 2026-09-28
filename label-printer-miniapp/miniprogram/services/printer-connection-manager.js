@@ -230,7 +230,7 @@ class PrinterConnectionManager {
     this.autoReconnectTimer = setTimeout(async () => {
       this.autoReconnectTimer = null;
       if (this.manualDisconnecting) return;
-      if (this.printer.printing) {
+      if (this.printer.printing || this.printer.jobPhase === 'printing') {
         this.scheduleAutoReconnect(1000);
         return;
       }
@@ -289,7 +289,7 @@ class PrinterConnectionManager {
     if (this.isDisabled() && !requested.ignoreKillSwitch) {
       return Promise.reject(codedError('BLE_RECONNECT_OFF', '稳定连接已关闭，请重新扫描并使用原连接流程'));
     }
-    if (this.printer.printing) {
+    if (this.printer.printing || this.printer.jobPhase === 'printing') {
       return Promise.reject(codedError('PRINT_IN_PROGRESS', '打印任务进行中，暂不能连接、重连或诊断'));
     }
     if (this.inflight.has(target.deviceId)) {
@@ -514,7 +514,7 @@ class PrinterConnectionManager {
       report.error = '稳定连接已被 kill switch 关闭';
       return report;
     }
-    if (this.printer.printing) {
+    if (this.printer.printing || this.printer.jobPhase === 'printing') {
       report.error = '打印任务进行中，暂不能连接、重连或诊断';
       return report;
     }

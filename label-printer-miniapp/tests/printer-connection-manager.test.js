@@ -185,6 +185,18 @@ function createHarness(options) {
 
 const DEVICE = { deviceId: 'printer-1', name: 'D110' };
 
+test('the whole serial job blocks reconnect even between protocol transactions', async () => {
+  const { manager, printer, session } = createHarness();
+  printer.jobPhase = 'printing';
+  await assert.rejects(manager.ensureReady(DEVICE), { code: 'PRINT_IN_PROGRESS' });
+  const report = await manager.diagnose(DEVICE);
+  assert.match(report.error, /打印任务进行中/);
+  assert.equal(session.opens, 0);
+  printer.jobPhase = 'preparing';
+  await manager.ensureReady(DEVICE);
+  assert.equal(printer.ready, true);
+});
+
 test('concurrent ensureReady calls are single-flight for one printer', async () => {
   let release;
   const gate = new Promise((resolve) => { release = resolve; });

@@ -4,7 +4,8 @@ const { PrinterConnectionManager } = require('./services/printer-connection-mana
 App({
   onLaunch() {
     const repository = new Repository(wx);
-    repository.migrate();
+    // Pages expose a retry state; a storage fault must not abort app setup.
+    try { repository.migrate(); } catch (error) { this.globalData.storageError = error.message; }
     const connectionManager = new PrinterConnectionManager({
       api: wx,
       storage: wx,

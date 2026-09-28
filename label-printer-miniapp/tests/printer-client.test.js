@@ -3,6 +3,7 @@ const test = require('node:test');
 
 const { PrinterClient } = require('../miniprogram/services/printer-client');
 const { COMMAND, RESPONSE } = require('../miniprogram/core/protocol');
+const { getProfile } = require('../miniprogram/core/profiles');
 
 class FakeSession {
   constructor(connectResult) {
@@ -150,4 +151,100 @@ test('fatal printer status errors are not swallowed as retryable timeouts', asyn
     client.waitUntilFinished({ task: 'b1' }, 1, () => {}),
     /缺纸/
   );
+});
+
+function printHarness(options) {
+  const config = options || {};
+  const session = new FakeSession(1);
+  session.maxWriteSize = config.maxWriteSize || 244;
+  session.request = async (command, data, expected) => {
+    session.calls.push({ command, data: Array.from(data || []), expected });
+    if (config.respond) {
+      const response = await config.respond(command);
+      if (response) return response;
+    }
+    return { data: Uint8Array.from(command === COMMAND.PRINT_STATUS ? [0, config.finishedCopies || 1] : [1]) };
+  };
+  const client = new PrinterClient(session);
+  client.ready = true;
+  client.wait = async () => {};
+  const image = { width: 8, height: 1, data: new Uint8ClampedArray(8 * 4).fill(255) };
+  return { client, session, image, profile: getProfile('b1') };
+}
+
+test('printing and completion use the same normalized copy count', async () => {
+  const { client, session, image, profile } = printHarness({ finishedCopies: 99 });
+  const result = await client.print(image, profile, { copies: 120 });
+  assert.equal(result.completedCopies, 99);
+  assert.deepEqual(session.calls.find((call) => call.command === COMMAND.PRINT_START).data.slice(0, 2), [0, 99]);
+});
+
+test('empty PRINT_END acknowledgement cannot report a completed print', async () => {
+  const { client, image, profile } = printHarness({
+    respond(command) { if (command === COMMAND.PRINT_END) return { data: new Uint8Array(0) }; }
+  });
+  await assert.rejects(client.print(image, profile, { copies: 1 }), /尚未完成/);
+});
+
+test('cancel during the final acknowledgement rejects completion and sends cancel only once', async () => {
+  let acknowledge;
+  let entered;
+  const finalRequest = new Promise((resolve) => { entered = resolve; });
+  const { client, session, image, profile } = printHarness({
+    respond(command) {
+      if (command === COMMAND.PRINT_END) {
+        entered();
+        return new Promise((resolve) => { acknowledge = resolve; });
+      }
+    }
+  });
+  const progress = [];
+  const printing = client.print(image, profile, { copies: 1 }, (value) => progress.push(value));
+  await finalRequest;
+  await client.cancel();
+  acknowledge({ data: Uint8Array.from([1]) });
+  await assert.rejects(printing, { code: 'PRINT_CANCELLED' });
+  assert.equal(progress.includes(100), false);
+  assert.equal(session.calls.filter((call) => call.command === COMMAND.CANCEL_PRINT).length, 1);
+});
+
+test('a frame that cannot fit the negotiated MTU is rejected before any print command', async () => {
+  const { client, session, profile } = printHarness({ maxWriteSize: 20 });
+  const data = new Uint8ClampedArray(384 * 4);
+  for (let pixel = 0; pixel < 384; pixel += 1) data[pixel * 4 + 3] = 255;
+  await assert.rejects(client.print({ width: 384, height: 1, data }, profile, { copies: 1 }), (error) => {
+    assert.equal(error.possiblyPrinted, false);
+    return /完整打印帧需要/.test(error.message);
+  });
+  assert.equal(session.calls.length, 0);
+});
+
+test('transport replacement during a request cannot continue or cancel on the new device', async () => {
+  let client;
+  const harness = printHarness({
+    respond(command) {
+      if (command === COMMAND.PAGE_START) client.invalidateConnection();
+    }
+  });
+  client = harness.client;
+  await assert.rejects(client.print(harness.image, harness.profile, { copies: 1 }), { code: 'TRANSPORT_RESET' });
+  assert.equal(harness.session.calls.some((call) => call.command === COMMAND.SET_PAGE_SIZE), false);
+  assert.equal(harness.session.calls.some((call) => call.command === COMMAND.CANCEL_PRINT), false);
+});
+
+test('connecting and foreign print calls cannot interrupt a serial job between pages', async () => {
+  const { client, image, profile } = printHarness();
+  client.jobToken = {};
+  client.jobPhase = 'printing';
+  await assert.rejects(client.connect({ deviceId: 'other' }), /打印任务进行中/);
+  await assert.rejects(client.print(image, profile, { copies: 1 }), /已有打印任务/);
+  client.jobPhase = 'preparing';
+  await assert.rejects(client.print(image, profile, { copies: 1 }), /已有打印任务/);
+});
+
+test('a progress listener failure does not cancel a confirmed physical print', async () => {
+  const { client, session, image, profile } = printHarness();
+  const result = await client.print(image, profile, { copies: 1 }, () => { throw new Error('page destroyed'); });
+  assert.equal(result.completedCopies, 1);
+  assert.equal(session.calls.some((call) => call.command === COMMAND.CANCEL_PRINT), false);
 });

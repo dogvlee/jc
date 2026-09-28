@@ -499,13 +499,25 @@ class BleSession {
   }
 
   request(command, data, expected, timeoutMs) {
-    const run = () => this.sendRequest(command, data, expected, timeoutMs);
+    // A queued print/cancel command belongs to the transport that accepted it.
+    // Reconnecting must never replay it against a newly negotiated device.
+    const generation = this.transportGeneration;
+    const run = () => this.sendRequest(command, data, expected, timeoutMs, generation);
     const task = this.queue.then(run, run);
     this.queue = task.catch(() => undefined);
     return task;
   }
 
-  async sendRequest(command, data, expected, timeoutMs) {
+  assertTransportGeneration(generation) {
+    if (generation !== this.transportGeneration) {
+      const error = new Error('蓝牙连接已变化，已停止旧任务');
+      error.code = 'TRANSPORT_RESET';
+      throw error;
+    }
+  }
+
+  async sendRequest(command, data, expected, timeoutMs, generation = this.transportGeneration) {
+    this.assertTransportGeneration(generation);
     if (!this.connected) {
       throw new Error('请先连接打印机');
     }
@@ -530,7 +542,9 @@ class BleSession {
 
     try {
       await this.writeBytes(encodePacket(command, data));
-      return responsePromise ? await responsePromise : null;
+      const response = responsePromise ? await responsePromise : null;
+      this.assertTransportGeneration(generation);
+      return response;
     } catch (error) {
       if (responsePromise) {
         this.rejectPending(error);

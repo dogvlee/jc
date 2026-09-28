@@ -12,11 +12,18 @@
     "redesign:batch": "node scripts/batch-redesign.mjs",
     "redesign:install": "node scripts/install-approved-redesigns.mjs",
     "release:shangyue": "node scripts/build-shangyue-release.mjs",
+    "release:wechat": "node scripts/prepare-wechat-release.mjs",
+    "test:wechat": "node scripts/wechat-smoke.cjs",
     "verify": "npm run check && npm test && npm run release:shangyue",
     "assets:sync": "python scripts/optimize_assets.py"
   },
+  "overrides": {
+    "@jimp/core": { "mkdirp": "0.5.6" },
+    "@jimp/jpeg": { "jpeg-js": "0.4.4" }
+  },
   "devDependencies": {
     "esbuild": "0.25.12",
+    "miniprogram-automator": "0.12.1",
     "qrcode-generator": "1.5.2"
   }
 }

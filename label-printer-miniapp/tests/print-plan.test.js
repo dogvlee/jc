@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { buildPrintPlan, pageSizeData } = require('../miniprogram/core/print-plan');
+const { buildPrintPlan, normalizeCopies, pageSizeData } = require('../miniprogram/core/print-plan');
 const { getProfile } = require('../miniprogram/core/profiles');
 const { COMMAND, RESPONSE } = require('../miniprogram/core/protocol');
 
@@ -34,6 +34,12 @@ function encodedFixture() {
     ]
   };
 }
+
+test('copy quantities normalize to the same finite integer for plans and completion waits', () => {
+  assert.deepEqual([120, 2.7, -8, 0, '3', Infinity, NaN, undefined].map(normalizeCopies), [99, 2, 1, 1, 3, 1, 1, 1]);
+  const plan = buildPrintPlan(encodedFixture(), getProfile('b21'), { copies: 2.7 });
+  assert.equal(plan.filter((item) => item.command === COMMAND.PAGE_START).length, 2);
+});
 
 function commands(plan) {
   return plan.map((item) => item.command);

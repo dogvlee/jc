@@ -556,13 +556,16 @@ test('closing the editor with unsaved changes prompts before exiting', () => {
     document,
     projectId: 'p1',
     dirtySinceSave: true,
-    repository: { saveProject(value, id) { savedCount += 1; return { id: id || 'p1' }; } },
+    repository: {
+      saveEditorProject(value, id) { savedCount += 1; return { id: id || 'p1' }; },
+      saveEditorAutosave() {}
+    },
     setData(patch) { Object.assign(this.data, patch); }
   });
 
   editor.closeEditor();
   assert.equal(backCount, 0);
-  assert.deepEqual(sheetOptions.itemList, ['保存并退出', '不保存退出']);
+  assert.deepEqual(sheetOptions.itemList, ['保存并退出', '保留草稿退出', '放弃修改退出']);
 
   sheetOptions.success({ tapIndex: 0 });
   assert.equal(savedCount, 1);

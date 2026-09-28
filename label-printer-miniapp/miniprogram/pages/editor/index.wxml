@@ -1,3 +1,9 @@
+<view wx:if="{{loadError}}" class="storage-recovery" role="alert">
+  <text>标签暂时无法读取</text><text>{{loadError}}</text>
+  <button class="primary-button" bindtap="retryEditorLoad">重新读取</button>
+  <button bindtap="returnHome">返回首页</button>
+</view>
+<block wx:else>
 <view class="editor-page">
   <view class="editor-header" style="padding-top: {{safeTop}}px;">
     <view class="header-main" style="padding-right: {{menuSafeRightPx}}px;">
@@ -18,17 +24,21 @@
     </view>
   </view>
 
+  <button wx:if="{{saveState}}" class="draft-save-status" bindtap="persistDocument" aria-live="polite">{{saveState}}</button>
   <view wx:if="{{templateAttentionMessage}}" class="template-attention" role="alert">
     <text>⚠ {{templateAttentionMessage}}</text>
   </view>
 
   <view class="canvas-stage">
     <view class="paper-shell" style="height: {{previewHeightPx}}px;">
-      <canvas id="labelCanvas" type="2d" class="label-canvas"></canvas>
+      <canvas wx:if="{{canvasInstanceId}}" id="labelCanvas" canvas-id="label-{{canvasInstanceId}}" type="2d" class="label-canvas" style="height: {{previewHeightPx}}px;"></canvas>
       <canvas
+        wx:if="{{canvasInstanceId}}"
         id="selectionCanvas"
+        canvas-id="selection-{{canvasInstanceId}}"
         type="2d"
         class="selection-canvas"
+        style="height: {{previewHeightPx}}px;"
         bindtouchstart="onCanvasTouchStart"
         bindlongpress="onCanvasLongPress"
         catchtouchmove="onCanvasTouchMove"
@@ -287,7 +297,7 @@
     <view wx:if="{{printing || printProgress > 0}}" class="progress-card"><view class="progress-track"><view class="progress-fill" style="width: {{printProgress}}%;"></view></view><text>{{printMessage}}</text></view>
     <view class="sheet-actions print-actions">
       <button wx:if="{{printing}}" class="danger-outline" bindtap="cancelPrint">取消打印</button>
-      <button wx:else class="primary-button" bindtap="startPrint" disabled="{{printBlock}}">{{connectedDevice ? '开始打印' : '连接并打印'}}</button>
+      <button wx:else class="primary-button" bindtap="startPrint" disabled="{{connectedDevice && printBlock}}">{{connectedDevice ? '开始打印' : '选择打印机'}}</button>
     </view>
   </view>
 </block>
@@ -327,7 +337,7 @@
 <block wx:if="{{showMaterialSheet}}">
   <view class="modal-backdrop" bindtap="closeMaterialSheet"></view>
   <view class="bottom-sheet material-sheet">
-    <view class="sheet-handle"></view><view class="sheet-heading"><view><text class="sheet-title">素材库</text><text class="sheet-subtitle">144 个内置素材优先 · 在线按需加载</text></view><button class="sheet-close" bindtap="closeMaterialSheet">×</button></view>
+    <view class="sheet-handle"></view><view class="sheet-heading"><view><text class="sheet-title">素材库</text><text class="sheet-subtitle">商跃内置矢量素材</text></view><button class="sheet-close" bindtap="closeMaterialSheet">×</button></view>
     <scroll-view class="asset-grid" scroll-y>
       <button wx:for="{{materialOptions}}" wx:key="id" data-id="{{item.id}}" bindtap="pickMaterial" loading="{{materialAssetLoadingId == item.id}}" disabled="{{materialAssetLoadingId != ''}}"><image wx:if="{{item.previewSrc}}" src="{{item.previewSrc}}" mode="aspectFit" lazy-load="true"></image><text wx:else class="asset-symbol">☺</text><text>{{item.label}}</text><text wx:if="{{item.vip}}" class="asset-vip">VIP</text></button>
       <view class="online-asset-status {{remoteMaterialError ? 'error' : ''}}"><text>{{remoteMaterialStatusText}}</text><button wx:if="{{remoteMaterialError && !remoteMaterialLoading}}" bindtap="loadMoreRemoteMaterials">重试</button><button wx:elif="{{remoteMaterialHasMore}}" bindtap="loadMoreRemoteMaterials" loading="{{remoteMaterialLoading}}" disabled="{{remoteMaterialLoading}}">{{remoteMaterialLoading ? '加载中' : '继续加载 100 个'}}</button></view>
@@ -338,10 +348,11 @@
 <block wx:if="{{showBorderSheet}}">
   <view class="modal-backdrop" bindtap="closeBorderSheet"></view>
   <view class="bottom-sheet border-sheet">
-    <view class="sheet-handle"></view><view class="sheet-heading"><view><text class="sheet-title">装饰边框</text><text class="sheet-subtitle">20 个程序化边框优先 · 在线边框作为底层图片</text></view><button class="sheet-close" bindtap="closeBorderSheet">×</button></view>
+    <view class="sheet-handle"></view><view class="sheet-heading"><view><text class="sheet-title">装饰边框</text><text class="sheet-subtitle">20 个商跃程序化边框</text></view><button class="sheet-close" bindtap="closeBorderSheet">×</button></view>
     <scroll-view class="border-grid" scroll-y>
       <button wx:for="{{borderOptions}}" wx:key="id" class="{{selected.borderStyle == item.id || selected.onlineBorderId == item.id ? 'active' : ''}}" data-id="{{item.id}}" bindtap="pickBorder" loading="{{borderAssetLoadingId == item.id}}" disabled="{{borderAssetLoadingId != ''}}"><image wx:if="{{item.previewSrc}}" class="border-image" src="{{item.previewSrc}}" mode="aspectFit" lazy-load="true"></image><view wx:else class="border-sample {{item.id}}"></view><text>{{item.label}}</text><text wx:if="{{item.vip}}" class="asset-vip">VIP</text></button>
       <view class="online-asset-status {{remoteBorderError ? 'error' : ''}}"><text>{{remoteBorderStatusText}}</text><button wx:if="{{remoteBorderError && !remoteBorderLoading}}" bindtap="loadMoreRemoteBorders">重试</button><button wx:elif="{{remoteBorderHasMore}}" bindtap="loadMoreRemoteBorders" loading="{{remoteBorderLoading}}" disabled="{{remoteBorderLoading}}">{{remoteBorderLoading ? '加载中' : '继续加载 100 个'}}</button></view>
     </scroll-view>
   </view>
+</block>
 </block>
