@@ -1307,3 +1307,61 @@ button.history-action {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+/* Live label previews (core/mini-preview.js): drawn large, scaled down. */
+.mini-frame {
+  position: relative;
+  flex: none;
+  overflow: hidden;
+  border-radius: 6rpx;
+  background: #fff;
+  box-shadow: 0 4rpx 12rpx rgba(31, 35, 41, 0.1);
+}
+
+.mini-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  background: #fff;
+}
+
+.mini-node {
+  position: absolute;
+  box-sizing: border-box;
+  overflow: hidden;
+  color: #000;
+}
+
+.mini-node.text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: sans-serif;
+}
+
+.mini-node.reverse,
+.mini-node.fill,
+.mini-node.line {
+  background: #000;
+}
+
+.mini-node.reverse {
+  color: #fff;
+}
+
+.mini-node.stroke {
+  border: 1px solid #000;
+}
+
+.mini-node.line.dashed {
+  background: repeating-linear-gradient(90deg, #000 0, #000 6px, transparent 6px, transparent 10px);
+}
+
+.mini-node.code {
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
+}

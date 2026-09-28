@@ -40,6 +40,7 @@ outputs/
 _niim_ux_baseline/
 NIIMBOT-print-template-align/
 NIIMBOT-print-template-align.zip
+label-printer-miniapp/scripts/.curated-work/
 label-printer-miniapp/scripts/.library-thumb-work/
 label-printer-miniapp/scripts/.thumb-work/
 _b64_builder.txt

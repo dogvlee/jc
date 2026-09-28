@@ -1,6 +1,5 @@
 const {
   APPROVED_ORIGINAL_TEMPLATES,
-  BATCH_TEMPLATES,
   categories,
   industries,
   templates
@@ -8,19 +7,23 @@ const {
 const { applyRowToDocument } = require('../../app/data-bind');
 const { buildTemplateDocument } = require('../../app/template-layouts');
 const {
-  buildLibraryDocument,
+  buildCuratedBatchDocument,
+  buildCuratedDocument,
   catalogMeta,
-  getLibraryEntry,
-  librarySceneChips,
-  librarySizeChips,
-  libraryStats,
-  queryLibraryMeta
-} = require('../../app/shangyue-library/pack');
-const LIBRARY_SCENES = librarySceneChips();
-const LIBRARY_SIZES = librarySizeChips();
-const LIBRARY_TOTAL = libraryStats().total;
+  curatedBatchTemplates,
+  curatedCategoryChips,
+  curatedSizeChips,
+  curatedStats,
+  getCuratedEntry,
+  queryCuratedMeta
+} = require('../../app/curated/index');
+const LIBRARY_SCENES = curatedCategoryChips();
+const LIBRARY_SIZES = curatedSizeChips();
+const LIBRARY_TOTAL = curatedStats().total;
+const BATCH_TEMPLATES = curatedBatchTemplates();
 const { STOCK_PRESETS } = require('../../app/stock-presets');
 const { createDocument, elementTypeLabel } = require('../../core/document');
+const { buildMiniPreview } = require('../../core/mini-preview');
 const { importNiimTemplate } = require('../../core/niim-template-import');
 const { getProfile } = require('../../core/profiles');
 const { buildScanDocument } = require('../../core/scan-label');
@@ -37,6 +40,37 @@ const MAX_CSV_IMPORT_BYTES = 2 * 1024 * 1024;
 const MAX_BACKUP_IMPORT_BYTES = 5 * 1024 * 1024;
 const MAX_TEMPLATE_IMPORT_BYTES = 2 * 1024 * 1024;
 const HOME_RECOMMENDED_TEMPLATES = APPROVED_ORIGINAL_TEMPLATES.slice(0, 6);
+// Live previews are built for the first projects only; the rest keep the light placeholder.
+const PROJECT_PREVIEW_LIMIT = 24;
+let previewSizes = null;
+
+/** Preview boxes in px for cards, project thumbnails and the preview sheet (rpx-based). */
+function previewBoxes() {
+  if (previewSizes) return previewSizes;
+  let width = 375;
+  try {
+    const info = typeof wx !== 'undefined' && (wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync());
+    width = Number(info && info.windowWidth) || 375;
+  } catch (error) {
+    width = 375;
+  }
+  const rpx = width / 750;
+  previewSizes = {
+    card: { w: 280 * rpx, h: 168 * rpx },
+    sheet: { w: 600 * rpx, h: 316 * rpx }
+  };
+  return previewSizes;
+}
+
+function withPreview(view, documentValue, box) {
+  if (!documentValue || view.thumbSrc) return view;
+  try {
+    view.preview = buildMiniPreview(documentValue, box.w, box.h);
+  } catch (error) {
+    view.preview = null;
+  }
+  return view;
+}
 const ROUTE_TITLES = {
   home: '商跃标签',
   templates: '商跃模板',
@@ -66,7 +100,7 @@ function templateView(item) {
   };
 }
 
-function projectView(item) {
+function projectView(item, index) {
   const document = item.document || {};
   const elements = Array.isArray(document.elements) ? document.elements : [];
   let kind = 'accent';
@@ -77,7 +111,10 @@ function projectView(item) {
     name: item.name || document.name || '未命名标签',
     sizeText: `${document.widthMm || 40}×${document.heightMm || 30} mm`,
     updatedText: formatRelativeTime(item.updatedAt),
-    kind
+    kind,
+    preview: index < PROJECT_PREVIEW_LIMIT && elements.length
+      ? withPreview({}, document, previewBoxes().card).preview || null
+      : null
   };
 }
 
@@ -143,7 +180,7 @@ Page({
     showSettingsSheet: false,
     showHelpSheet: false,
     projectQuery: '',
-    batchTemplateId: 'product-simple',
+    batchTemplateId: BATCH_TEMPLATES[0].id,
     labelTypeNames: ['间隙纸', '黑标纸', '连续纸', '定孔纸'],
     stockPresets: STOCK_PRESETS,
     batchTemplateNames: BATCH_TEMPLATES.map((item) => item.name),
@@ -260,7 +297,7 @@ Page({
       settings,
       densityMin: profile.densityMin,
       densityMax: profile.densityMax,
-      recentProjects: projects.slice(0, 4).map(projectView),
+      recentProjects: projects.slice(0, 4).map((item, index) => projectView(item, index)),
       allProjects: this.filteredProjectViews(projects),
       userTemplateCount: userTemplates.length,
       dataRows,
@@ -279,7 +316,8 @@ Page({
 
   filteredProjectViews(projects) {
     const query = String(this.data.projectQuery || '').trim().toLowerCase();
-    return (projects || []).filter((item) => !query || String(item.name || '').toLowerCase().includes(query)).map(projectView);
+    return (projects || []).filter((item) => !query || String(item.name || '').toLowerCase().includes(query))
+      .map((item, index) => projectView(item, index));
   },
 
   refreshTemplates() {
@@ -288,17 +326,18 @@ Page({
     const libraryScene = this.data.libraryScene;
     const librarySize = this.data.librarySize;
     const query = String(this.data.templateQuery || '').trim().toLowerCase();
-    if (industry === '行业库') {
-      const page = queryLibraryMeta({
-        sceneLabel: libraryScene,
+    if (industry === '场景模板') {
+      const page = queryCuratedMeta({
+        category: libraryScene,
         size: librarySize,
         query,
         limit: this.data.templateVisibleCount
       });
       this.filteredTemplates = page.items;
+      const box = previewBoxes().card;
       this.setData({
         templateTotal: page.total,
-        visibleTemplates: page.items.map(templateView)
+        visibleTemplates: page.items.map((item) => withPreview(templateView(item), buildCuratedDocument(item.id), box))
       });
       return;
     }
@@ -311,7 +350,8 @@ Page({
       size: [item.document.widthMm, item.document.heightMm],
       kind: projectView(item).kind,
       blurb: '保存在本机的自定义模板',
-      source: 'user'
+      source: 'user',
+      document: item.document
     }));
     const source = industry === '我的'
         ? userItems
@@ -320,14 +360,15 @@ Page({
       if (category !== '全部' && item.category !== category) {
         return false;
       }
-      if (industry !== '全部' && industry !== '我的' && industry !== '行业库' && item.industry !== industry) return false;
+      if (industry !== '全部' && industry !== '我的' && industry !== '场景模板' && item.industry !== industry) return false;
       if (!query) return true;
       return [item.name, item.category, item.industry, item.blurb, item.sceneLabel].some((value) => String(value || '').toLowerCase().includes(query));
     });
     this.filteredTemplates = filtered;
     this.setData({
       templateTotal: filtered.length,
-      visibleTemplates: filtered.slice(0, this.data.templateVisibleCount).map(templateView)
+      visibleTemplates: filtered.slice(0, this.data.templateVisibleCount)
+        .map((item) => withPreview(templateView(item), item.document, previewBoxes().card))
     });
   },
 
@@ -407,11 +448,11 @@ Page({
   },
 
   resolveTemplate(id) {
-    if (String(id || '').startsWith('sy-lib-')) {
-      const entry = getLibraryEntry(id);
+    if (String(id || '').startsWith('sy-tpl-')) {
+      const entry = getCuratedEntry(id);
       if (!entry) return null;
       const meta = catalogMeta(entry);
-      return { meta: templateView(meta), document: buildLibraryDocument(id) };
+      return { meta: templateView(meta), document: buildCuratedDocument(id) };
     }
     const user = (this.userTemplates || []).find((item) => item.id === id);
     if (user) return { meta: templateView({
@@ -438,6 +479,7 @@ Page({
     resolved.meta.elementSummary = Object.keys(counts).map((key) => `${elementTypeLabel(key)}×${counts[key]}`).join(' · ');
     resolved.meta.elementCount = resolved.document.elements.length;
     this.previewDocument = resolved.document;
+    withPreview(resolved.meta, resolved.document, previewBoxes().sheet);
     this.setData({ showTemplatePreview: true, previewTemplate: resolved.meta });
   },
 
@@ -564,6 +606,9 @@ Page({
     this.editorOpening = true;
     wx.navigateTo({
       url: '/pages/editor/index',
+      success: () => {
+        if (this.data.showTemplatePreview) this.closeTemplatePreview();
+      },
       fail: () => {
         this.editorOpening = false;
         wx.showToast({ title: '编辑器未打开，请重试', icon: 'none' });
@@ -700,7 +745,7 @@ Page({
   onBatchTemplateChange(event) {
     const index = Number(event.detail.value) || 0;
     const item = BATCH_TEMPLATES[index];
-    this.setData({ batchTemplateIndex: index, batchTemplateId: item ? item.id : 'product-simple' });
+    this.setData({ batchTemplateIndex: index, batchTemplateId: item ? item.id : BATCH_TEMPLATES[0].id });
   },
 
   runBatch() {
@@ -708,7 +753,7 @@ Page({
     if (!meta) {
       wx.showModal({
         title: '该模板不支持批量生成',
-        content: '请重新选择一个内置基础模板。',
+        content: '请重新选择一个批量模板。',
         showCancel: false
       });
       return;
@@ -722,7 +767,7 @@ Page({
     const documents = [];
     for (let index = 0; index < rows.length; index += 1) {
       try {
-        const document = applyRowToDocument(buildTemplateDocument(meta), rows[index]);
+        const document = applyRowToDocument(buildCuratedBatchDocument(meta.id), rows[index]);
         validateDocument(document, profile.dpi);
         documents.push(document);
       } catch (error) {

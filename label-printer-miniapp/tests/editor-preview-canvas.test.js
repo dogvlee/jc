@@ -240,3 +240,27 @@ test('paper shell has no one-axis height clamp and tall canvases remain scrollab
   assert.match(paperRule[1], /margin-top:\s*auto/);
   assert.match(paperRule[1], /margin-bottom:\s*auto/);
 });
+
+test('opening a template selects its first editable element, not a locked backdrop', (t) => {
+  t.after(() => { delete global.wx; delete global.getApp; });
+  const values = new Map();
+  global.wx = {
+    getWindowInfo: () => ({ windowWidth: 390, pixelRatio: 3 }),
+    getStorageSync: (key) => values.get(key) || '',
+    setStorageSync: (key, value) => values.set(key, structuredClone(value)),
+    removeStorageSync: (key) => values.delete(key)
+  };
+  const documentValue = createDocument(40, 30);
+  const backdrop = createElement('rect', documentValue);
+  Object.assign(backdrop, { id: 'backdrop', filled: true, locked: true });
+  const title = createElement('text', documentValue);
+  Object.assign(title, { id: 'title', text: '云南青提' });
+  documentValue.elements = [backdrop, title];
+  const repository = new Repository(wx);
+  repository.saveEditorDraft({ document: documentValue, projectId: '', dirtySinceSave: true });
+  global.getApp = () => ({ globalData: { repository, bleSession: { onConnectionStateChange: () => () => {} }, printerClient: {} } });
+  const editor = editorFor(null, { data: { ...pageDefinition.data } });
+  editor.onLoad({});
+  assert.equal(editor.selectedId, 'title');
+  assert.deepEqual(editor.selectedIds, ['title']);
+});

@@ -204,7 +204,7 @@ test('redesigned pilot templates clear structural and copy-distance gates', () =
 test('wifi original encodes a fictional WPA guest network', () => {
   const document = buildTemplateDocument(getTemplate('shangyue-wifi-card'));
   const qr = document.elements.find((element) => element.type === 'qrcode');
-  assert.equal(qr.value, 'WIFI:T:WPA;S:SY-Guest;P:welcome26;;');
+  assert.equal(qr.value, 'WIFI:T:WPA;S:SY-Guest;P:sy202609;;');
   assert.ok(document.elements.some((element) => element.text === '打印后请改密码'));
 });
 

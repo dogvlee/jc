@@ -5,11 +5,8 @@ const {
   auditLibrary,
   auditLibraryDocument,
   layoutFingerprint
-} = require('../miniprogram/app/shangyue-library/quality');
-const {
-  LIBRARY_INDEX,
-  buildLibraryDocument
-} = require('../miniprogram/app/shangyue-library/pack');
+} = require('../miniprogram/app/curated/quality');
+const { CURATED_INDEX, buildCuratedDocument } = require('../miniprogram/app/curated/index');
 
 function text(id, x, y, width, height, fontSize, value) {
   return { id, type: 'text', x, y, width, height, fontSize, text: value || id };
@@ -82,23 +79,20 @@ test('batch gate separates exact duplicates, variant collisions and global struc
   assert.notEqual(layoutFingerprint(make(entries[0])), layoutFingerprint(moved));
 });
 
-test('all 8,100 Shangyue presets pass hard quality gates and retain variant diversity', () => {
-  const audit = auditLibrary(LIBRARY_INDEX, (entry) => buildLibraryDocument(entry.id));
-  const failing = audit.reports.filter((report) => !report.ok);
-  assert.deepEqual(
-    failing.slice(0, 5).map((report) => ({ name: report.name, issues: report.issues })),
-    [],
-    `${failing.length} generated documents have hard quality defects`
-  );
-  assert.equal(audit.totals.documents, 8100);
-  assert.equal(audit.totals.documentErrors, 0);
-  assert.equal(audit.totals.batchErrors, 0);
-  assert.equal(audit.totals.documentWarnings, 0);
-  assert.equal(audit.diversity.exactDuplicateGroups, 0);
-  assert.equal(audit.diversity.variantCollisionGroups, 0);
-  assert.ok(audit.diversity.uniqueStructures >= 680);
-  assert.ok(audit.diversity.maxStructureReuse <= 110);
-  assert.ok(audit.batchIssues.some((item) => item.rule === 'GLOBAL_STRUCTURE_REUSE_HIGH'));
+test('text-fit gate rejects text the renderer would have to shrink', () => {
+  const report = auditLibraryDocument({
+    id: 'fit',
+    widthMm: 40,
+    heightMm: 30,
+    elements: [
+      text('fits', 2, 2, 20, 4, 3, '云南青提'),
+      text('too-long', 2, 8, 12, 3.2, 3, '内蒙古呼和浩特市特产'),
+      { id: 'date-long', type: 'date', x: 2, y: 14, width: 10, height: 3, fontSize: 2.4, format: 'YYYY-MM-DD', label: '保质期至', autoUpdate: true },
+      text('two-lines', 2, 20, 20, 7.5, 3, '第一行\n第二行')
+    ]
+  });
+  const flagged = report.issues.filter((item) => item.rule === 'TEXT_OVERFLOW').map((item) => item.elementIds[0]).sort();
+  assert.deepEqual(flagged, ['date-long', 'too-long']);
 });
 
 test('edge gate rejects frames and solid ink that print as black edges after paper drift', () => {
@@ -126,16 +120,27 @@ test('edge gate rejects frames and solid ink that print as black edges after pap
   assert.equal(report.ok, false);
 });
 
-test('every shelf, batch and library template keeps ink off the label edge', () => {
+test('every shelf, batch and curated template keeps ink off the label edge', () => {
   const { BATCH_TEMPLATES, PUBLIC_TEMPLATES } = require('../miniprogram/app/catalog');
   const { buildTemplateDocument } = require('../miniprogram/app/template-layouts');
   const documents = PUBLIC_TEMPLATES.concat(BATCH_TEMPLATES)
     .map((template) => buildTemplateDocument(template))
-    .concat(LIBRARY_INDEX.map((entry) => buildLibraryDocument(entry.id)));
+    .concat(CURATED_INDEX.map((entry) => buildCuratedDocument(entry.id)));
   const failures = [];
   for (const document of documents) {
     const edge = auditLibraryDocument(document).issues.filter((item) => item.rule.startsWith('EDGE_'));
     if (edge.length) failures.push(`${document.name}（${document.widthMm}×${document.heightMm}）：${edge[0].message}`);
   }
   assert.ok(!failures.length, `${failures.length} 个模板有黑边风险，例如：\n${failures.slice(0, 6).join('\n')}`);
+});
+
+test('every shelf template fits its text at the declared size', () => {
+  const { PUBLIC_TEMPLATES } = require('../miniprogram/app/catalog');
+  const { buildTemplateDocument } = require('../miniprogram/app/template-layouts');
+  const failures = [];
+  for (const template of PUBLIC_TEMPLATES) {
+    const errors = auditLibraryDocument(buildTemplateDocument(template)).issues.filter((item) => item.severity === 'error');
+    if (errors.length) failures.push(`${template.id}：${errors[0].message}`);
+  }
+  assert.deepEqual(failures, []);
 });

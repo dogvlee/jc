@@ -6,6 +6,7 @@
   "scripts": {
     "build:vendor": "esbuild qrcode-generator --bundle --platform=browser --format=cjs --minify --legal-comments=inline --outfile=miniprogram/vendor/qrcode.js",
     "build:icons": "node scripts/build-icons.mjs",
+    "curated:sheets": "node scripts/render-curated-sheets.mjs",
     "test": "node --test tests/*.test.js",
     "test:coverage": "node --test --experimental-test-coverage tests/*.test.js",
     "check": "node scripts/check-project.mjs",

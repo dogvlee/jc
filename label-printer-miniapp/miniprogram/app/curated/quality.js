@@ -6,6 +6,12 @@
  * imported candidate before that candidate is admitted to the public pack.
  */
 const { codePrintMetrics } = require('../../core/code-quality');
+const { formatDateValue, serialValue } = require('../../core/renderer');
+const { normalizeTextMode } = require('../../core/text-direction');
+const { lineWidthMm } = require('./text-metrics');
+
+// Any fixed moment works: printed dates keep the same length every day.
+const SAMPLE_TIME = new Date(2026, 8, 28, 14, 30);
 
 const CONTENT_TYPES = new Set(['text', 'date', 'serial', 'table', 'barcode', 'qrcode', 'image', 'material']);
 const TEXT_TYPES = new Set(['text', 'date', 'serial', 'table']);
@@ -178,6 +184,44 @@ function checkEdge(document, element, id, type, box, rules, issues) {
   }
 }
 
+function displayText(element) {
+  if (element.type === 'date') return formatDateValue(element, SAMPLE_TIME);
+  if (element.type === 'serial') return serialValue(element);
+  return String(element.text == null ? '' : element.text);
+}
+
+function lineSpacing(element) {
+  const value = Number(element.lineSpacing);
+  if (!Number.isFinite(value) || value === 0) return 1.15;
+  return value > 0 && value < 0.4 ? 1.15 + value : value;
+}
+
+/**
+ * The renderer shrinks text that does not fit its box. Templates must fit at
+ * the declared size, otherwise the printed text ends up smaller than intended.
+ * Widths come from the same conservative estimate the curated layouts use.
+ */
+function checkTextFit(element, id, type, box, issues) {
+  if (!['text', 'date', 'serial'].includes(type) || normalizeTextMode(element) !== 'horizontal') return;
+  const size = finiteNumber(element.fontSize);
+  const value = displayText(element);
+  if (size == null || size <= 0 || !value.trim()) return;
+  let lines = 0;
+  value.split('\n').forEach((paragraph) => {
+    const width = lineWidthMm(paragraph, size, element.bold);
+    lines += Math.max(1, Math.ceil(width / box.width - 1e-6));
+  });
+  const blockHeight = size + (lines - 1) * size * lineSpacing(element);
+  if (blockHeight > box.height + 0.05) {
+    issues.push(issue(
+      'TEXT_OVERFLOW',
+      'error',
+      `${id}「${value.slice(0, 16)}」按 ${size} mm 字号需要约 ${rounded(blockHeight, 1)} mm 高，框只有 ${rounded(box.height, 1)} mm，打印时会被缩小`,
+      { elementIds: [id], elementType: type, actual: rounded(blockHeight, 2), maximum: rounded(box.height, 2) }
+    ));
+  }
+}
+
 function checkElement(document, element, elementIndex, rules, issues, contentBoxes) {
   const id = String(element && element.id || `element-${elementIndex + 1}`);
   const type = String(element && element.type || 'unknown');
@@ -213,6 +257,7 @@ function checkElement(document, element, elementIndex, rules, issues, contentBox
     ));
   }
   checkEdge(document, element, id, type, box, rules, issues);
+  checkTextFit(element, id, type, box, issues);
 
   // Lines and narrow decorative bands intentionally have one small axis. They
   // still have to be positive and in bounds, but are excluded from the generic

@@ -15,7 +15,7 @@ node scripts/check-shangyue-release.mjs <待上传的小程序根目录>
 - 固定第三方内容目录客户端与域名；
 - `online-niim`、`niim-import`、`remote-niim` 来源；
 - 默认 22 套中未显式设置 `releaseApproved: true`，或来源不是 `shangyue-original` / `shangyue-authorized-redesign` 的模板；
-- 行业库中来源不是 `shangyue-library`、缺少 `sy-semantic-grid-v2` 生成证据，或未通过 8,100 条全库质量门的组合预设；
+- 场景模板不是恰好 300 套、来源不是 `shangyue-original` / `shangyue-curated`、含图片或素材，或任何一套未通过质量门（越界、字号、重叠、码区、黑边、文字放得下）或与另一套完全重复；
 - 商跃矢量素材不是恰好 76 个独立路径条目，或缺少 `shangyue-vector-v2` / `vector` 来源标记；
 - 缺少原创元数据，或引用非商跃资源目录的公开模板。
 

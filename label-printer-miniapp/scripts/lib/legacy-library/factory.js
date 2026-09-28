@@ -3,7 +3,7 @@
  * Builds original vector labels from a scene + paper size. Never reads NIIM
  * elements, images, fonts or brand copy.
  */
-const { createDocument, createElement } = require('../../core/document');
+const { createDocument, createElement } = require('../../../miniprogram/core/document');
 const {
   ITEM_POOLS,
   OWNED_PAPERS,

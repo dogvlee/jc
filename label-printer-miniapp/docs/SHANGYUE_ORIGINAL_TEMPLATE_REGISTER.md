@@ -149,13 +149,13 @@
 | 设计历史 | 内部记录：最初参考精诚同类用途，版式、文案与码值独立重做 |
 | 对外标记 | `© 2026 商跃` |
 | 小程序源码 | `miniprogram/app/catalog.js`、`miniprogram/app/template-layouts.js` |
-| 实际渲染缩略图 | `miniprogram/assets/shangyue-thumbs/shangyue-wifi-card-v1.png`（640×480，SHA-256 `e3901bf2944ed4091fccdc4bc152503e2e905f6874f0aef529a14c587e173d5a`） |
+| 实际渲染缩略图 | `miniprogram/assets/shangyue-thumbs/shangyue-wifi-card-v1.png`（640×480，SHA-256 `e3bf6ce9b0887ee95836c824fd69c9c541709c6e1c9dc651d0180f21c717e22b`） |
 | 网页/App 镜像 | `../niim-label-app/src/app/catalog.js`、`../niim-label-app/src/app/template-layouts.js` |
 | 设计方式 | 独立重设计：左侧标准 `WIFI:` 二维码、右侧访客凭据和反白密码框 |
 | 第三方图片 | 无 |
 | 第三方字体 | 无；仅使用运行环境通用 `sans-serif` |
 | 目标纸张 | 40×30mm；适配当前 B 系 203dpi profile |
-| 二维码正文 | `WIFI:T:WPA;S:SY-Guest;P:welcome26;;` |
+| 二维码正文 | `WIFI:T:WPA;S:SY-Guest;P:sy202609;;` |
 
 ### 重设计说明
 
@@ -167,21 +167,21 @@ SSID / 密码均为虚构样例，版面上保留“打印后请改密码”。�
 
 | 登记号 | 模板 ID | 名称 | 权属分类 | 纸张 | 对照旧稿 | 缩略图 SHA-256 |
 |---|---|---|---|---|---|---|
-| SY-AR-002 | `shangyue-promo-tag` | 商跃促销价签 | 商跃原创（2026-09-28 由授权改编转为自有） | 40×30 | `promo-price` | `81a0e68717b971977138f8b4fafe13d00e9fef9de2140ab3790bab8498536ec2` |
+| SY-AR-002 | `shangyue-promo-tag` | 商跃促销价签 | 商跃原创（2026-09-28 由授权改编转为自有） | 40×30 | `promo-price` | `ada1042a380ae7e2e1da68c9cad6d0eb2ff64370406e492b19c40f8ebd7f9b93` |
 | SY-OT-008 | `shangyue-jewelry-tag` | 商跃珠宝吊牌 | 商跃原创 | 40×30 | `jewelry-price` | `8ea344ab92206911ef993fbdeb13ff74242e6c546f99763e77ab88fcf9294a28` |
 | SY-OT-009 | `shangyue-garment-tag` | 商跃服装吊牌 | 商跃原创 | 40×30 | `clothing-tag` | `a84c689e92348459696d301f8c6ff9505b3242c53dc8cd55ee631e70e7e01531` |
 | SY-OT-010 | `shangyue-ship-label` | 商跃物流简签 | 商跃原创 | 40×30 | `shipping-bin` | `3b386c0cff406b46c1ee2f838ccf77738522974a51427212afde91153ef3658a` |
 | SY-OT-011 | `shangyue-cable-tag` | 商跃线缆标识 | 商跃原创 | 40×12 | `cable-name` | `263286e73765e6026be6415d9504a20b6cae35d82bedf7384315a4f30fde4997` |
 | SY-OT-012 | `shangyue-asset-tag` | 商跃固定资产 | 商跃原创 | 40×30 | `asset-card` | `07662ebe90de133091d032e11b6cac61aee43526555be81ca18ed13efb934f3b` |
-| SY-OT-013 | `shangyue-biz-card` | 商跃商务名片 | 商跃原创 | 40×30 | `business-card` | `d7f960e990caba274d31d3f493c976b351b6ed15cc44ba8c2f9b8b3ef4926a23` |
+| SY-OT-013 | `shangyue-biz-card` | 商跃商务名片 | 商跃原创 | 40×30 | `business-card` | `6a46c9e6b913ee24140b3270084d46e4c5b17c7139de9eb3bad4e15ee15645ad` |
 | SY-AR-003 | `shangyue-kitchen-date` | 商跃餐饮效期 | 商跃原创（2026-09-28 由授权改编转为自有） | 40×30 | `catering-date` | `6feffef5397678212b073f9d5a8241b7236056b12b22aec24968f0d66897d8a9` |
 | SY-OT-015 | `shangyue-med-label` | 商跃药品签 | 商跃原创 | 40×20 | `medicine-box` | `7eb88b4098b854e265d808b231dbeba7ddcf353aae813faa9b4182f96326c75b` |
 | SY-OT-016 | `shangyue-seat-card` | 商跃席卡 | 商跃原创 | 40×30 | `wedding-invite` | `952254754c24f811d798f36b49ac3aba5e6541be7ccc88760697712a8674f644` |
 | SY-OT-017 | `shangyue-bakery-tag` | 商跃烘焙价签 | 商跃原创 | 40×30 | `bakery-tag` | `e1d7be276379c0586bb74fd49de006c3aaeba331f372b36e7a2bb6baf7afa634` |
-| SY-AR-004 | `shangyue-plant-tag` | 商跃植物签 | 商跃原创（2026-09-28 由授权改编转为自有） | 40×30 | `plant-care` | `9db140567f60378967410baf423456535699976af8e2b5b639de607818dd4fa6` |
+| SY-AR-004 | `shangyue-plant-tag` | 商跃植物签 | 商跃原创（2026-09-28 由授权改编转为自有） | 40×30 | `plant-care` | `866b9af1a711c9608e5a8cba6606075afd98f65b2bb0eed51de9133d0cbbded1` |
 | SY-OT-019 | `shangyue-desk-plate` | 商跃工位牌 | 商跃原创 | 40×30 | `office-desk` | `6e5a8b41792b82713bbcb9cd050cdc8af402dde40389afdca0e5c0bb644fbcca` |
 | SY-OT-020 | `shangyue-lab-tag` | 商跃样品签 | 商跃原创 | 40×20 | `lab-sample` | `76e2fd3e6feb365cd07e6468179bbffb84d26e28945fa35693aed3af6660063d` |
-| SY-AR-005 | `shangyue-care-tag` | 商跃洗涤说明 | 商跃原创（2026-09-28 由授权改编转为自有） | 40×30 | `garment-care` | `31d269f9cf5b0db080195e8634b054d4a570666f8171d210da2f7cd444a933b0` |
+| SY-AR-005 | `shangyue-care-tag` | 商跃洗涤说明 | 商跃原创（2026-09-28 由授权改编转为自有） | 40×30 | `garment-care` | `489befa736c057c3097e64e37eb0c1f79fe6c953ad059314c1066ea67348fccf` |
 | SY-OT-022 | `shangyue-serial-cable` | 商跃线号序列 | 商跃原创 | 30×12 | `serial-cable` | `cd9d5541bd1667b11ecae6faafdb1cfb86c33cef2a744622d7a0c859f710ad5e` |
 
 所有 16 套都不含 `image` / `material`、不含精臣/NIIMBOT/95598 文案，文字 ≥ 2.2mm，缩略图由真实渲染导出。其中 12 套商跃原创按洁净室证据链登记；4 套授权改编仅记录资产、字体和完整文案未直接复用，不因版式差异或素材隔离而改标为“商跃原创”。
@@ -192,19 +192,17 @@ SSID / 密码均为虚构样例，版面上保留“打印后请改密码”。�
 
 `shangyue-wifi-card`、`shangyue-promo-tag`、`shangyue-kitchen-date`、`shangyue-plant-tag`、`shangyue-care-tag` 升级为 2.0.0：分别改为左码右凭据、上置条码+右价格舱、双时间窗格、三栏照护仪表和面料侧栏+四格参数。这 5 套统一归类为“精诚授权改编 · 商跃重设计”：用户已确认获得精诚同意，书面凭证待归档，任何对照图、文档、货架或发布说明都不得将它们标为“商跃原创”。布局距离不小于 0.25、可见文案不复用完整行，仅作为重设计差异性证据，不改变授权改编属性。
 
-## 商跃行业库（独立行业货架，不并入默认 22 套）
+## 商跃场景模板（精选 300 套，独立货架，不并入默认 22 套）
 
-商跃自有场景 × 常用纸张 × 自有占位文案生成的程序化库，不再读取第三方目录名录。
+2026-09-28 起替换原 8,100 条程序化“行业库”。原库把内部编号（如 `SY/WS-B11`）当标题印在标签上，大量条目只有一两行字，无法保证逐套可用，已下架；生成器移到 `scripts/lib/legacy-library/`，只供内部转换流水线使用，不再随包分发。
 
-- 应用模块：`miniprogram/app/shangyue-library/`
-- 对照目录：`output/shangyue-library/`（`index.json`、`stats.json`、`samples/`）
-- 命名：`sy-lib-#####`，显示名 `商跃价签 · 青提 · 40×30甲`
-- 不进入上述公开 22 套货架，也不计入货架 22 套商跃原创统计
-- 不含第三方底图、元素、VIP 资源或品牌品名
-- 规模口径：25 场景 × 18 纸张 × 6 份自有示例文案 × 3 个阅读路径 = 8,100 条组合预设；不得表述为“8,100 张逐张手绘原创作品”
-- 2026-08-18 升级至 `sy-semantic-grid-v2`：`signal / orbit / ledger` 三套商跃母版、独立场景码、稳定内容种子和场景核心字段；AI 参与规则设计与样张审阅，但运行时由确定性代码生成
-- 每个文档保留 `authorshipBasis: deterministic-clean-room-generator`、`sourceTemplateId: null`、`aiAssisted: true`、内容种子和布局种子
-- 自动门禁覆盖 8,100 条的越界、字号、重叠、码区清晰度、空白、完全重复和甲乙丙撞版；评审数字以 `output/shangyue-library/stats.json` 为准
+- 应用模块：`miniprogram/app/curated/`（`layout.js` 版式原语、`recipes/*.js` 48 个场景配方、`index.js` 300 条目录、`quality.js` 质量门、`text-metrics.js` 字宽估算）
+- 命名：`sy-tpl-<配方>-<宽>x<高>-<序号>`，显示名 `商品价签 · 云南青提`；徽章“原创”，`© 2026 商跃`，`source: shangyue-curated`
+- 规模与配比：300 套 = 配方 × 常用纸张 × 虚构示例内容，按本地精诚模板快照的**汇总统计**（各场景与纸张的出现频次）分配套数：价签类约 30%，效期 / 餐饮约 16%，其余为仓储物流、办公人员、工业质检、线缆通信、实验、医护与生活。统计只用于决定“做哪些场景、哪些尺寸”，不读取、不复用任何单个模板的版式、坐标、文案、图片或字体
+- 内容：示例商品、人名、地址、电话、条码均为虚构；EAN-13 校验位由代码计算；日期元素全部打印时自动计算（到期日 = 打印时刻 + 保质时长），取餐号、箱号、资产编号、样品编号为自动递增流水号，资产二维码与样品条码跟随编号
+- 质量门（`tests/curated-library.test.js`、发布门禁逐套执行）：越界、字号 ≥ 2.2 mm、重叠、码区 ≥ 2 打印点/模块、黑边（`EDGE_*`）、**文字按声明字号放得下（`TEXT_OVERFLOW`）**、无完全重复、无内部编号或 `undefined` 文本
+- 人工看图：`npm run curated:sheets` 用无头 Chrome 按每页 24 张渲染到 `output/shangyue-curated/`，并用真实 Canvas 测量标出任何被自动缩小的文字；2026-09-28 版本 300 套全部看过，缩小为 0
+- 预览：模板页“场景模板”分页与预览弹层由 `core/mini-preview.js` 按真实版式实时绘制（条码 / 二维码按真实编码生成），不再显示通用示意图
 
 ### 2026-09-28 去黑边修订
 
@@ -212,7 +210,7 @@ SSID / 密码均为虚构样例，版面上保留“打印后请改密码”。�
 
 - 22 套全部去掉整圈外框和贴边竖条；顶栏、面料侧栏、价格舱改为距纸边至少 1.5 mm 的圆角色块；内容距纸边至少 1 mm（40×30 版式统一留 2 mm）。
 - 商跃行业库 8,100 条同步去掉外框、信号轨、环行卡角标和信息栅角线，内容框按纸张留 1.5–2.5 mm 安全边距；取号场景的甲乙丙改为三种不同骨架，避免撞版。版本升至 2.1.0。
-- 质量门禁新增 `EDGE_FRAME`（整圈外框）、`EDGE_INK`（1.5 mm 内的线条、色块、表格、反白字）、`EDGE_TOO_CLOSE`（1 mm 内的任何元素），由 `tests/shangyue-library-quality.test.js` 对货架、批量模板和行业库全量检查。
+- 质量门禁新增 `EDGE_FRAME`（整圈外框）、`EDGE_INK`（1.5 mm 内的线条、色块、表格、反白字）、`EDGE_TOO_CLOSE`（1 mm 内的任何元素），由 `tests/template-quality.test.js` 对货架、批量模板和场景模板全量检查（原行业库已于同日由 300 套场景模板替换，见上文）。
 - `shangyue-asset-tag` 的盘点二维码、`shangyue-serial-cable` 的条码改为“跟随序号递增”，连续打印时每张的码与编号一致；线号序列改为反白 `LN` + 纯数字编号，条码只编码数字。
 - 资产签、工位牌、名片补页脚细线与说明，平衡下方留白。
 - 缩略图改为透明底 + 白色圆角纸张卡片（描边与投影只存在于预览，不打印），22 张重新渲染，SHA-256 已同步更新到上表与 `catalog.js`。Web 端（niim-label-app）仍使用自己的旧版式与缩略图，本次未改动。
@@ -220,3 +218,7 @@ SSID / 密码均为虚构样例，版面上保留“打印后请改密码”。�
 ### 2026-09-28 权属调整
 
 权利人决定：`shangyue-wifi-card`、`shangyue-promo-tag`、`shangyue-kitchen-date`、`shangyue-plant-tag`、`shangyue-care-tag` 5 套货架模板作为商跃原创发布。代码中 `APPROVED_AUTHORIZED_REDESIGN_TEMPLATE_IDS` 清空，5 套并入 `APPROVED_ORIGINAL_TEMPLATE_IDS`，徽章为“原创”，`copyright` 为 `© 2026 商跃`，编辑器与首页不再显示“授权改编”。设计历史保留在本文件内部记录，不写入用户可见字段。今后经洁净室流程（只提取用途与字段、版式和文案由商跃重做、通过全部门禁并人工看图）产出的模板，同样以商跃原创发布。
+
+### 2026-09-28 文字放得下修订
+
+新增 `TEXT_OVERFLOW` 门禁后，货架 22 套中有 5 套共 10 处文字按声明字号放不下（打印时会被渲染器自动缩小）：连网码（“WPA2 · GUEST”“SY · VISITOR”“PASS welcome26”“商跃连网 · 临时凭据”）、促销价签（到手价 ¥6.90）、商务名片（邮箱）、植物签（“CARE / P-026”）、洗涤说明（“100%”“COTTON”“SY-2601”）。已改为能放下的文案或字号；连网码示例密码改为 8 位 `sy202609`（WPA 密码至少 8 位），二维码正文同步。5 张缩略图重新渲染，SHA-256 已更新。

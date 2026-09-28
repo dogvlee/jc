@@ -3,12 +3,12 @@ const crypto = require('node:crypto');
 const {
   buildDocument,
   ownedEntry
-} = require('../../miniprogram/app/shangyue-library/factory');
+} = require('./legacy-library/factory');
 const {
   classifyScene,
   pickItem,
   sceneById
-} = require('../../miniprogram/app/shangyue-library/classify');
+} = require('./legacy-library/classify');
 
 const ROLE_RULES = [
   [/name|title|product|commodity|goods|品名|名称/i, 'name'],

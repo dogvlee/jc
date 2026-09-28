@@ -402,7 +402,9 @@ Page({
     this.projectId = state.projectId || '';
     this.dirtySinceSave = state.dirtySinceSave;
     this.document = state.document;
-    this.selectedId = this.document.elements.length ? this.document.elements[0].id : '';
+    // Templates often start with a locked backdrop; select what the user edits.
+    const firstEditable = this.document.elements.find((item) => !item.locked) || this.document.elements[0];
+    this.selectedId = firstEditable ? firstEditable.id : '';
     this.selectedIds = this.selectedId ? [this.selectedId] : [];
     this.multiSelect = false;
     this.undoStack = [];

@@ -3,6 +3,13 @@
  * Roles: name, code, price, date → text / barcode / qrcode / date elements.
  */
 
+const { checksum } = require('../core/ean13');
+
+// 13 digits with a valid check digit; anything else prints as Code 128.
+function isEan13(value) {
+  return /^\d{13}$/.test(value) && checksum(value.slice(0, 12)) === Number(value[12]);
+}
+
 function looksLikePrice(text) {
   return /¥|￥|元|price|价/i.test(String(text || ''));
 }
@@ -46,6 +53,32 @@ function applyRowToDocument(documentValue, row, options) {
   const date = String(rowData[config.dateField] != null ? rowData[config.dateField] : '').trim();
 
   if (name) documentValue.name = name;
+
+  // Templates that tag their fields (bindField) are filled exactly; the
+  // heuristics below remain for older templates without tags.
+  const tagged = documentValue.elements.filter((item) => ['name', 'price', 'code', 'date'].includes(item.bindField));
+  if (tagged.length) {
+    const values = { name, price, code, date };
+    tagged.forEach((element) => {
+      const value = values[element.bindField];
+      if (!value) return;
+      if (element.type === 'barcode') {
+        element.value = value;
+        element.format = isEan13(value) ? 'ean13' : 'code128';
+        delete element.unsupportedCodeType;
+        delete element.requiresFormatConfirmation;
+      } else if (element.type === 'qrcode') {
+        element.value = value;
+      } else if (element.type === 'date') {
+        element.autoUpdate = false;
+        element.fixedValue = value;
+      } else {
+        element.text = element.bindField === 'price' && !/¥|￥/.test(value) ? `¥${value}` : value;
+      }
+      confirmBoundValue(element);
+    });
+    return documentValue;
+  }
 
   const texts = documentValue.elements.filter((item) => item.type === 'text');
   const barcodes = documentValue.elements.filter((item) => item.type === 'barcode');

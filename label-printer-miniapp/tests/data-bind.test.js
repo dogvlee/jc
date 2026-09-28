@@ -57,3 +57,48 @@ test("the explicit batch allowlist contains the 32 base layouts but not the wish
 test("stockLabel formats installed stock string", () => {
   assert.match(stockLabel(50, 30, 203), /T50×30/);
 });
+
+test("explicit bind fields fill only the tagged elements", () => {
+  const document = {
+    name: "模板",
+    widthMm: 40,
+    heightMm: 30,
+    templateMeta: { batchCompatible: true },
+    elements: [
+      { id: "header", type: "text", text: "商品标价签" },
+      { id: "name", type: "text", text: "云南青提", bindField: "name" },
+      { id: "price", type: "text", text: "¥16.80", bindField: "price" },
+      { id: "code", type: "barcode", value: "6901234567892", format: "ean13", bindField: "code" },
+      { id: "made", type: "date", autoUpdate: true, bindField: "date" }
+    ]
+  };
+  applyRowToDocument(document, { name: "赣南脐橙", code: "ABC-1001", price: "39.9", date: "2026-10-01" });
+  const byId = Object.fromEntries(document.elements.map((item) => [item.id, item]));
+  assert.equal(byId.header.text, "商品标价签");
+  assert.equal(byId.name.text, "赣南脐橙");
+  assert.equal(byId.price.text, "¥39.9");
+  assert.equal(byId.code.value, "ABC-1001");
+  assert.equal(byId.code.format, "code128");
+  assert.equal(byId.made.autoUpdate, false);
+  assert.equal(byId.made.fixedValue, "2026-10-01");
+  assert.equal(document.name, "赣南脐橙");
+});
+
+test("curated batch templates bind every row and still pass print validation", () => {
+  const { curatedBatchTemplates, buildCuratedBatchDocument } = require("../miniprogram/app/curated/index");
+  const { validateDocument } = require("../miniprogram/core/renderer");
+  const picks = curatedBatchTemplates();
+  assert.ok(picks.length >= 10);
+  for (const pick of picks) {
+    const document = buildCuratedBatchDocument(pick.id);
+    assert.equal(document.templateMeta.batchCompatible, true, pick.id);
+    applyRowToDocument(document, { name: "批量测试品", code: "6901234567892", price: "12.50" });
+    const bound = document.elements.filter((item) => item.bindField);
+    assert.ok(bound.length >= 1, pick.id);
+    const values = document.elements.map((item) => [item.text, item.value].join(" ")).join(" ");
+    if (bound.some((item) => item.bindField === "name")) assert.match(values, /批量测试品/, pick.id);
+    if (bound.some((item) => item.bindField === "price")) assert.match(values, /¥12.50/, pick.id);
+    if (bound.some((item) => item.bindField === "code")) assert.match(values, /6901234567892/, pick.id);
+    assert.doesNotThrow(() => validateDocument(document, 203), pick.id);
+  }
+});

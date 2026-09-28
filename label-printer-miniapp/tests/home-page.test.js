@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { ownedLibraryShape } = require('../miniprogram/app/shangyue-library/classify');
+const { curatedStats } = require('../miniprogram/app/curated/index');
 
 let pageDefinition = null;
 global.Page = (definition) => { pageDefinition = definition; };
@@ -117,12 +117,12 @@ test('template shelf contains only approved originals, authorized redesigns, and
   assert.match(markup, /wx:if="\{\{item\.thumbSrc\}\}"[^>]+src="\{\{item\.thumbSrc\}\}"/);
   assert.match(markup, /wx:if="\{\{item\.badge\}\}"[^>]*>\{\{item\.badge\}\}/);
   assert.match(markup, /previewTemplate\.copyright/);
-  assert.match(markup, /公开货架均为商跃原创模板/);
+  assert.match(markup, /公开货架与场景模板均为商跃原创/);
   assert.doesNotMatch(markup, /授权改编/);
   assert.match(markup, /20 款 OFL 开源中文字库/);
 });
 
-test('industry library is a separate owned-matrix shelf and stays off the default seed list', () => {
+test('scene templates are a separate curated shelf and stay off the default seed list', () => {
   const page = Object.assign({}, pageDefinition, {
     data: {
       templateCategory: '全部',
@@ -137,36 +137,68 @@ test('industry library is a separate owned-matrix shelf and stays off the defaul
   });
   page.refreshTemplates();
   assert.ok(page.data.visibleTemplates.every((item) => item.source === 'shangyue-original'));
-  assert.equal(page.data.visibleTemplates.some((item) => String(item.id).startsWith('sy-lib-')), false);
+  assert.equal(page.data.visibleTemplates.some((item) => String(item.id).startsWith('sy-tpl-')), false);
 
-  const shape = ownedLibraryShape();
-  page.data.templateIndustry = '行业库';
+  page.data.templateIndustry = '场景模板';
   page.refreshTemplates();
-  assert.equal(page.data.templateTotal, shape.total);
+  assert.equal(page.data.templateTotal, curatedStats().total);
   assert.equal(page.data.visibleTemplates.length, 24);
-  assert.ok(page.data.visibleTemplates.every((item) => item.source === 'shangyue-library'));
-  assert.ok(page.data.visibleTemplates.every((item) => String(item.id).startsWith('sy-lib-')));
+  assert.ok(page.data.visibleTemplates.every((item) => item.source === 'shangyue-curated'));
+  assert.ok(page.data.visibleTemplates.every((item) => String(item.id).startsWith('sy-tpl-')));
   const resolved = page.resolveTemplate(page.data.visibleTemplates[0].id);
-  assert.ok(resolved.document.elements.length >= 1);
-  assert.equal(resolved.document.templateMeta.library, 'shangyue-library');
-  page.data.libraryScene = '商跃价签';
+  assert.ok(resolved.document.elements.length >= 2);
+  assert.equal(resolved.document.templateMeta.library, 'shangyue-curated');
+  page.data.libraryScene = '零售';
   page.refreshTemplates();
-  assert.equal(page.data.templateTotal, shape.perScene);
-  assert.ok(page.data.visibleTemplates.every((item) => item.sceneLabel === '商跃价签'));
+  assert.ok(page.data.templateTotal > 80);
+  assert.ok(page.data.visibleTemplates.every((item) => item.category === '零售'));
   page.data.librarySize = '40×30';
   page.refreshTemplates();
   assert.ok(page.data.templateTotal > 0);
-  assert.ok(page.data.templateTotal <= shape.perSize);
   assert.ok(page.data.visibleTemplates.every((item) => item.sizeText === '40×30 mm'));
   const markup = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'home', 'index.wxml'), 'utf8');
-  assert.match(markup, /行业库/);
+  assert.match(markup, /data-value="场景模板"/);
+  assert.doesNotMatch(markup, /行业库/);
   assert.match(markup, /setLibraryScene/);
   assert.match(markup, /setLibrarySize/);
 });
 
-test('batch picker uses the explicit 32-template allowlist and excludes the wish card', () => {
-  assert.equal(pageDefinition.data.batchTemplateNames.length, 32);
+test('batch picker offers the tagged curated templates only', () => {
+  const { curatedBatchTemplates } = require('../miniprogram/app/curated/index');
+  const picks = curatedBatchTemplates();
+  assert.equal(pageDefinition.data.batchTemplateNames.length, picks.length);
+  assert.deepEqual(pageDefinition.data.batchTemplateNames, picks.map((item) => item.name));
+  assert.equal(pageDefinition.data.batchTemplateId, picks[0].id);
   assert.equal(pageDefinition.data.batchTemplateNames.includes('商跃心意祝福卡'), false);
+});
+
+test('batch generation fills tagged fields and saves one project per row', () => {
+  let saved = null;
+  global.wx = { showToast() {}, showModal(options) { throw new Error(options.content); } };
+  const page = Object.assign({}, pageDefinition, {
+    data: Object.assign({}, pageDefinition.data, {
+      dataRows: [
+        { name: '青苹果', code: '6901234567892', price: '9.9', date: '' },
+        { name: '香蕉', code: 'BN-2001', price: '5.5', date: '' }
+      ]
+    }),
+    repository: {
+      getSettings: () => ({ defaultProfileId: 'd110' }),
+      saveProjects(documents) { saved = documents; return documents.map((document, index) => ({ id: `p${index}`, document })); }
+    },
+    refresh() {},
+    openEditor() {},
+    setData(patch) { Object.assign(this.data, patch); }
+  });
+  page.runBatch();
+  assert.equal(saved.length, 2);
+  const texts = saved.map((document) => document.elements.map((item) => item.text || item.value || '').join('|'));
+  assert.match(texts[0], /青苹果/);
+  assert.match(texts[0], /¥9.9/);
+  assert.match(texts[0], /6901234567892/);
+  assert.match(texts[1], /香蕉/);
+  assert.match(texts[1], /BN-2001/);
+  delete global.wx;
 });
 
 test('opening the template shelf does not request the remote NIIM catalog', () => {
@@ -287,5 +319,22 @@ test('home scan-to-label retries from the failure dialog and names the label by 
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(scanCalls, 2);
   assert.equal(openedDocument.name, '条码 773012345678901');
+  delete global.wx;
+});
+
+test('using a template closes its preview once the editor has opened', () => {
+  let navigated = null;
+  global.wx = {
+    navigateTo(options) { navigated = options; options.success && options.success(); }
+  };
+  const page = Object.assign({}, pageDefinition, {
+    data: { showTemplatePreview: true, previewTemplate: { id: 'sy-tpl-x' } },
+    previewDocument: { widthMm: 40, heightMm: 30, elements: [] },
+    setData(patch) { Object.assign(this.data, patch); }
+  });
+  page.navigateEditor();
+  assert.equal(navigated.url, '/pages/editor/index');
+  assert.equal(page.data.showTemplatePreview, false);
+  assert.equal(page.previewDocument, null);
   delete global.wx;
 });

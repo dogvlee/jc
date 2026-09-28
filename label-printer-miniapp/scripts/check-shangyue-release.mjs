@@ -65,8 +65,8 @@ for (let index = 0; index < files.length; index += 1) {
 
 const catalogPath = path.join(releaseRoot, 'app', 'catalog.js');
 const layoutsPath = path.join(releaseRoot, 'app', 'template-layouts.js');
-const libraryPath = path.join(releaseRoot, 'app', 'shangyue-library', 'pack.js');
-const libraryQualityPath = path.join(releaseRoot, 'app', 'shangyue-library', 'quality.js');
+const libraryPath = path.join(releaseRoot, 'app', 'curated', 'index.js');
+const libraryQualityPath = path.join(releaseRoot, 'app', 'curated', 'quality.js');
 const materialsPath = path.join(releaseRoot, 'core', 'materials.js');
 const materialSymbolsPath = path.join(releaseRoot, 'core', 'material-symbols-v2.js');
 
@@ -119,48 +119,45 @@ try {
 
   delete require.cache[require.resolve(libraryPath)];
   const library = require(libraryPath);
-  const entries = Array.isArray(library.LIBRARY_INDEX) ? library.LIBRARY_INDEX : [];
-  if (entries.length !== 8100 || new Set(entries.map((entry) => entry.id)).size !== entries.length) {
-    failures.push(`商跃行业库索引异常：${entries.length} entries`);
-  }
-  for (const entry of entries) {
-    const item = library.catalogMeta(entry);
-    if (item.origin !== 'shangyue-library'
-      || item.source !== 'shangyue-library'
-      || item.approvedOriginal !== false
-      || item.publicCatalog !== true
-      || item.releaseApproved !== true
-      || item.designSystem !== 'sy-semantic-grid-v2'
-      || item.aiAssisted !== true) {
-      failures.push(`行业库条目未通过公开门禁：${entry.id || 'unknown'}`);
-      continue;
-    }
-    const documentValue = library.buildLibraryDocument(entry.id);
-    const meta = documentValue && documentValue.templateMeta;
-    if (!meta
-      || meta.origin !== 'shangyue-library'
-      || meta.thirdPartyAssets !== false
-      || meta.releaseApproved !== true
-      || meta.designSystem !== 'sy-semantic-grid-v2'
-      || meta.aiAssisted !== true
-      || meta.sourceTemplateId !== null
-      || (documentValue.elements || []).some((element) => (
-        ['image', 'material'].includes(element.type) || Boolean(element.path)
-      ))) {
-      failures.push(`行业库文档来源或资源异常：${entry.id || 'unknown'}`);
-    }
+  const entries = Array.isArray(library.CURATED_INDEX) ? library.CURATED_INDEX : [];
+  if (entries.length !== 300 || new Set(entries.map((entry) => entry.id)).size !== entries.length) {
+    failures.push(`商跃场景模板索引异常：${entries.length} entries`);
   }
   delete require.cache[require.resolve(libraryQualityPath)];
   const quality = require(libraryQualityPath);
-  const audit = quality.auditLibrary(entries, (entry) => library.buildLibraryDocument(entry.id));
-  if (!audit.ok) {
-    failures.push(`商跃行业库质量门失败：${audit.totals.documentErrors} document errors / ${audit.totals.batchErrors} batch errors`);
-  }
-  if (audit.diversity.exactDuplicateGroups !== 0
-    || audit.diversity.variantCollisionGroups !== 0
-    || audit.diversity.uniqueStructures < 680
-    || audit.diversity.maxStructureReuse > 110) {
-    failures.push(`商跃行业库多样性门失败：${audit.diversity.uniqueStructures} structures / max reuse ${audit.diversity.maxStructureReuse}`);
+  const fingerprints = new Set();
+  for (const entry of entries) {
+    const item = library.catalogMeta(entry);
+    if (item.origin !== 'shangyue-original'
+      || item.source !== 'shangyue-curated'
+      || item.approvedOriginal !== true
+      || item.publicCatalog !== true
+      || item.releaseApproved !== true
+      || item.designSystem !== 'sy-curated-v1') {
+      failures.push(`场景模板条目未通过公开门禁：${entry.id || 'unknown'}`);
+      continue;
+    }
+    const documentValue = library.buildCuratedDocument(entry.id);
+    const meta = documentValue && documentValue.templateMeta;
+    if (!meta
+      || meta.origin !== 'shangyue-original'
+      || meta.library !== 'shangyue-curated'
+      || meta.thirdPartyAssets !== false
+      || meta.releaseApproved !== true
+      || (documentValue.elements || []).some((element) => (
+        ['image', 'material'].includes(element.type) || Boolean(element.path)
+      ))) {
+      failures.push(`场景模板来源或资源异常：${entry.id || 'unknown'}`);
+      continue;
+    }
+    const report = quality.auditLibraryDocument(documentValue);
+    if (!report.ok) {
+      const first = report.issues.find((issue) => issue.severity === 'error');
+      failures.push(`场景模板质量门失败：${entry.id} ${first ? first.message : ''}`);
+    }
+    const fingerprint = quality.exactFingerprint(documentValue);
+    if (fingerprints.has(fingerprint)) failures.push(`场景模板完全重复：${entry.id}`);
+    fingerprints.add(fingerprint);
   }
 
   delete require.cache[require.resolve(materialsPath)];

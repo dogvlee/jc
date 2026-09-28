@@ -1,3 +1,11 @@
+<template name="miniLabel">
+  <view class="mini-frame" style="width: {{width}}px; height: {{height}}px;">
+    <view class="mini-label" style="width: {{innerWidth}}px; height: {{innerHeight}}px; transform: scale({{zoom}});">
+      <view wx:for="{{nodes}}" wx:for-item="node" wx:key="key" class="mini-node {{node.kind}}" style="{{node.style}}">{{node.text}}</view>
+    </view>
+  </view>
+</template>
+
 <view wx:if="{{storageError}}" class="storage-recovery" role="alert">
   <view class="glyph-badge"><text class="icon icon-triangle-alert" aria-hidden="true"></text></view>
   <text class="empty-title">本地标签暂时无法读取</text>
@@ -41,7 +49,7 @@
         <view wx:if="{{recentProjects.length}}" class="project-grid compact-grid">
           <view wx:for="{{recentProjects}}" wx:key="id" class="project-card">
             <button class="project-open" data-id="{{item.id}}" bindtap="openProject">
-              <view class="project-thumb"><view class="abstract-preview kind-{{item.kind}}"><view class="preview-line wide"></view><view class="preview-line"></view><view class="preview-code"></view></view></view>
+              <view class="project-thumb"><block wx:if="{{item.preview}}"><template is="miniLabel" data="{{...item.preview}}" /></block><view wx:else class="abstract-preview kind-{{item.kind}}"><view class="preview-line wide"></view><view class="preview-line"></view><view class="preview-code"></view></view></view>
               <view class="project-card-copy"><text class="card-title">{{item.name}}</text><text class="card-meta">{{item.sizeText}} · {{item.updatedText}}</text></view>
             </button>
           </view>
@@ -66,6 +74,7 @@
           <button wx:for="{{recommendedTemplates}}" wx:key="id" class="template-card" data-id="{{item.id}}" bindtap="previewTemplate">
             <view class="template-thumb">
               <image wx:if="{{item.thumbSrc}}" src="{{item.thumbSrc}}" mode="aspectFit" lazy-load="true" />
+              <block wx:elif="{{item.preview}}"><template is="miniLabel" data="{{...item.preview}}" /></block>
               <view wx:else class="abstract-preview kind-{{item.kind}}"><view class="preview-line wide"></view><view class="preview-line"></view><view class="preview-code"></view></view>
             </view>
             <view class="template-copy"><text class="card-title">{{item.name}}</text><view class="template-meta"><text wx:if="{{item.badge}}" class="template-badge">{{item.badge}}</text><text class="card-meta">{{item.sizeText}} · {{item.category}}</text></view></view>
@@ -84,7 +93,7 @@
 
   <block wx:if="{{route == 'templates'}}">
     <view class="plain-header" style="padding-top: {{headerTop}}px;">
-      <view class="header-copy"><text class="plain-title">{{templateIndustry == '行业库' ? '场景预设' : '商跃模板'}}</text><text class="plain-subtitle">{{templateIndustry == '行业库' ? '按场景和纸张生成的商跃预设，可改字后打印' : '常用场景模板与我的模板'}}</text></view>
+      <view class="header-copy"><text class="plain-title">{{templateIndustry == '场景模板' ? '场景模板' : '商跃模板'}}</text><text class="plain-subtitle">{{templateIndustry == '场景模板' ? libraryTotal + ' 套商跃原创，按行业和纸张挑选，改字即可打印' : '常用场景模板与我的模板'}}</text></view>
       <button class="outline-button btn-s" bindtap="importTemplateFile"><text class="icon icon-file-input" aria-hidden="true"></text>导入模板</button>
     </view>
     <view class="page-toolbar">
@@ -92,13 +101,13 @@
       <scroll-view class="filter-scroll tab-scroll" scroll-x="true" enhanced="true" show-scrollbar="{{false}}">
         <view class="filter-row tab-row">
           <button wx:for="{{industries}}" wx:key="*this" class="filter-tab {{templateIndustry == item ? 'active' : ''}}" data-value="{{item}}" bindtap="setTemplateIndustry">{{item}}</button>
-          <button class="filter-tab {{templateIndustry == '行业库' ? 'active' : ''}}" data-value="行业库" bindtap="setTemplateIndustry">行业库</button>
+          <button class="filter-tab {{templateIndustry == '场景模板' ? 'active' : ''}}" data-value="场景模板" bindtap="setTemplateIndustry">场景模板</button>
           <button class="filter-tab {{templateIndustry == '我的' ? 'active' : ''}}" data-value="我的" bindtap="setTemplateIndustry">我的 {{userTemplateCount}}</button>
         </view>
       </scroll-view>
       <scroll-view class="filter-scroll" scroll-x="true" enhanced="true" show-scrollbar="{{false}}">
         <view class="filter-row">
-          <block wx:if="{{templateIndustry == '行业库'}}">
+          <block wx:if="{{templateIndustry == '场景模板'}}">
             <button wx:for="{{libraryScenes}}" wx:key="*this" class="chip filter-chip {{libraryScene == item ? 'active' : ''}}" data-value="{{item}}" bindtap="setLibraryScene">{{item}}</button>
           </block>
           <block wx:else>
@@ -106,7 +115,7 @@
           </block>
         </view>
       </scroll-view>
-      <scroll-view wx:if="{{templateIndustry == '行业库'}}" class="filter-scroll" scroll-x="true" enhanced="true" show-scrollbar="{{false}}">
+      <scroll-view wx:if="{{templateIndustry == '场景模板'}}" class="filter-scroll" scroll-x="true" enhanced="true" show-scrollbar="{{false}}">
         <view class="filter-row">
           <button wx:for="{{librarySizes}}" wx:key="*this" class="chip filter-chip {{librarySize == item ? 'active' : ''}}" data-value="{{item}}" bindtap="setLibrarySize">{{item}}</button>
         </view>
@@ -117,7 +126,8 @@
         <button wx:for="{{visibleTemplates}}" wx:key="id" class="template-card library-card" data-id="{{item.id}}" bindtap="previewTemplate">
           <view class="template-thumb library-thumb">
             <image wx:if="{{item.thumbSrc}}" src="{{item.thumbSrc}}" mode="aspectFit" lazy-load="true" />
-            <view wx:else class="abstract-preview kind-{{item.kind}}"><view class="preview-line wide"></view><view class="preview-line"></view><view class="preview-code"></view></view>
+            <block wx:elif="{{item.preview}}"><template is="miniLabel" data="{{...item.preview}}" /></block>
+              <view wx:else class="abstract-preview kind-{{item.kind}}"><view class="preview-line wide"></view><view class="preview-line"></view><view class="preview-code"></view></view>
           </view>
           <view class="template-copy"><text class="card-title">{{item.name}}</text><view class="template-meta"><text wx:if="{{item.badge}}" class="template-badge">{{item.badge}}</text><text class="card-meta">{{item.sizeText}} · {{item.category}}</text></view><text class="card-blurb">{{item.blurb}}</text></view>
         </button>
@@ -138,7 +148,7 @@
       <view wx:if="{{allProjects.length}}" class="project-grid projects-page-grid">
         <view wx:for="{{allProjects}}" wx:key="id" class="project-card project-manage-card">
           <button class="project-open" data-id="{{item.id}}" bindtap="openProject">
-            <view class="project-thumb"><view class="abstract-preview kind-{{item.kind}}"><view class="preview-line wide"></view><view class="preview-line"></view><view class="preview-code"></view></view></view>
+            <view class="project-thumb"><block wx:if="{{item.preview}}"><template is="miniLabel" data="{{...item.preview}}" /></block><view wx:else class="abstract-preview kind-{{item.kind}}"><view class="preview-line wide"></view><view class="preview-line"></view><view class="preview-code"></view></view></view>
             <view class="project-card-copy"><text class="card-title">{{item.name}}</text><text class="card-meta">{{item.sizeText}} · {{item.updatedText}}</text></view>
           </button>
           <button class="delete-card" data-id="{{item.id}}" bindtap="deleteProject" aria-label="删除 {{item.name}}"><text class="icon icon-trash-2" aria-hidden="true"></text></button>
@@ -218,6 +228,7 @@
     <view class="sheet-heading"><view class="sheet-heading-copy"><text class="sheet-title">{{previewTemplate.name}}</text><text class="sheet-subtitle">{{previewTemplate.sizeText}} · {{previewTemplate.category}} · {{previewTemplate.industry}}</text></view><button class="close-button" bindtap="closeTemplatePreview" aria-label="关闭"><text class="icon icon-x" aria-hidden="true"></text></button></view>
     <view class="large-template-preview">
       <image wx:if="{{previewTemplate.thumbSrc}}" src="{{previewTemplate.thumbSrc}}" mode="aspectFit" />
+      <block wx:elif="{{previewTemplate.preview}}"><template is="miniLabel" data="{{...previewTemplate.preview}}" /></block>
       <view wx:else class="abstract-preview kind-{{previewTemplate.kind}}"><view class="preview-line wide"></view><view class="preview-line"></view><view class="preview-code"></view></view>
     </view>
     <text class="preview-blurb">{{previewTemplate.blurb}}</text>
@@ -260,7 +271,7 @@
 
 <view wx:if="{{showHelpSheet}}" class="modal-layer">
   <view class="modal-backdrop" bindtap="closeHelp"></view>
-  <view class="bottom-sheet help-sheet"><view class="sheet-handle"></view><view class="sheet-heading"><text class="sheet-title">使用帮助</text><button class="close-button" bindtap="closeHelp" aria-label="关闭"><text class="icon icon-x" aria-hidden="true"></text></button></view><view class="help-copy"><text>商跃标签是独立开发的本地标签制作工具。</text><text>公开货架均为商跃原创模板；行业场景预设由商跃程序化生成。</text><text>字体库含 20 款 OFL 开源中文字库，按需联网加载。</text><text>1. 从首页选择模板或新建空白标签。</text><text>2. 在编辑器点选元素，修改内容、样式和位置。</text><text>3. 打印前连接热敏打印机，确认机型、纸张和浓度。</text><text>4. 项目、模板、批量数据和历史默认只保存在本机，请定期导出备份。</text><view class="help-warning"><text class="icon icon-info" aria-hidden="true"></text><text>实体打印受手机、打印机型号与固件影响；首次使用请执行连接诊断和样张验收。</text></view></view></view>
+  <view class="bottom-sheet help-sheet"><view class="sheet-handle"></view><view class="sheet-heading"><text class="sheet-title">使用帮助</text><button class="close-button" bindtap="closeHelp" aria-label="关闭"><text class="icon icon-x" aria-hidden="true"></text></button></view><view class="help-copy"><text>商跃标签是独立开发的本地标签制作工具。</text><text>公开货架与场景模板均为商跃原创，按常见行业和纸张逐套设计并检查过可打印性。</text><text>字体库含 20 款 OFL 开源中文字库，按需联网加载。</text><text>1. 从首页选择模板或新建空白标签。</text><text>2. 在编辑器点选元素，修改内容、样式和位置。</text><text>3. 打印前连接热敏打印机，确认机型、纸张和浓度。</text><text>4. 项目、模板、批量数据和历史默认只保存在本机，请定期导出备份。</text><view class="help-warning"><text class="icon icon-info" aria-hidden="true"></text><text>实体打印受手机、打印机型号与固件影响；首次使用请执行连接诊断和样张验收。</text></view></view></view>
 </view>
 
 <view wx:if="{{showOnboarding}}" class="modal-layer onboarding-layer">
