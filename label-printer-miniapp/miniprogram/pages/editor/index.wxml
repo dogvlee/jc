@@ -94,8 +94,12 @@
 
         <view wx:if="{{selected.type == 'barcode' || selected.type == 'qrcode'}}" class="property-section">
           <text class="section-label">编码内容</text>
-          <textarea class="text-area small" value="{{selected.value}}" data-field="value" bindfocus="startFieldEdit" bindinput="previewField" bindblur="finishFieldEdit" maxlength="500" cursor-spacing="24" confirm-type="done" auto-height></textarea>
-          <button class="outline-wide" bindtap="scanSelectedCode" loading="{{codeScanning}}" disabled="{{codeScanning}}"><text class="icon icon-scan-line" aria-hidden="true"></text>扫描填入</button>
+          <view wx:if="{{documentHasSerial || selected.serialLinked}}" class="switch-row"><text>跟随序号递增</text><switch checked="{{selected.serialLinked}}" data-field="serialLinked" bindchange="updateSwitch" color="#E02D26" /></view>
+          <view wx:if="{{selected.serialLinked}}" class="preview-value"><text>第 1 张打印</text><text>{{selectedLinkedValue}}</text></view>
+          <block wx:else>
+            <textarea class="text-area small" value="{{selected.value}}" data-field="value" bindfocus="startFieldEdit" bindinput="previewField" bindblur="finishFieldEdit" maxlength="500" cursor-spacing="24" confirm-type="done" auto-height></textarea>
+            <button class="outline-wide" bindtap="scanSelectedCode" loading="{{codeScanning}}" disabled="{{codeScanning}}"><text class="icon icon-scan-line" aria-hidden="true"></text>扫描填入</button>
+          </block>
           <view wx:if="{{selected.type == 'barcode'}}" class="segment-row">
             <button class="{{selected.format == 'ean13' ? 'active' : ''}}" data-field="format" data-value="ean13" bindtap="setChoiceField">EAN-13</button>
             <button class="{{selected.format == 'code128' ? 'active' : ''}}" data-field="format" data-value="code128" bindtap="setChoiceField">Code 128</button>

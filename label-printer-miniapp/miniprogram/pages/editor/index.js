@@ -49,9 +49,10 @@ const {
 } = require('../../core/editor-gesture');
 const { createImageCacheRegistry } = require('../../core/image-cache');
 const { applyScanToElement } = require('../../core/scan-label');
+const { linkedCodeValue, syncLinkedCodes } = require('../../core/linked-codes');
 const { localizeUrl } = require('../../services/remote-image-cache');
 const { KEYS, Repository, normalizeDocument } = require('../../services/repository');
-const { scanCode } = require('../../services/scanner');
+const { scanCode, showScanFailure } = require('../../services/scanner');
 const { EditorSession } = require('../../services/editor-session');
 const { PrintJobService } = require('../../services/print-job-service');
 const { fontFallbackInfo, listFontCatalog, resolveFontId } = require('../../core/font-family');
@@ -623,6 +624,8 @@ Page({
       projectId: this.projectId || '',
       selectedDateValue: selected && selected.type === 'date' ? formatDateValue(selected) : '',
       selectedSerialValue: selected && selected.type === 'serial' ? serialValue(selected) : '',
+      documentHasSerial: this.document.elements.some((item) => item.type === 'serial'),
+      selectedLinkedValue: selected && selected.serialLinked ? linkedCodeValue(this.document, selected) : '',
       selectedFontFamily: selectedFont.renderFamily,
       fontFallbackNote: selectedFont.fallback
         ? `源字体“${selectedFont.requested}”未随模板提供，已用开源「${selectedFont.label}」稳定替代。请选择下方字体确认替换。`
@@ -813,6 +816,7 @@ Page({
   commit(mutator, reinitializeCanvas) {
     const before = cloneDocument(this.document);
     mutator(this.document);
+    syncLinkedCodes(this.document);
     this.document.elements.forEach((item) => clampElement(item, this.document));
     this.recordSnapshot(before);
     this.persistDocument();
@@ -1295,18 +1299,54 @@ Page({
         applyScanToElement(current, result);
         updateInputConfirmationAfterEdit(current, 'value');
       });
-      wx.showToast({ title: selected.type === 'barcode' ? '条码已填入' : '二维码已填入', icon: 'success' });
+      if (!this.offerReadableCodeSize(selected.id)) {
+        wx.showToast({ title: selected.type === 'barcode' ? '条码已填入' : '二维码已填入', icon: 'success' });
+      }
     } catch (error) {
       if (error && error.code === 'SCAN_CANCELLED') return;
-      wx.showModal({
-        title: '无法填入扫码内容',
-        content: error && error.message ? error.message : '扫码失败，请稍后重试',
-        showCancel: false
-      });
+      showScanFailure(wx, error, { title: '无法填入扫码内容', retry: () => this.scanSelectedCode() });
     } finally {
       this.codeScanInFlight = false;
       this.setData({ codeScanning: false });
     }
+  },
+
+  // After a scan fills a code, flag a size that would print unreadably now
+  // instead of at print preflight. Returns true when a dialog was shown.
+  offerReadableCodeSize(elementId) {
+    const dpi = this.profile && this.profile.dpi;
+    const probeDocument = cloneDocument(this.document);
+    const probeElement = probeDocument.elements.find((item) => item.id === elementId);
+    if (!dpi || !probeElement) return false;
+    let probe;
+    try {
+      probe = resizeCodeElementToMinimum(probeElement, probeDocument, dpi);
+    } catch (error) {
+      return false;
+    }
+    if (probe.ok && !probe.changed) return false;
+    const label = probeElement.type === 'qrcode' ? '二维码' : '条码';
+    const needed = `${label}需要约 ${probe.metrics.minimumMmRounded.toFixed(1)} mm`;
+    if (!probe.ok) {
+      wx.showModal({
+        title: `${label}已填入`,
+        content: `内容较长，按当前尺寸打印可能扫不出；${needed}，当前标签放不下。请换更大的标签纸${probeElement.type === 'barcode' ? '，或改用二维码' : ''}。`,
+        showCancel: false,
+        confirmText: '知道了'
+      });
+      return true;
+    }
+    wx.showModal({
+      title: `${label}已填入`,
+      content: `内容较长，按当前尺寸打印可能扫不出。放大到可清晰打印的尺寸吗？（${needed}）`,
+      confirmText: '放大',
+      cancelText: '暂不',
+      confirmColor: '#E02D26',
+      success: (result) => {
+        if (result && result.confirm) this.resizeCodeToMinimum(elementId);
+      }
+    });
+    return true;
   },
 
   setTextMode(event) {
@@ -2085,6 +2125,10 @@ Page({
 
   fixCodeSize() {
     const elementId = this.data.printBlock && this.data.printBlock.elementId;
+    this.resizeCodeToMinimum(elementId, { closePrintSheet: true });
+  },
+
+  resizeCodeToMinimum(elementId, options) {
     const probeDocument = cloneDocument(this.document);
     const probeElement = probeDocument.elements.find((item) => item.id === elementId);
     if (!probeElement) return;
@@ -2100,7 +2144,7 @@ Page({
       return;
     }
     this.setSelection([elementId], false);
-    this.setData({ showPrintSheet: false });
+    if (options && options.closePrintSheet) this.setData({ showPrintSheet: false });
     this.commit((documentValue) => {
       const element = documentValue.elements.find((item) => item.id === elementId);
       resizeCodeElementToMinimum(element, documentValue, this.profile.dpi);

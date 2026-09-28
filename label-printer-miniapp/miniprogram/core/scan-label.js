@@ -1,7 +1,15 @@
 const { createDocument, createElement } = require('./document');
+const { codePrintMetrics } = require('./code-quality');
+const { checksum: ean13Checksum } = require('./ean13');
 
 const MAX_SCAN_VALUE_LENGTH = 500;
 const MAX_BARCODE_VALUE_LENGTH = 80;
+// Every built-in printer profile is 203 dpi; callers may pass the active one.
+const DEFAULT_DPI = 203;
+const NAME_PREVIEW_LENGTH = 18;
+const ONE_DIMENSIONAL_TYPES = [
+  'BARCODE', 'EAN13', 'EAN8', 'CODE128', 'CODE39', 'CODE93', 'CODE25', 'CODABAR', 'UPC', 'ITF', 'RSS14', 'RSSEXPANDED'
+];
 
 function normalizedScanType(value) {
   return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -9,8 +17,7 @@ function normalizedScanType(value) {
 
 function isOneDimensionalType(scanType) {
   const type = normalizedScanType(scanType);
-  return ['BARCODE', 'EAN13', 'EAN8', 'CODE128', 'CODE39', 'CODE93', 'CODABAR', 'UPC', 'UPCA', 'UPCE', 'ITF']
-    .some((name) => type.includes(name));
+  return ONE_DIMENSIONAL_TYPES.some((name) => type.includes(name));
 }
 
 function normalizeScanResult(payload) {
@@ -40,6 +47,19 @@ function inferBarcodeFormat(value, scanType) {
   return /^\d{12,13}$/.test(String(value || '')) ? 'ean13' : 'code128';
 }
 
+/**
+ * UPC-A is EAN-13 with a leading 0: same bars, so the label scans exactly like
+ * the original. Other one-dimensional types keep their content in Code 128.
+ */
+function barcodeContent(value, scanType) {
+  const text = String(value || '');
+  if (normalizedScanType(scanType).includes('UPCA') && /^\d{12}$/.test(text)
+    && ean13Checksum(`0${text.slice(0, 11)}`) === Number(text[11])) {
+    return { value: `0${text}`, format: 'ean13' };
+  }
+  return { value: text, format: inferBarcodeFormat(text, scanType) };
+}
+
 function assertBarcodeValue(value) {
   if (value.length > MAX_BARCODE_VALUE_LENGTH) {
     const error = new Error(`一维码内容不能超过 ${MAX_BARCODE_VALUE_LENGTH} 个字符`);
@@ -67,12 +87,31 @@ function applyScanToElement(element, payload) {
       throw error;
     }
     assertBarcodeValue(scan.value);
-    element.value = scan.value;
-    element.format = inferBarcodeFormat(scan.value, scan.scanType);
+    const content = barcodeContent(scan.value, scan.scanType);
+    element.value = content.value;
+    element.format = content.format;
   } else {
     element.value = scan.value;
   }
   return element;
+}
+
+function scanLabelName(scan) {
+  let preview = scan.value.replace(/\s+/g, ' ').trim();
+  if (scan.kind === 'qrcode') preview = preview.replace(/^https?:\/\/(www\.)?/i, '');
+  const characters = Array.from(preview);
+  if (characters.length > NAME_PREVIEW_LENGTH) preview = `${characters.slice(0, NAME_PREVIEW_LENGTH).join('')}…`;
+  return `${scan.kind === 'barcode' ? '条码' : '二维码'} ${preview}`.trim();
+}
+
+// Width a barcode needs for 2 print dots per module; 0 when it cannot be encoded.
+function minimumBarcodeWidthMm(element, dpi) {
+  try {
+    const metrics = codePrintMetrics(element, dpi);
+    return metrics ? metrics.minimumMmRounded : 0;
+  } catch (error) {
+    return 0;
+  }
 }
 
 function buildScanDocument(payload, options) {
@@ -81,13 +120,16 @@ function buildScanDocument(payload, options) {
   const widthMm = Math.max(5, Math.min(150, Number(config.widthMm) || 50));
   const heightMm = Math.max(5, Math.min(150, Number(config.heightMm) || 30));
   const document = createDocument(widthMm, heightMm);
-  document.name = scan.kind === 'barcode' ? '扫码条码标签' : '扫码二维码标签';
+  document.name = scanLabelName(scan);
   document.elements = [];
 
   const element = createElement(scan.kind, document);
   applyScanToElement(element, payload);
   if (scan.kind === 'barcode') {
-    element.width = Math.max(1, widthMm - 4);
+    // Keep 2 mm side margins when they fit; long codes may widen to 0.5 mm
+    // margins because the symbol already carries its own quiet zones.
+    const required = minimumBarcodeWidthMm(element, Number(config.dpi) || DEFAULT_DPI);
+    element.width = Math.max(1, Math.min(widthMm - 1, Math.max(widthMm - 4, required)));
     element.height = Math.max(1, Math.min(14, heightMm * 0.52, heightMm - 2));
   } else {
     const size = Math.max(1, Math.min(24, widthMm - 2, heightMm - 2));
@@ -104,6 +146,7 @@ module.exports = {
   MAX_BARCODE_VALUE_LENGTH,
   MAX_SCAN_VALUE_LENGTH,
   applyScanToElement,
+  barcodeContent,
   buildScanDocument,
   inferBarcodeFormat,
   isOneDimensionalType,

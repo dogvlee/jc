@@ -126,7 +126,7 @@ test('v2 library carries Shangyue provenance and three named design families', (
   ))) {
     const document = buildLibraryDocument(entry.id);
     familyIds.add(document.templateMeta.designFamily);
-    assert.equal(document.templateMeta.designVersion, '2.0.0');
+    assert.equal(document.templateMeta.designVersion, '2.1.0');
     assert.equal(document.templateMeta.designSystem, 'sy-semantic-grid-v2');
     assert.equal(document.templateMeta.aiAssisted, true);
     assert.equal(document.templateMeta.sourceTemplateId, null);

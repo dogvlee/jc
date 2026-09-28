@@ -633,3 +633,126 @@ test('inspector and layer list surface Chinese element type labels', () => {
   assert.match(wxml, /class="layer-type">\{\{item\._typeLabel\}\}/);
   assert.equal(/inspector-title">[^<]*selected\.type/.test(wxml), false);
 });
+
+test('a scanned value too dense for its barcode offers to enlarge it straight away', async () => {
+  const { validateCodeElement } = require('../miniprogram/core/code-quality');
+  const document = createDocument(40, 30);
+  const barcode = createElement('barcode', document);
+  document.elements = [barcode];
+  let modal = null;
+  const toasts = [];
+  global.wx = {
+    scanCode(options) { options.success({ result: 'SN-000123', scanType: 'CODE_128' }); },
+    showToast(options) { toasts.push(options.title); },
+    showModal(options) { modal = options; }
+  };
+  const editor = Object.assign({}, pageDefinition, {
+    data: { codeScanning: false },
+    document,
+    profile: getProfile('d110'),
+    selectedId: barcode.id,
+    selectedIds: [barcode.id],
+    setData(patch) { Object.assign(this.data, patch); },
+    setSelection() {},
+    commit(mutator) { mutator(this.document); }
+  });
+  assert.throws(() => validateCodeElement(Object.assign({}, barcode, { value: 'SN-000123' }), 203), /清晰度不足/);
+  await editor.scanSelectedCode();
+  assert.equal(barcode.value, 'SN-000123');
+  assert.equal(modal.title, '条码已填入');
+  assert.equal(modal.confirmText, '放大');
+  modal.success({ confirm: true });
+  assert.doesNotThrow(() => validateCodeElement(barcode, 203));
+  assert.ok(barcode.x >= 0 && barcode.x + barcode.width <= document.widthMm);
+  assert.deepEqual(toasts, ['已放大，请检查排版']);
+  delete global.wx;
+});
+
+test('a scanned value that cannot fit the label says so instead of offering a resize', async () => {
+  const document = createDocument(20, 12);
+  const barcode = createElement('barcode', document);
+  document.elements = [barcode];
+  let modal = null;
+  global.wx = {
+    scanCode(options) { options.success({ result: 'SF1234567890123', scanType: 'CODE_128' }); },
+    showToast() {},
+    showModal(options) { modal = options; }
+  };
+  const editor = Object.assign({}, pageDefinition, {
+    data: { codeScanning: false },
+    document,
+    profile: getProfile('d110'),
+    selectedId: barcode.id,
+    selectedIds: [barcode.id],
+    setData(patch) { Object.assign(this.data, patch); },
+    commit(mutator) { mutator(this.document); }
+  });
+  await editor.scanSelectedCode();
+  assert.equal(barcode.value, 'SF1234567890123');
+  assert.equal(modal.showCancel, false);
+  assert.match(modal.content, /放不下/);
+  delete global.wx;
+});
+
+test('editor scan-fill failures offer a rescan per the UX spec', async () => {
+  const document = createDocument(40, 30);
+  const barcode = createElement('barcode', document);
+  document.elements = [barcode];
+  let scanCalls = 0;
+  let modal = null;
+  global.wx = {
+    scanCode(options) {
+      scanCalls += 1;
+      options.success({ result: 'https://example.com', scanType: 'QR_CODE' });
+    },
+    showToast() {},
+    showModal(options) { modal = options; }
+  };
+  const editor = Object.assign({}, pageDefinition, {
+    data: { codeScanning: false },
+    document,
+    selectedId: barcode.id,
+    selectedIds: [barcode.id],
+    setData(patch) { Object.assign(this.data, patch); },
+    commit(mutator) { mutator(this.document); }
+  });
+  await editor.scanSelectedCode();
+  assert.equal(barcode.value, '0');
+  assert.equal(modal.title, '无法填入扫码内容');
+  assert.deepEqual([modal.confirmText, modal.cancelText], ['重新扫码', '取消']);
+  modal.success({ confirm: true });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(scanCalls, 2);
+  delete global.wx;
+});
+
+test('turning on serial follow makes the code print the serial text and keeps it in sync', () => {
+  const document = createDocument(40, 30);
+  const serial = createElement('serial', document);
+  Object.assign(serial, { prefix: 'FA-', start: 1024, digits: 4 });
+  const qr = createElement('qrcode', document);
+  document.elements = [serial, qr];
+  const editor = Object.assign({}, pageDefinition, {
+    document,
+    selectedId: qr.id,
+    selectedIds: [qr.id],
+    commit: pageDefinition.commit,
+    recordSnapshot() {},
+    persistDocument() {},
+    syncPageData() {}
+  });
+  editor.updateSwitch({ currentTarget: { dataset: { field: 'serialLinked' } }, detail: { value: true } });
+  assert.equal(qr.serialLinked, true);
+  assert.equal(qr.value, 'FA-1024');
+  editor.selectedId = serial.id;
+  editor.selectedIds = [serial.id];
+  editor.commit(() => { serial.start = 1100; });
+  assert.equal(qr.value, 'FA-1100');
+});
+
+test('the code inspector offers serial follow only when the label has a serial number', () => {
+  const markup = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'editor', 'index.wxml'), 'utf8');
+  const row = markup.slice(markup.lastIndexOf('<view', markup.indexOf('跟随序号递增')), markup.indexOf('跟随序号递增'));
+  assert.ok(row.includes('wx:if="{{documentHasSerial || selected.serialLinked}}"'), row);
+  assert.ok(markup.includes('data-field="serialLinked" bindchange="updateSwitch"'));
+});

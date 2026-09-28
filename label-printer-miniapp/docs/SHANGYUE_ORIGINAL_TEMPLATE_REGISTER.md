@@ -19,7 +19,7 @@
 | 当前版本 | 1.0.0 |
 | 署名标记 | `© 2026 商跃` |
 | 小程序源码 | `miniprogram/app/catalog.js`、`miniprogram/app/template-layouts.js` |
-| 实际渲染缩略图 | `miniprogram/assets/shangyue-thumbs/shangyue-wish-card-v1.png`（640×480，SHA-256 `1760fceadeb068a38d1fe439fa1bc3f5d62e4a7afa8e72c274738410e046833e`） |
+| 实际渲染缩略图 | `miniprogram/assets/shangyue-thumbs/shangyue-wish-card-v1.png`（640×480，SHA-256 `47b96220a1a9d8111091375c017fa2f3a2b5bd3ff01f24f1248ce423c446896e`） |
 | 网页/App 镜像 | `../niim-label-app/src/app/catalog.js`、`../niim-label-app/src/app/template-layouts.js` |
 | 设计方式 | 洁净室独立排版，全部由可编辑文字、线条、矩形、二维码和序列号组成 |
 | 第三方图片 | 无 |
@@ -31,7 +31,7 @@
 
 外部参考包中的 50×30「祝福」截图只用于确认用户场景是“可编辑祝福卡”。其花卉边框、爱心图片、ZT195 字体、50×30 构图、文字位置和在线模板数据均未复用。
 
-本模板采用独立的非对称竖条、留白双栏、反白品牌签、短文本二维码和可递增编号；纸张改为 40×30mm。源码测试会持续检查：
+本模板采用留白双栏、反白品牌签、短文本二维码和可递增编号；纸张改为 40×30mm。源码测试会持续检查：
 
 - 不含 `image` / `material` 元素或第三方资源路径；
 - 不含 NIIMBOT、精臣、95598、网上国网等第三方品牌文案；
@@ -58,7 +58,7 @@
 | 当前版本 | 1.0.0 |
 | 署名标记 | `© 2026 商跃` |
 | 小程序源码 | `miniprogram/app/catalog.js`、`miniprogram/app/template-layouts.js` |
-| 实际渲染缩略图 | `miniprogram/assets/shangyue-thumbs/shangyue-price-tag-v1.png`（640×480，SHA-256 `4c1ede4a17f8fc77d59afd4964811befcea3fd42b121abbffdb8af355479e4a4`） |
+| 实际渲染缩略图 | `miniprogram/assets/shangyue-thumbs/shangyue-price-tag-v1.png`（640×480，SHA-256 `06a0c194b2930e906f09173181b8166a4ca55eedcd04907a55e37a4eb31783d4`） |
 | 网页/App 镜像 | `../niim-label-app/src/app/catalog.js`、`../niim-label-app/src/app/template-layouts.js` |
 | 设计方式 | 洁净室独立排版：顶栏反白分区、品名、双价、EAN-13；无第三方图片或字体 |
 | 第三方图片 | 无 |
@@ -84,9 +84,9 @@
 | 当前版本 | 1.0.0 |
 | 署名标记 | `© 2026 商跃` |
 | 小程序源码 | `miniprogram/app/catalog.js`、`miniprogram/app/template-layouts.js` |
-| 实际渲染缩略图 | `miniprogram/assets/shangyue-thumbs/shangyue-bin-label-v1.png`（640×480，SHA-256 `5da703f658b06fc0ef2f144c4f9a06e39597e985d8885188035bcabae7b83852`） |
+| 实际渲染缩略图 | `miniprogram/assets/shangyue-thumbs/shangyue-bin-label-v1.png`（640×480，SHA-256 `4112c62fe3069e9a8535d1eabe0047ecfe53a930625459055266abc8ccece7a6`） |
 | 网页/App 镜像 | `../niim-label-app/src/app/catalog.js`、`../niim-label-app/src/app/template-layouts.js` |
-| 设计方式 | 洁净室独立排版：左侧竖条、货位码、SKU/批次、序列号、右侧入库二维码 |
+| 设计方式 | 洁净室独立排版：反白品牌签、货位码、SKU/批次、序列号、右侧入库二维码 |
 | 第三方图片 | 无 |
 | 第三方字体 | 无；仅使用运行环境通用 `sans-serif` |
 | 目标纸张 | 40×30mm；适配当前 B 系 203dpi profile |
@@ -106,7 +106,7 @@
 | 当前版本 | 1.0.0 |
 | 署名标记 | `© 2026 商跃` |
 | 小程序源码 | `miniprogram/app/catalog.js`、`miniprogram/app/template-layouts.js` |
-| 实际渲染缩略图 | `miniprogram/assets/shangyue-thumbs/shangyue-name-sticker-v1.png`（640×480，SHA-256 `8274b51fe9a3afdfe45442ae10125fc84d513f8b0f6eda78252b13a7f653e879`） |
+| 实际渲染缩略图 | `miniprogram/assets/shangyue-thumbs/shangyue-name-sticker-v1.png`（640×480，SHA-256 `5d69334d3cb5f24b2a863f4a4d43d18d04820ad422fc0987ee884bf85d2368a1`） |
 | 网页/App 镜像 | `../niim-label-app/src/app/catalog.js`、`../niim-label-app/src/app/template-layouts.js` |
 | 设计方式 | 洁净室独立排版：横条签名、班级/部门、联系电话；40×20mm 不放二维码 |
 | 第三方图片 | 无 |
@@ -127,7 +127,7 @@
 | 当前版本 | 1.0.0 |
 | 署名标记 | `© 2026 商跃` |
 | 小程序源码 | `miniprogram/app/catalog.js`、`miniprogram/app/template-layouts.js` |
-| 实际渲染缩略图 | `miniprogram/assets/shangyue-thumbs/shangyue-fresh-date-v1.png`（640×480，SHA-256 `e71807c82eba3c62645661af73d274fd3acac287b141b308d5e3584ab9d9d550`） |
+| 实际渲染缩略图 | `miniprogram/assets/shangyue-thumbs/shangyue-fresh-date-v1.png`（640×480，SHA-256 `cf5cacce0e1d02af11091e5400c7cfe2ccc49213fe966ad6a022e72477ae0c6d`） |
 | 网页/App 镜像 | `../niim-label-app/src/app/catalog.js`、`../niim-label-app/src/app/template-layouts.js` |
 | 设计方式 | 洁净室独立排版：顶栏冷藏分区、制作/食用日期表、开封提示 |
 | 第三方图片 | 无 |
@@ -150,7 +150,7 @@
 | 授权状态 | 用户已确认获精诚同意；书面凭证和授权编号待归档 |
 | 对外标记 | `精诚授权改编 · 商跃重设计`；不得标为“商跃原创” |
 | 小程序源码 | `miniprogram/app/catalog.js`、`miniprogram/app/template-layouts.js` |
-| 实际渲染缩略图 | `miniprogram/assets/shangyue-thumbs/shangyue-wifi-card-v1.png`（640×480，SHA-256 `2c7de8eae7063011c31e6ede73a88ddf0cbd2569ad297b3e2fb140b574cf3aa3`） |
+| 实际渲染缩略图 | `miniprogram/assets/shangyue-thumbs/shangyue-wifi-card-v1.png`（640×480，SHA-256 `e3901bf2944ed4091fccdc4bc152503e2e905f6874f0aef529a14c587e173d5a`） |
 | 网页/App 镜像 | `../niim-label-app/src/app/catalog.js`、`../niim-label-app/src/app/template-layouts.js` |
 | 设计方式 | 在获得精诚同意的前提下改编并重设计：左侧标准 `WIFI:` 二维码、右侧访客凭据和反白密码框 |
 | 第三方图片 | 无 |
@@ -168,22 +168,22 @@ SSID / 密码均为虚构样例，版面上保留“打印后请改密码”。�
 
 | 登记号 | 模板 ID | 名称 | 权属分类 | 纸张 | 对照旧稿 | 缩略图 SHA-256 |
 |---|---|---|---|---|---|---|
-| SY-AR-002 | `shangyue-promo-tag` | 商跃促销价签 | 精诚授权改编 · 商跃重设计 | 40×30 | `promo-price` | `e37550c265eb269e2eef97c7b4832dd999f899a957022e41a61174a2353a7c3f` |
-| SY-OT-008 | `shangyue-jewelry-tag` | 商跃珠宝吊牌 | 商跃原创 | 40×30 | `jewelry-price` | `caef0f6f8b83029647f08e602dc1c98fe5b4106ab1ff63a942848f045ba901d3` |
-| SY-OT-009 | `shangyue-garment-tag` | 商跃服装吊牌 | 商跃原创 | 40×30 | `clothing-tag` | `01df2b2e7b4fe3d2d4c44ff80604e8011275237d830ee99a3c08b6b3a8808a4d` |
-| SY-OT-010 | `shangyue-ship-label` | 商跃物流简签 | 商跃原创 | 40×30 | `shipping-bin` | `b596c2a5ddd48d0c61d91f84e01c10d1cbe603fb2bdb24ecf51e16ef247714b6` |
-| SY-OT-011 | `shangyue-cable-tag` | 商跃线缆标识 | 商跃原创 | 40×12 | `cable-name` | `420d9d81f1d84212e0ec0b7c28abd287fb5a90f3bb4be8ea97bb8923f9c3c501` |
-| SY-OT-012 | `shangyue-asset-tag` | 商跃固定资产 | 商跃原创 | 40×30 | `asset-card` | `3f3e10e414e8fe705e0f1b75a6bc0f522632bfe273842508923c60f64ae5644c` |
-| SY-OT-013 | `shangyue-biz-card` | 商跃商务名片 | 商跃原创 | 40×30 | `business-card` | `fe5a30fa5d6a113614b60206818d0bd6e7c3d8fdf36a00464bba3b421333fc18` |
-| SY-AR-003 | `shangyue-kitchen-date` | 商跃餐饮效期 | 精诚授权改编 · 商跃重设计 | 40×30 | `catering-date` | `f36ba52bdf09de0ef6c951b49c53bf24a993cef35f6ddcf81bdfc8187f1fed5a` |
-| SY-OT-015 | `shangyue-med-label` | 商跃药品签 | 商跃原创 | 40×20 | `medicine-box` | `1d01806924229c303bded5bab592ab7a7d2063ef4ecad8fd515f40ac3698c078` |
-| SY-OT-016 | `shangyue-seat-card` | 商跃席卡 | 商跃原创 | 40×30 | `wedding-invite` | `7391f3f8c71de2f3ce3a014faf15076475a8aa555c007bc422eefdbe1e3f32b0` |
-| SY-OT-017 | `shangyue-bakery-tag` | 商跃烘焙价签 | 商跃原创 | 40×30 | `bakery-tag` | `7e5123676b50fb7da0e6ff36ef4ddd63a773f3f2296622b6527dab6c5ae52ccf` |
-| SY-AR-004 | `shangyue-plant-tag` | 商跃植物签 | 精诚授权改编 · 商跃重设计 | 40×30 | `plant-care` | `68ee5309e64827b2eb61fdc61bc618f663c2952c18794af24a690a6ec279742c` |
-| SY-OT-019 | `shangyue-desk-plate` | 商跃工位牌 | 商跃原创 | 40×30 | `office-desk` | `3645442a4efd72d06e858854d1b483aea5209ccb931ac818ca9e58c392dc6188` |
-| SY-OT-020 | `shangyue-lab-tag` | 商跃样品签 | 商跃原创 | 40×20 | `lab-sample` | `cbe19be684d95be7950796843b9929f82e0ed1f68f1b93f1e689c8aa1ed9cf4e` |
-| SY-AR-005 | `shangyue-care-tag` | 商跃洗涤说明 | 精诚授权改编 · 商跃重设计 | 40×30 | `garment-care` | `ca14692e899f3ccd803acf52eb967d0cce207cd2dc82744c9479ed90fb058e87` |
-| SY-OT-022 | `shangyue-serial-cable` | 商跃线号序列 | 商跃原创 | 30×12 | `serial-cable` | `019627fdc20b101092b9c1938e3b6d9a5afeba4ade5e94cb52e5193d904d8fd2` |
+| SY-AR-002 | `shangyue-promo-tag` | 商跃促销价签 | 精诚授权改编 · 商跃重设计 | 40×30 | `promo-price` | `81a0e68717b971977138f8b4fafe13d00e9fef9de2140ab3790bab8498536ec2` |
+| SY-OT-008 | `shangyue-jewelry-tag` | 商跃珠宝吊牌 | 商跃原创 | 40×30 | `jewelry-price` | `8ea344ab92206911ef993fbdeb13ff74242e6c546f99763e77ab88fcf9294a28` |
+| SY-OT-009 | `shangyue-garment-tag` | 商跃服装吊牌 | 商跃原创 | 40×30 | `clothing-tag` | `a84c689e92348459696d301f8c6ff9505b3242c53dc8cd55ee631e70e7e01531` |
+| SY-OT-010 | `shangyue-ship-label` | 商跃物流简签 | 商跃原创 | 40×30 | `shipping-bin` | `3b386c0cff406b46c1ee2f838ccf77738522974a51427212afde91153ef3658a` |
+| SY-OT-011 | `shangyue-cable-tag` | 商跃线缆标识 | 商跃原创 | 40×12 | `cable-name` | `263286e73765e6026be6415d9504a20b6cae35d82bedf7384315a4f30fde4997` |
+| SY-OT-012 | `shangyue-asset-tag` | 商跃固定资产 | 商跃原创 | 40×30 | `asset-card` | `07662ebe90de133091d032e11b6cac61aee43526555be81ca18ed13efb934f3b` |
+| SY-OT-013 | `shangyue-biz-card` | 商跃商务名片 | 商跃原创 | 40×30 | `business-card` | `d7f960e990caba274d31d3f493c976b351b6ed15cc44ba8c2f9b8b3ef4926a23` |
+| SY-AR-003 | `shangyue-kitchen-date` | 商跃餐饮效期 | 精诚授权改编 · 商跃重设计 | 40×30 | `catering-date` | `6feffef5397678212b073f9d5a8241b7236056b12b22aec24968f0d66897d8a9` |
+| SY-OT-015 | `shangyue-med-label` | 商跃药品签 | 商跃原创 | 40×20 | `medicine-box` | `7eb88b4098b854e265d808b231dbeba7ddcf353aae813faa9b4182f96326c75b` |
+| SY-OT-016 | `shangyue-seat-card` | 商跃席卡 | 商跃原创 | 40×30 | `wedding-invite` | `952254754c24f811d798f36b49ac3aba5e6541be7ccc88760697712a8674f644` |
+| SY-OT-017 | `shangyue-bakery-tag` | 商跃烘焙价签 | 商跃原创 | 40×30 | `bakery-tag` | `e1d7be276379c0586bb74fd49de006c3aaeba331f372b36e7a2bb6baf7afa634` |
+| SY-AR-004 | `shangyue-plant-tag` | 商跃植物签 | 精诚授权改编 · 商跃重设计 | 40×30 | `plant-care` | `9db140567f60378967410baf423456535699976af8e2b5b639de607818dd4fa6` |
+| SY-OT-019 | `shangyue-desk-plate` | 商跃工位牌 | 商跃原创 | 40×30 | `office-desk` | `6e5a8b41792b82713bbcb9cd050cdc8af402dde40389afdca0e5c0bb644fbcca` |
+| SY-OT-020 | `shangyue-lab-tag` | 商跃样品签 | 商跃原创 | 40×20 | `lab-sample` | `76e2fd3e6feb365cd07e6468179bbffb84d26e28945fa35693aed3af6660063d` |
+| SY-AR-005 | `shangyue-care-tag` | 商跃洗涤说明 | 精诚授权改编 · 商跃重设计 | 40×30 | `garment-care` | `31d269f9cf5b0db080195e8634b054d4a570666f8171d210da2f7cd444a933b0` |
+| SY-OT-022 | `shangyue-serial-cable` | 商跃线号序列 | 商跃原创 | 30×12 | `serial-cable` | `cd9d5541bd1667b11ecae6faafdb1cfb86c33cef2a744622d7a0c859f710ad5e` |
 
 所有 16 套都不含 `image` / `material`、不含精臣/NIIMBOT/95598 文案，文字 ≥ 2.2mm，缩略图由真实渲染导出。其中 12 套商跃原创按洁净室证据链登记；4 套授权改编仅记录资产、字体和完整文案未直接复用，不因版式差异或素材隔离而改标为“商跃原创”。
 
@@ -204,3 +204,14 @@ SSID / 密码均为虚构样例，版面上保留“打印后请改密码”。�
 - 2026-08-18 升级至 `sy-semantic-grid-v2`：`signal / orbit / ledger` 三套商跃母版、独立场景码、稳定内容种子和场景核心字段；AI 参与规则设计与样张审阅，但运行时由确定性代码生成
 - 每个文档保留 `authorshipBasis: deterministic-clean-room-generator`、`sourceTemplateId: null`、`aiAssisted: true`、内容种子和布局种子
 - 自动门禁覆盖 8,100 条的越界、字号、重叠、码区清晰度、空白、完全重复和甲乙丙撞版；评审数字以 `output/shangyue-library/stats.json` 为准
+
+### 2026-09-28 去黑边修订
+
+用户反馈部分商跃模板打印后出现黑边。原因是 22 套货架模板都有距纸边 0.4–0.8 mm 的整圈外框，其中多套还有贴边的实心竖条或通栏黑色顶栏；热敏机走纸约有 0.5–1 mm 偏差，一偏就印成一侧黑边、另一侧留白。本次修订：
+
+- 22 套全部去掉整圈外框和贴边竖条；顶栏、面料侧栏、价格舱改为距纸边至少 1.5 mm 的圆角色块；内容距纸边至少 1 mm（40×30 版式统一留 2 mm）。
+- 商跃行业库 8,100 条同步去掉外框、信号轨、环行卡角标和信息栅角线，内容框按纸张留 1.5–2.5 mm 安全边距；取号场景的甲乙丙改为三种不同骨架，避免撞版。版本升至 2.1.0。
+- 质量门禁新增 `EDGE_FRAME`（整圈外框）、`EDGE_INK`（1.5 mm 内的线条、色块、表格、反白字）、`EDGE_TOO_CLOSE`（1 mm 内的任何元素），由 `tests/shangyue-library-quality.test.js` 对货架、批量模板和行业库全量检查。
+- `shangyue-asset-tag` 的盘点二维码、`shangyue-serial-cable` 的条码改为“跟随序号递增”，连续打印时每张的码与编号一致；线号序列改为反白 `LN` + 纯数字编号，条码只编码数字。
+- 资产签、工位牌、名片补页脚细线与说明，平衡下方留白。
+- 缩略图改为透明底 + 白色圆角纸张卡片（描边与投影只存在于预览，不打印），22 张重新渲染，SHA-256 已同步更新到上表与 `catalog.js`。Web 端（niim-label-app）仍使用自己的旧版式与缩略图，本次未改动。

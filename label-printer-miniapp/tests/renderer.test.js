@@ -436,3 +436,19 @@ test('image thresholding uses the WeChat offscreen canvas API when available', (
   assert.equal(context.drawImageCalls[0][0], raster);
   assert.deepEqual(Array.from(raster.output.data), [0, 0, 0, 255]);
 });
+
+test('a barcode that follows the serial prints each page serial as its readable text', () => {
+  const document = {
+    widthMm: 40,
+    heightMm: 12,
+    elements: [
+      { id: 'serial', type: 'serial', x: 1.5, y: 1.2, width: 20, height: 3, prefix: 'LN-', start: 2208, digits: 4, fontSize: 2.4, currentValue: 2211 },
+      { id: 'code', type: 'barcode', x: 1.5, y: 4.8, width: 36, height: 6, value: 'LN-2208', format: 'code128', showText: true, fontSize: 2, serialLinked: true }
+    ]
+  };
+  const context = createCanvasContext();
+  renderDocument(context, document, { width: 320, height: 96 }, 203, {});
+  const values = context.textCalls.map((call) => call.value);
+  assert.ok(values.includes('LN-2211'), values.join(' | '));
+  assert.equal(values.includes('LN-2208'), false);
+});

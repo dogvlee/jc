@@ -25,9 +25,12 @@ if (!chrome) {
 
 const outDir = path.join(root, 'miniprogram', 'assets', 'shangyue-thumbs');
 const webOutDir = path.join(root, '..', 'niim-label-app', 'public', 'assets', 'shangyue-thumbs');
+// The web app keeps its own copy of the layouts; refresh its thumbnails only
+// when those layouts were updated too.
+const withWeb = process.argv.includes('--with-web');
 const workDir = path.join(root, 'scripts', '.thumb-work');
 fs.mkdirSync(outDir, { recursive: true });
-fs.mkdirSync(webOutDir, { recursive: true });
+if (withWeb) fs.mkdirSync(webOutDir, { recursive: true });
 fs.mkdirSync(workDir, { recursive: true });
 
 const bundlePath = path.join(workDir, 'thumbs.bundle.js');
@@ -44,14 +47,13 @@ if (esbuild.status !== 0) {
   process.exit(esbuild.status || 1);
 }
 
-const keepExisting = new Set(['shangyue-wish-card']);
 const hashes = {};
 
 for (const template of PUBLIC_TEMPLATES) {
   const htmlPath = path.join(workDir, `${template.id}.html`);
   fs.writeFileSync(htmlPath, `<!doctype html>
 <html><head><meta charset="utf-8"><style>
-  html,body{margin:0;background:#fff;width:640px;height:480px;overflow:hidden}
+  html,body{margin:0;background:transparent;width:640px;height:480px;overflow:hidden}
   canvas{display:block}
 </style></head>
 <body>
@@ -67,7 +69,7 @@ for (const template of PUBLIC_TEMPLATES) {
     '--hide-scrollbars',
     '--force-device-scale-factor=1',
     '--window-size=640,480',
-    '--default-background-color=ffffffff',
+    '--default-background-color=00000000',
     `--screenshot=${screenshotPath}`,
     pathToFileURL(htmlPath)
   ], { encoding: 'utf8' });
@@ -78,12 +80,8 @@ for (const template of PUBLIC_TEMPLATES) {
 
   const destName = path.basename(template.thumbSrc);
   const dest = path.join(outDir, destName);
-  if (keepExisting.has(template.id) && fs.existsSync(dest)) {
-    hashes[template.id] = createHash('sha256').update(fs.readFileSync(dest)).digest('hex');
-    continue;
-  }
   fs.copyFileSync(screenshotPath, dest);
-  fs.copyFileSync(screenshotPath, path.join(webOutDir, destName));
+  if (withWeb) fs.copyFileSync(screenshotPath, path.join(webOutDir, destName));
   hashes[template.id] = createHash('sha256').update(fs.readFileSync(dest)).digest('hex');
 }
 

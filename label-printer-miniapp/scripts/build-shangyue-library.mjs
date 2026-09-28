@@ -58,7 +58,7 @@ const stats = {
   total: entries.length,
   countMeaning: 'scene × paper × copy × layout variant entries; not individually hand-drawn works',
   designSystem: 'sy-semantic-grid-v2',
-  designVersion: '2.0.0',
+  designVersion: '2.1.0',
   aiAssisted: true,
   uniqueScenes: Object.keys(scenes).length,
   uniqueSizes: Object.keys(sizes).length,

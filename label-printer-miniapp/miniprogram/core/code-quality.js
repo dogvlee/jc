@@ -1,5 +1,5 @@
 const qrcode = require('../vendor/qrcode');
-const { encodeCode128B } = require('./code128');
+const { encodeCode128 } = require('./code128');
 const { encodeEan13 } = require('./ean13');
 
 const QR_QUIET_ZONE_MODULES = 4;
@@ -14,7 +14,7 @@ function encodeElement(element) {
   if (element.type === 'barcode') {
     const encoded = element.format === 'ean13'
       ? encodeEan13(element.value)
-      : encodeCode128B(element.value);
+      : encodeCode128(element.value);
     return {
       kind: 'barcode',
       moduleCount: encoded.moduleCount,

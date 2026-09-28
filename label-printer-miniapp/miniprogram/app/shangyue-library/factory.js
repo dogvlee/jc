@@ -151,7 +151,7 @@ function provenance(entry) {
     publicCatalog: true,
     releaseApproved: true,
     batchCompatible: false,
-    designVersion: '2.0.0',
+    designVersion: '2.1.0',
     designSystem: 'sy-semantic-grid-v2',
     designFamily: family.id,
     designFamilyLabel: family.label,
@@ -162,81 +162,23 @@ function provenance(entry) {
     contentSeed: stableSeed(entry),
     layoutSeed: stableLayoutSeed(entry),
     createdAt: '2026-08-17',
-    optimizedAt: '2026-08-18'
+    optimizedAt: '2026-09-28'
   };
 }
 
-function pushIdentityFrame(doc, widthMm, heightMm, entry) {
-  const inset = clamp(Math.min(widthMm, heightMm) * 0.03, 0.4, 0.9);
-  const family = designFamily(entry.variant);
-  doc.elements.push(rect(doc, {
-    x: inset,
-    y: inset,
-    width: widthMm - inset * 2,
-    height: heightMm - inset * 2,
-    shapeKind: family.id === 'ledger' ? 'rect' : 'rounded',
-    lineWidth: family.id === 'orbit' ? 0.28 : 0.36,
-    locked: true
-  }));
-
-  let rail = 0;
-  if (family.id === 'signal') {
-    rail = clamp(widthMm * 0.018, 0.65, 0.9);
-    doc.elements.push(rect(doc, {
-      x: inset + 0.45,
-      y: inset + 0.45,
-      width: rail,
-      height: heightMm - inset * 2 - 0.9,
-      filled: true,
-      lineWidth: 0.2,
-      locked: true
-    }));
-  } else if (family.id === 'orbit') {
-    const block = clamp(Math.min(widthMm, heightMm) * 0.07, 1.0, 2.0);
-    doc.elements.push(rect(doc, {
-      x: widthMm - inset - block - 0.45,
-      y: inset + 0.45,
-      width: block,
-      height: 0.65,
-      filled: true,
-      lineWidth: 0.2,
-      locked: true
-    }));
-    doc.elements.push(rect(doc, {
-      x: inset + 0.45,
-      y: heightMm - inset - 1.1,
-      width: block,
-      height: 0.65,
-      filled: true,
-      lineWidth: 0.2,
-      locked: true
-    }));
-  } else {
-    doc.elements.push(line(doc, {
-      x: inset + 0.55,
-      y: inset + 0.75,
-      width: clamp(widthMm * 0.16, 4.5, 8.0),
-      height: 0.3,
-      lineWidth: 0.55,
-      locked: true
-    }));
-    doc.elements.push(line(doc, {
-      x: widthMm - inset - clamp(widthMm * 0.12, 3.6, 6.0) - 0.55,
-      y: heightMm - inset - 0.8,
-      width: clamp(widthMm * 0.12, 3.6, 6.0),
-      height: 0.3,
-      lineWidth: 0.55,
-      locked: true
-    }));
-  }
-
-  const pad = 0.75;
+/**
+ * Safe content box. Labels drift 0.5–1 mm under the print head, so templates
+ * carry no outer frame, edge rail or corner marks (they print as black edges)
+ * and keep every element at least 1.5 mm inside the paper.
+ */
+function contentBox(widthMm, heightMm, entry) {
+  const margin = clamp(Math.min(widthMm, heightMm) * 0.06, 1.5, 2.5);
   return {
-    x: inset + pad + rail + (rail ? 0.4 : 0),
-    y: inset + pad,
-    w: widthMm - inset * 2 - pad * 2 - rail - (rail ? 0.4 : 0),
-    h: heightMm - inset * 2 - pad * 2,
-    family
+    x: margin,
+    y: margin,
+    w: widthMm - margin * 2,
+    h: heightMm - margin * 2,
+    family: designFamily(entry.variant)
   };
 }
 
@@ -252,7 +194,7 @@ function buildDocument(entry) {
   const variant = Number(entry.variant) || 0;
   const item = entry.item || pickItem(entry.scene, Number(entry.serial) || 0);
   const index = stableSeed(Object.assign({}, entry, { item }));
-  const inner = pushIdentityFrame(doc, widthMm, heightMm, entry);
+  const inner = contentBox(widthMm, heightMm, entry);
 
   if (heightMm <= 16 || widthMm <= 22) {
     fillNarrow(doc, inner, entry, item, index, variant);
@@ -360,6 +302,62 @@ function fillNarrow(doc, box, entry, item, index, variant) {
       bold: true,
       align,
       fontFamily: 'monospace'
+    }));
+    return;
+  }
+
+  if (entry.scene === 'queue' && mode === 1) {
+    // Number first: a large ticket number beside a stacked title and note.
+    const numberW = contentW * 0.46;
+    const sideX = textX + numberW + 0.6;
+    const sideW = contentW - numberW - 0.6;
+    add(doc, serial(doc, {
+      x: textX,
+      y: box.y,
+      width: numberW,
+      height: box.h,
+      prefix: 'SY-',
+      start: 10 + (index % 80),
+      digits: 3,
+      fontSize: clamp(box.h * 0.36, 2.6, 3.8),
+      bold: true,
+      align: 'left',
+      fontFamily: 'monospace'
+    }));
+    add(doc, text(doc, {
+      x: sideX, y: box.y, width: sideW, height: topH,
+      text: item, fontSize: 2.4, bold: true, align: 'right', fontFamily
+    }));
+    add(doc, text(doc, {
+      x: sideX, y: lowerY, width: sideW, height: lowerH,
+      text: '请持号等候', fontSize: 2.2, align: 'right'
+    }));
+    return;
+  }
+
+  if (entry.scene === 'queue' && mode === 2) {
+    // Centered title across the top, number and note side by side below.
+    add(doc, text(doc, {
+      x: textX, y: box.y, width: contentW, height: topH,
+      text: item, fontSize: 2.6, bold: true, align: 'center', fontFamily
+    }));
+    addDivider();
+    add(doc, serial(doc, {
+      x: textX,
+      y: lowerY,
+      width: contentW * 0.5,
+      height: lowerH,
+      prefix: 'SY-',
+      start: 10 + (index % 80),
+      digits: 3,
+      fontSize: 2.6,
+      bold: true,
+      align: 'left',
+      fontFamily: 'monospace'
+    }));
+    add(doc, text(doc, {
+      x: textX + contentW * 0.52, y: lowerY, width: contentW * 0.48, height: lowerH,
+      text: '请持号等候', fontSize: 2.2, align: 'right'
     }));
     return;
   }

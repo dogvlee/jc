@@ -266,3 +266,32 @@ test('template preview summarizes elements in Chinese', () => {
   assert.equal(page.data.previewTemplate.elementSummary, '文本×2 · 二维码×1');
   assert.equal(page.data.previewTemplate.elementCount, 3);
 });
+
+test('home scan-to-label retries from the failure dialog and names the label by content', async () => {
+  let scanCalls = 0;
+  let modal = null;
+  let openedDocument = null;
+  global.wx = {
+    scanCode(options) {
+      scanCalls += 1;
+      if (scanCalls === 1) options.fail({ errMsg: 'scanCode:fail' });
+      else options.success({ result: '773012345678901', scanType: 'CODE_128' });
+    },
+    showModal(options) { modal = options; }
+  };
+  const page = Object.assign({}, pageDefinition, {
+    data: { codeScanning: false },
+    repository: { getSettings: () => ({ stockWidthMm: 40, stockHeightMm: 12 }) },
+    setData(patch) { Object.assign(this.data, patch); },
+    openEditor(document) { openedDocument = document; }
+  });
+  await page.scanToLabel();
+  assert.equal(openedDocument, null);
+  assert.equal(modal.confirmText, '重新扫码');
+  assert.equal(page.data.codeScanning, false);
+  modal.success({ confirm: true });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(scanCalls, 2);
+  assert.equal(openedDocument.name, '条码 773012345678901');
+  delete global.wx;
+});

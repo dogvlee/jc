@@ -10,6 +10,10 @@ const { codePrintMetrics } = require('../../core/code-quality');
 const CONTENT_TYPES = new Set(['text', 'date', 'serial', 'table', 'barcode', 'qrcode', 'image', 'material']);
 const TEXT_TYPES = new Set(['text', 'date', 'serial', 'table']);
 const CODE_TYPES = new Set(['barcode', 'qrcode']);
+// Strokes, fills and grids: the element kinds that print as a solid black
+// edge when the label drifts under the print head.
+const INK_TYPES = new Set(['rect', 'line', 'table']);
+const EDGE_EPSILON_MM = 0.001;
 
 const DEFAULT_RULES = Object.freeze({
   dpi: 203,
@@ -22,6 +26,9 @@ const DEFAULT_RULES = Object.freeze({
   qrSquareToleranceMm: 0.2,
   minimumBarcodeWidthMm: 24.8,
   minimumBarcodeHeightMm: 6,
+  edgeSafeMm: 1.0,
+  solidEdgeSafeMm: 1.5,
+  frameCoverageRatio: 0.7,
   overlapAreaMm2: 0.3,
   overlapRatio: 0.12,
   maximumWhitespaceRatio: 0.82,
@@ -124,6 +131,53 @@ function contentMetrics(document, boxes) {
   };
 }
 
+// Rotation-aware footprint on the paper, so a rotated element cannot slip
+// past the edge rules.
+function paperExtent(element, box) {
+  const radians = (finiteNumber(element && element.rotation) || 0) * Math.PI / 180;
+  const cosine = Math.abs(Math.cos(radians));
+  const sine = Math.abs(Math.sin(radians));
+  const width = cosine * box.width + sine * box.height;
+  const height = sine * box.width + cosine * box.height;
+  return { x: box.x + (box.width - width) / 2, y: box.y + (box.height - height) / 2, width, height };
+}
+
+/**
+ * Thermal printers drift 0.5–1 mm against die-cut labels. A frame, a filled
+ * band or a rule near the edge then prints as a black edge on one side and a
+ * gap on the other, so library templates keep that zone clear.
+ */
+function checkEdge(document, element, id, type, box, rules, issues) {
+  const extent = paperExtent(element, box);
+  const width = Number(document.widthMm);
+  const height = Number(document.heightMm);
+  const gap = Math.min(extent.x, extent.y, width - extent.x - extent.width, height - extent.y - extent.height);
+  const details = { elementIds: [id], elementType: type, actual: rounded(gap, 2) };
+  if (type === 'rect' && element.filled !== true
+    && extent.width >= width * rules.frameCoverageRatio && extent.height >= height * rules.frameCoverageRatio) {
+    issues.push(issue('EDGE_FRAME', 'error', `${id} 是整圈外框，走纸偏移后会一边黑边、一边留白`, details));
+    return;
+  }
+  const ink = INK_TYPES.has(type) || (TEXT_TYPES.has(type) && element.reverse === true);
+  if (ink && gap < rules.solidEdgeSafeMm - EDGE_EPSILON_MM) {
+    issues.push(issue(
+      'EDGE_INK',
+      'error',
+      `${id} 的线条或色块距纸边 ${gap.toFixed(2)} mm（至少 ${rules.solidEdgeSafeMm} mm），打印偏移会出现黑边`,
+      Object.assign({ minimum: rules.solidEdgeSafeMm }, details)
+    ));
+    return;
+  }
+  if (gap < rules.edgeSafeMm - EDGE_EPSILON_MM) {
+    issues.push(issue(
+      'EDGE_TOO_CLOSE',
+      'error',
+      `${id} 距纸边 ${gap.toFixed(2)} mm（至少 ${rules.edgeSafeMm} mm），打印偏移会被裁切`,
+      Object.assign({ minimum: rules.edgeSafeMm }, details)
+    ));
+  }
+}
+
 function checkElement(document, element, elementIndex, rules, issues, contentBoxes) {
   const id = String(element && element.id || `element-${elementIndex + 1}`);
   const type = String(element && element.type || 'unknown');
@@ -158,6 +212,7 @@ function checkElement(document, element, elementIndex, rules, issues, contentBox
       { elementIds: [id], elementType: type, actual: box }
     ));
   }
+  checkEdge(document, element, id, type, box, rules, issues);
 
   // Lines and narrow decorative bands intentionally have one small axis. They
   // still have to be positive and in bounds, but are excluded from the generic

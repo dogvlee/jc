@@ -100,3 +100,42 @@ test('all 8,100 Shangyue presets pass hard quality gates and retain variant dive
   assert.ok(audit.diversity.maxStructureReuse <= 110);
   assert.ok(audit.batchIssues.some((item) => item.rule === 'GLOBAL_STRUCTURE_REUSE_HIGH'));
 });
+
+test('edge gate rejects frames and solid ink that print as black edges after paper drift', () => {
+  const report = auditLibraryDocument({
+    id: 'edges',
+    widthMm: 40,
+    heightMm: 30,
+    elements: [
+      { id: 'frame', type: 'rect', x: 0.8, y: 0.8, width: 38.4, height: 28.4, lineWidth: 0.35, filled: false },
+      { id: 'inset-frame', type: 'rect', x: 2, y: 2, width: 36, height: 26, lineWidth: 0.3, filled: false },
+      { id: 'rail', type: 'rect', x: 1.2, y: 6, width: 1, height: 18, filled: true },
+      { id: 'band', type: 'text', x: 5, y: 1.2, width: 20, height: 3, fontSize: 2.2, text: '反白标题', reverse: true },
+      { id: 'rule', type: 'line', x: 2, y: 28.9, width: 20, height: 0.3, lineWidth: 0.3 },
+      { id: 'tight', type: 'text', x: 0.6, y: 10, width: 10, height: 3, fontSize: 2.2, text: '贴边文字' },
+      { id: 'fine', type: 'text', x: 2, y: 15, width: 20, height: 3, fontSize: 2.2, text: '正常文字' }
+    ]
+  });
+  const flagged = (rule) => report.issues
+    .filter((item) => item.rule === rule)
+    .map((item) => item.elementIds[0])
+    .sort();
+  assert.deepEqual(flagged('EDGE_FRAME'), ['frame', 'inset-frame']);
+  assert.deepEqual(flagged('EDGE_INK'), ['band', 'rail', 'rule']);
+  assert.deepEqual(flagged('EDGE_TOO_CLOSE'), ['tight']);
+  assert.equal(report.ok, false);
+});
+
+test('every shelf, batch and library template keeps ink off the label edge', () => {
+  const { BATCH_TEMPLATES, PUBLIC_TEMPLATES } = require('../miniprogram/app/catalog');
+  const { buildTemplateDocument } = require('../miniprogram/app/template-layouts');
+  const documents = PUBLIC_TEMPLATES.concat(BATCH_TEMPLATES)
+    .map((template) => buildTemplateDocument(template))
+    .concat(LIBRARY_INDEX.map((entry) => buildLibraryDocument(entry.id)));
+  const failures = [];
+  for (const document of documents) {
+    const edge = auditLibraryDocument(document).issues.filter((item) => item.rule.startsWith('EDGE_'));
+    if (edge.length) failures.push(`${document.name}（${document.widthMm}×${document.heightMm}）：${edge[0].message}`);
+  }
+  assert.ok(!failures.length, `${failures.length} 个模板有黑边风险，例如：\n${failures.slice(0, 6).join('\n')}`);
+});

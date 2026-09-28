@@ -41,8 +41,56 @@ function paintTemplate(target, templateId) {
   return template;
 }
 
+function roundedRectPath(context, x, y, width, height, radius) {
+  context.beginPath();
+  context.moveTo(x + radius, y);
+  context.arcTo(x + width, y, x + width, y + height, radius);
+  context.arcTo(x + width, y + height, x, y + height, radius);
+  context.arcTo(x, y + height, x, y, radius);
+  context.arcTo(x, y, x + width, y, radius);
+  context.closePath();
+}
+
+// Shelf thumbnail: transparent surround, white die-cut paper with a hairline
+// and soft shadow, so the label edge reads at every paper ratio. Templates
+// themselves carry no frame; this outline exists only in the preview.
+function paintShelfThumb(target, templateId) {
+  const template = getTemplate(templateId);
+  if (!template) throw new Error(`unknown template: ${templateId}`);
+  const context = target.getContext('2d');
+  context.clearRect(0, 0, target.width, target.height);
+  const documentValue = freezeDocument(buildTemplateDocument(template));
+  const inset = 28;
+  const fitted = fitPaper(documentValue.widthMm, documentValue.heightMm, target.width - inset * 2, target.height - inset * 2);
+  const paper = document.createElement('canvas');
+  paper.width = fitted.width;
+  paper.height = fitted.height;
+  renderDocument(paper.getContext('2d'), documentValue, fitted, fitted.dpi, {});
+  const x = Math.round((target.width - fitted.width) / 2);
+  const y = Math.round((target.height - fitted.height) / 2);
+  const radius = Math.round(1.5 * fitted.dpi / 25.4);
+  context.save();
+  context.shadowColor = 'rgba(15, 17, 20, 0.14)';
+  context.shadowBlur = 18;
+  context.shadowOffsetY = 4;
+  roundedRectPath(context, x, y, fitted.width, fitted.height, radius);
+  context.fillStyle = '#ffffff';
+  context.fill();
+  context.restore();
+  context.save();
+  roundedRectPath(context, x, y, fitted.width, fitted.height, radius);
+  context.clip();
+  context.drawImage(paper, x, y);
+  context.restore();
+  roundedRectPath(context, x + 0.5, y + 0.5, fitted.width - 1, fitted.height - 1, radius);
+  context.strokeStyle = '#E5E6EB';
+  context.lineWidth = 1;
+  context.stroke();
+  return template;
+}
+
 window.renderShangyueThumb = function renderShangyueThumb(templateId) {
-  paintTemplate(document.getElementById('thumb'), templateId);
+  paintShelfThumb(document.getElementById('thumb'), templateId);
 };
 
 window.renderShangyueCompare = function renderShangyueCompare(leftId, rightId, leftTitle, rightTitle) {

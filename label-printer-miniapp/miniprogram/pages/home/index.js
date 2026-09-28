@@ -28,7 +28,7 @@ const { validateDocument } = require('../../core/renderer');
 const { parseCsv, rowsToRecords, stringifyCsv } = require('../../services/csv');
 const { localizeDocumentImages } = require('../../services/remote-image-cache');
 const { KEYS, Repository, normalizeDocument } = require('../../services/repository');
-const { scanCode } = require('../../services/scanner');
+const { scanCode, showScanFailure } = require('../../services/scanner');
 const { EditorSession } = require('../../services/editor-session');
 
 const PAGE_SIZE = 24;
@@ -515,11 +515,7 @@ Page({
       this.openEditor(document, '');
     } catch (error) {
       if (error && error.code === 'SCAN_CANCELLED') return;
-      wx.showModal({
-        title: '无法扫码建标',
-        content: error && error.message ? error.message : '扫码失败，请稍后重试',
-        showCancel: false
-      });
+      showScanFailure(wx, error, { title: '无法扫码建标', retry: () => this.scanToLabel() });
     } finally {
       this.codeScanInFlight = false;
       this.setData({ codeScanning: false });

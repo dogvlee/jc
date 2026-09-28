@@ -1,8 +1,9 @@
 const qrcode = require('../vendor/qrcode');
-const { encodeCode128B } = require('./code128');
+const { encodeCode128 } = require('./code128');
 const { encodeEan13 } = require('./ean13');
 const { drawMaterialSymbol } = require('./materials');
 const { drawBorderStyle, borderById } = require('./borders');
+const { resolveLinkedCodes, serialText } = require('./linked-codes');
 const { clampTextArcAngle, normalizeTextMode } = require('./text-direction');
 const { CHROME } = require('./editor-gesture');
 const { QR_QUIET_ZONE_MODULES, validateCodeElement } = require('./code-quality');
@@ -572,8 +573,7 @@ function formatTimeChip(element, now) {
 }
 
 function serialValue(element) {
-  const raw = element.currentValue == null ? Number(element.start) || 0 : Number(element.currentValue) || 0;
-  return `${element.prefix || ''}${pad(raw, element.digits)}${element.suffix || ''}`;
+  return serialText(element);
 }
 
 function drawGeneratedText(context, element, dpi, text) {
@@ -602,7 +602,7 @@ function drawBarcode(context, element, dpi) {
   }
   let encoded;
   try {
-    encoded = element.format === 'ean13' ? encodeEan13(element.value) : encodeCode128B(element.value);
+    encoded = element.format === 'ean13' ? encodeEan13(element.value) : encodeCode128(element.value);
   } catch (error) {
     return;
   }
@@ -689,7 +689,7 @@ function drawQrCode(context, element, dpi) {
 }
 
 function validateDocument(document, dpi) {
-  document.elements.forEach((element) => {
+  resolveLinkedCodes(document).elements.forEach((element) => {
     if (element.type === 'barcode' || element.type === 'qrcode') validateCodeElement(element, dpi);
   });
 }
@@ -974,7 +974,7 @@ function renderDocument(context, document, canvasSize, dpi, images, options) {
   }
   context.fillStyle = CHROME.paper;
   context.fillRect(0, 0, canvasSize.width, canvasSize.height);
-  document.elements.forEach((element) => {
+  resolveLinkedCodes(document).elements.forEach((element) => {
     if (element.type === 'text') {
       drawText(context, element, dpi);
     } else if (element.type === 'date') {
