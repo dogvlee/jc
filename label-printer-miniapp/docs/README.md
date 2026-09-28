@@ -15,6 +15,7 @@
 | [产品规格](./PRODUCT_SPEC.md) | 产品定位、范围、用户旅程、能力与验收基线 | 产品、研发、QA |
 | [完整需求规格](./REQUIREMENTS_SPEC.md) | 带唯一编号的功能与非功能需求 | 产品、研发、QA |
 | [体验规格](./UX_SPEC.md) | 信息架构、页面交互、状态、文案与可用性要求 | 产品、设计、前端、QA |
+| [设计系统与视觉规范](./DESIGN_SYSTEM.md) | 设计变量、图标、通用样式与 Figma 组件对照 | 设计、前端、QA |
 | [竞品分析](./COMPETITIVE_ANALYSIS.md) | NIIMBOT、Phomemo、DYMO、Brother 对比与优先级决策 | 产品、业务 |
 | [扫码建标功能规格](./FEATURE_SPEC_SCAN_TO_LABEL.md) | 本期新增功能的规则、护栏、错误与验收 | 产品、研发、QA、隐私 |
 

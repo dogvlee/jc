@@ -1,0 +1,369 @@
+# 商跃标签 UI 视觉改版 Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** 把小程序两个页面（home、editor）及全部弹层改成“清爽白底 + 品牌红点缀”的主流 App 观感，并在 Figma 交付与代码对应的设计系统和页面稿。
+
+**Architecture:** 设计变量写在 `app.wxss` 的 `page {}`，通用组件样式也放在 `app.wxss`，两个页面共用；图标由脚本从 `lucide-static` 生成 `styles/icons.wxss`（SVG data URI + `-webkit-mask`，颜色跟随 `color`）。WXML 就地改造，保留全部被测试和冒烟脚本引用的 class、文案与事件绑定。
+
+**Tech Stack:** 微信小程序原生 WXML/WXSS（WebView 渲染）、Node 18+ `node:test`、`lucide-static@1.48.0`（开发依赖）、miniprogram-automator 冒烟、Figma MCP（use_figma）。
+
+**Spec:** `docs/superpowers/specs/2026-09-28-ui-refresh-design.md`
+
+## Global Constraints
+
+- 主色 `#E02D26`；旧红色 `#f44336`、`#f4433b`、`#ef433c`、`#e53935`、`#f13932`、`#ff5b53` 不得再出现在 `miniprogram/pages`、`app.wxss`、`app.json`。
+- 首页顺序：最近标签 → 当前纸张 → 商跃模板 → `scan-banner`；`quick-panel` 不得出现。
+- 保留 class：`.onboarding-actions`、`.primary-button`、`.bottom-nav`、`.circle-button`、`.device-pill`、`.brand-row`、`.create-nav`、`.tool-button`、`.save-button`、`.print-button`、`.header-main`、`.icon-button`、`.close`、`.draft-recovery`、`.project-open`、`.print-actions`、`.print-sheet`、`.sheet-close`、`.plain-header`、`.library-card`、`.preview-sheet`、`.paper-shell`、`.label-canvas`、`.selection-canvas`、`.copies-input`、`.layer-type`、`.inspector-title`、`.scan-banner`。
+- `.header-main` 保持 `style="padding-right: {{menuSafeRightPx}}px;"`；`.paper-shell` 不写 min/max-height 且保持 `margin-top/bottom: auto`；`.canvas-stage` 保持 `align-items: flex-start`。
+- `.plain-header` 内只允许一个 `button`（模板页为导入按钮）。
+- 字重只用 400/500/600；页边距 32rpx。
+- 不做 git commit（工作区含用户未提交改动）；改动前备份到 scratchpad，结束时输出本次改动 diff。
+- Figma：教育版每天 200 次、每分钟 10 次调用；写入按批合并。
+
+## File Structure
+
+| 文件 | 职责 | 动作 |
+| --- | --- | --- |
+| `scripts/build-icons.mjs` | 从 lucide-static 生成图标 WXSS 与 Figma 用 JSON；`--check` 校验是否最新 | 新建 |
+| `miniprogram/styles/icons.wxss` | 生成的图标类（勿手改） | 生成 |
+| `docs/design/icons.json` | 同一批 SVG，供 Figma | 生成 |
+| `miniprogram/app.wxss` | 设计变量 + 全局重置 + 通用组件 + `@import` 图标 | 重写 |
+| `miniprogram/app.json`、`pages/*/index.json` | 窗口/背景色 | 修改 |
+| `miniprogram/pages/home/index.wxml/.wxss` | 首页五个路由与弹层 | 改造 |
+| `miniprogram/pages/home/index.js` | 仅 `confirmColor` | 修改 |
+| `miniprogram/pages/editor/index.wxml/.wxss` | 编辑器与弹层 | 改造 |
+| `miniprogram/pages/editor/index.js` | `ELEMENT_TOOLS` 增加 `icon` 字段、`confirmColor` | 修改 |
+| `tests/ui-icons.test.js`、`tests/ui-tokens.test.js` | 设计系统回归测试 | 新建 |
+| `THIRD_PARTY_NOTICES.md`、`miniprogram/THIRD_PARTY_NOTICES.txt` | Lucide ISC + Feather MIT | 修改 |
+| `package.json` / `package-lock.json` | `lucide-static` 开发依赖、`build:icons` 脚本 | 修改 |
+| `docs/DESIGN_SYSTEM.md`、`docs/README.md`、`docs/UX_SPEC.md` | 设计系统说明、索引、首页头部描述 | 新建/修改 |
+
+---
+
+### Task 0: 基线与备份
+
+**Files:** 无改动（备份到 scratchpad）
+
+- [ ] **Step 1:** 复制将修改的文件到 `<scratchpad>/baseline/`（保持相对路径）：`miniprogram/app.wxss app.json pages/**`、`THIRD_PARTY_NOTICES.md`、`miniprogram/THIRD_PARTY_NOTICES.txt`、`package.json`、`package-lock.json`、`docs/README.md`、`docs/UX_SPEC.md`。
+- [ ] **Step 2:** 运行 `npm.cmd test`，记录通过数作为基线（预期全部 PASS）。
+
+### Task 1: 图标生成管线
+
+**Files:**
+- Create: `scripts/build-icons.mjs`, `tests/ui-icons.test.js`
+- Generate: `miniprogram/styles/icons.wxss`, `docs/design/icons.json`
+- Modify: `package.json`（devDependency `lucide-static: 1.48.0`，script `build:icons`），`THIRD_PARTY_NOTICES.md`，`miniprogram/THIRD_PARTY_NOTICES.txt`
+
+**Interfaces:**
+- Produces: CSS 基类 `.icon`；字形类 `.icon-<lucide 名>`；`build-icons.mjs` 导出 `ICON_NAMES: string[]`、`STROKE_WIDTH = 1.8`、`renderIcons(): { wxss: string, json: string }`；CLI `--check` 在产物过期时退出码 1。
+
+- [ ] **Step 1: 写失败测试** `tests/ui-icons.test.js`
+
+```js
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
+
+const root = path.join(__dirname, '..');
+const mini = path.join(root, 'miniprogram');
+const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
+const iconsPath = 'miniprogram/styles/icons.wxss';
+const NON_GLYPH = new Set(['button']);
+
+function definedIcons() {
+  return new Set([...read(iconsPath).matchAll(/\.icon-([a-z0-9-]+)\s*\{/g)].map((m) => m[1]));
+}
+
+function usedIcons() {
+  const sources = ['pages/home/index.wxml', 'pages/editor/index.wxml', 'pages/editor/index.js', 'pages/home/index.js']
+    .map((file) => fs.readFileSync(path.join(mini, file), 'utf8'));
+  const used = new Set();
+  for (const source of sources) {
+    for (const match of source.matchAll(/\bicon-([a-z0-9]+(?:-[a-z0-9]+)*)\b/g)) {
+      if (!NON_GLYPH.has(match[1])) used.add(match[1]);
+    }
+  }
+  return used;
+}
+
+test('icon stylesheet is generated, current and imported globally', () => {
+  assert.ok(fs.existsSync(path.join(root, iconsPath)));
+  assert.match(read(iconsPath), /Generated by scripts\/build-icons\.mjs from lucide-static@1\.48\.0/);
+  assert.match(read('miniprogram/app.wxss'), /@import\s+["']\/?styles\/icons\.wxss["'];/);
+  const check = spawnSync(process.execPath, [path.join(root, 'scripts', 'build-icons.mjs'), '--check'], { encoding: 'utf8' });
+  assert.equal(check.status, 0, check.stderr || check.stdout);
+});
+
+test('every icon class used by pages is defined, and every defined icon is used', () => {
+  const defined = definedIcons();
+  const used = usedIcons();
+  const missing = [...used].filter((name) => !defined.has(name));
+  const unused = [...defined].filter((name) => !used.has(name));
+  assert.deepEqual(missing, [], `未定义的图标：${missing.join(', ')}`);
+  assert.deepEqual(unused, [], `未使用的图标：${unused.join(', ')}`);
+});
+
+test('icons are inline masks only, never remote images', () => {
+  const css = read(iconsPath);
+  assert.doesNotMatch(css, /url\(\s*["']?(?:https?:)?\/\//i);
+  assert.match(css, /\.icon\s*\{[^}]*-webkit-mask-size/);
+  for (const match of css.matchAll(/url\("([^"]+)"\)/g)) assert.match(match[1], /^data:image\/svg\+xml,/);
+});
+
+test('legacy unicode glyph icons are gone from pages', () => {
+  const glyphs = /[⌁▦▧♙⌂⌗⚙↻⇧⇩▣▰▱↶↷☺◷▥▤―⌕＋›✓]/u;
+  for (const file of ['pages/home/index.wxml', 'pages/editor/index.wxml']) {
+    const markup = fs.readFileSync(path.join(mini, file), 'utf8');
+    const hit = markup.match(glyphs);
+    assert.equal(hit, null, `${file} 仍含符号图标 ${hit && hit[0]}`);
+  }
+  const editor = fs.readFileSync(path.join(mini, 'pages/editor/index.js'), 'utf8');
+  const tools = editor.slice(editor.indexOf('const ELEMENT_TOOLS'), editor.indexOf('];', editor.indexOf('const ELEMENT_TOOLS')));
+  assert.doesNotMatch(tools, /mark:/);
+  assert.equal((tools.match(/icon: 'icon-/g) || []).length, 10);
+});
+
+test('Lucide license is recorded in both notice files', () => {
+  for (const file of ['THIRD_PARTY_NOTICES.md', 'miniprogram/THIRD_PARTY_NOTICES.txt']) {
+    const text = read(file);
+    assert.match(text, /lucide/i);
+    assert.match(text, /ISC License/);
+    assert.match(text, /Cole Bemis/);
+  }
+});
+```
+
+- [ ] **Step 2:** `node --test tests/ui-icons.test.js` → FAIL（icons.wxss 不存在）。
+- [ ] **Step 3:** `npm.cmd install --save-dev --save-exact lucide-static@1.48.0`；新增 `"build:icons": "node scripts/build-icons.mjs"`。
+- [ ] **Step 4:** 写 `scripts/build-icons.mjs`：
+
+```js
+import fs from 'node:fs';
+import path from 'node:path';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+
+const require = createRequire(import.meta.url);
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const projectRoot = path.resolve(scriptDir, '..');
+const packageRoot = path.dirname(require.resolve('lucide-static/package.json'));
+const { version } = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8'));
+
+export const STROKE_WIDTH = 1.8;
+export const ICON_NAMES = [ /* 见 Step 5 清单，按字母排序 */ ];
+const WXSS_OUT = path.join(projectRoot, 'miniprogram', 'styles', 'icons.wxss');
+const JSON_OUT = path.join(projectRoot, 'docs', 'design', 'icons.json');
+
+function innerMarkup(name) {
+  const source = fs.readFileSync(path.join(packageRoot, 'icons', `${name}.svg`), 'utf8');
+  const body = source.replace(/<!--[\s\S]*?-->/g, '').match(/<svg[^>]*>([\s\S]*)<\/svg>/);
+  if (!body) throw new Error(`无法解析图标：${name}`);
+  return body[1].replace(/\s*\n\s*/g, '').replace(/\s*\/>/g, '/>').replace(/currentColor/g, '#000').replace(/"/g, "'").trim();
+}
+
+function svg(name) {
+  return `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#000' stroke-width='${STROKE_WIDTH}' stroke-linecap='round' stroke-linejoin='round'>${innerMarkup(name)}</svg>`;
+}
+
+const encode = (markup) => markup.replace(/%/g, '%25').replace(/#/g, '%23').replace(/</g, '%3C').replace(/>/g, '%3E');
+
+export function renderIcons() {
+  const header = `/* Generated by scripts/build-icons.mjs from lucide-static@${version} (ISC; see THIRD_PARTY_NOTICES). Do not edit. */\n`;
+  const base = '.icon { display: inline-block; flex: none; width: 1em; height: 1em; vertical-align: -0.14em; background-color: currentColor; -webkit-mask-repeat: no-repeat; -webkit-mask-position: center; -webkit-mask-size: 100% 100%; }\n';
+  const rules = ICON_NAMES.map((name) => `.icon-${name} { -webkit-mask-image: url("data:image/svg+xml,${encode(svg(name))}"); }`).join('\n');
+  const icons = Object.fromEntries(ICON_NAMES.map((name) => [name, svg(name).replace(/#000/g, '#1F2329')]));
+  return {
+    wxss: `${header}${base}${rules}\n`,
+    json: `${JSON.stringify({ source: 'lucide-static', version, license: 'ISC', strokeWidth: STROKE_WIDTH, icons }, null, 2)}\n`
+  };
+}
+
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain) {
+  const { wxss, json } = renderIcons();
+  if (process.argv.includes('--check')) {
+    const stale = [[WXSS_OUT, wxss], [JSON_OUT, json]].filter(([file, text]) => !fs.existsSync(file) || fs.readFileSync(file, 'utf8') !== text);
+    if (stale.length) {
+      console.error(`图标产物已过期，请运行 npm run build:icons：${stale.map(([file]) => path.relative(projectRoot, file)).join(', ')}`);
+      process.exit(1);
+    }
+    console.log(`[icons] ${ICON_NAMES.length} icons up to date`);
+  } else {
+    fs.mkdirSync(path.dirname(WXSS_OUT), { recursive: true });
+    fs.mkdirSync(path.dirname(JSON_OUT), { recursive: true });
+    fs.writeFileSync(WXSS_OUT, wxss);
+    fs.writeFileSync(JSON_OUT, json);
+    console.log(`[icons] wrote ${ICON_NAMES.length} icons`);
+  }
+}
+```
+
+- [ ] **Step 5:** 图标清单（CSS 类名 = Lucide 名）：`activity arrow-down arrow-up bluetooth bluetooth-connected bluetooth-searching bold chevron-right circle-alert circle-check circle-help circle-user-round clock copy download file-input flip-horizontal-2 flip-vertical-2 frame hash history house image info italic layers layout-grid list-checks lock lock-open minus pencil plus printer qr-code redo-2 rotate-ccw save scan-line search search-x settings sheet shield-check signal sliders-horizontal smile square strikethrough table tags trash-2 triangle-alert type underline undo-2 upload wifi x barcode check`。执行过程中若某个图标最终未被页面使用，从清单删除（测试会强制两边一致）。
+- [ ] **Step 6:** 两个 NOTICE 文件追加 Lucide 段落（来源链接、ISC 全文、Feather MIT 全文，复制自 `node_modules/lucide-static/LICENSE`）。
+- [ ] **Step 7:** `npm.cmd run build:icons`；此时 `ui-icons` 前三项中“已使用/未使用”和“符号残留”仍 FAIL，由 Task 3–7 逐步转绿。
+
+### Task 2: 设计变量与通用组件
+
+**Files:**
+- Modify: `miniprogram/app.wxss`（重写）、`miniprogram/app.json`、`miniprogram/pages/home/index.json`、`miniprogram/pages/editor/index.json`
+- Test: `tests/ui-tokens.test.js`
+
+**Interfaces:**
+- Produces: CSS 变量（名称与值见 spec §3）；全局类 `.primary-button`、`.outline-button`、`.text-button`、`.danger-button`、`.danger-outline`、尺寸修饰 `.btn-l/.btn-m/.btn-s`、`.chip`(+`.active`)、`.card`、`.section-title`、`.muted`、`.bottom-sheet`、`.sheet-handle`、`.sheet-heading`、`.sheet-title`、`.sheet-subtitle`、`.close-button`/`.sheet-close`、`.sheet-actions`、`.modal-backdrop`、`.glyph-badge`（图标圆底，不能以 icon- 开头以免被当成图标名）、`.empty-state`。
+
+- [ ] **Step 1: 写失败测试** `tests/ui-tokens.test.js`
+
+```js
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const mini = path.join(__dirname, '..', 'miniprogram');
+const read = (file) => fs.readFileSync(path.join(mini, file), 'utf8');
+const STYLE_FILES = ['app.wxss', 'pages/home/index.wxss', 'pages/editor/index.wxss'];
+const LEGACY_REDS = /#(?:f44336|f4433b|ef433c|e53935|f13932|ff5b53|ff4b43|ee3e37|f24840|e23c31|e43f34|e54438)\b/i;
+
+test('every CSS variable used by styles is defined once on page in app.wxss', () => {
+  const app = read('app.wxss');
+  const pageBlock = app.match(/(?:^|\n)page\s*\{([^}]*)\}/);
+  assert.ok(pageBlock, 'app.wxss 需要 page {} 设计变量块');
+  const defined = new Set([...pageBlock[1].matchAll(/(--[a-z0-9-]+)\s*:/g)].map((m) => m[1]));
+  for (const file of STYLE_FILES) {
+    for (const match of read(file).matchAll(/var\((--[a-z0-9-]+)/g)) {
+      assert.ok(defined.has(match[1]), `${file} 使用了未定义的变量 ${match[1]}`);
+    }
+  }
+  for (const name of ['--color-primary', '--color-bg', '--color-text-1', '--radius-lg', '--space-5', '--gutter']) {
+    assert.ok(defined.has(name), `缺少 ${name}`);
+  }
+  assert.match(pageBlock[1], /--color-primary:\s*#E02D26;/i);
+});
+
+test('legacy brand reds are gone from app and page sources', () => {
+  for (const file of [...STYLE_FILES, 'app.json', 'pages/home/index.wxml', 'pages/editor/index.wxml', 'pages/home/index.js', 'pages/editor/index.js']) {
+    const hit = read(file).match(LEGACY_REDS);
+    assert.equal(hit, null, `${file} 仍含旧红色 ${hit && hit[0]}`);
+  }
+});
+
+test('native slider, switch and confirm colors use the brand primary', () => {
+  for (const file of ['pages/home/index.wxml', 'pages/editor/index.wxml']) {
+    for (const match of read(file).matchAll(/(?:activeColor|color)="(#[0-9a-fA-F]{6})"/g)) {
+      assert.equal(match[1].toUpperCase(), '#E02D26', `${file} ${match[0]}`);
+    }
+  }
+  for (const file of ['pages/home/index.js', 'pages/editor/index.js']) {
+    for (const match of read(file).matchAll(/confirmColor:\s*'(#[0-9a-fA-F]{6})'/g)) {
+      assert.equal(match[1].toUpperCase(), '#E02D26', `${file} ${match[0]}`);
+    }
+  }
+});
+
+test('page stylesheets do not redeclare the global page palette', () => {
+  for (const file of ['pages/home/index.wxss', 'pages/editor/index.wxss']) {
+    const block = read(file).match(/(?:^|\n)page\s*\{([^}]*)\}/);
+    if (block) assert.doesNotMatch(block[1], /font-family|(?:^|;)\s*color\s*:/, `${file} 不应覆盖全局字体和文字色`);
+  }
+});
+```
+
+- [ ] **Step 2:** `node --test tests/ui-tokens.test.js` → FAIL（无变量块、旧红色残留）。
+- [ ] **Step 3:** 重写 `app.wxss`：`@import "/styles/icons.wxss";` + `page {}` 变量（spec §3 全部）+ 全局 `button` 重置（margin/padding 0、透明底、`line-height: 1.2`、`font: inherit`、`color: inherit`、`border-radius: 0`、`::after` 去边框、保留 `button:not([size="mini"]) { width: auto; min-width: 0; }`）+ spec §5 通用组件。按钮统一 `display: flex; align-items: center; justify-content: center; gap: 8rpx;`，修复文字不居中。
+- [ ] **Step 4:** `app.json` `backgroundColor` → `#F5F6F8`；home json `backgroundColor` → `#F5F6F8`；editor json → `#EEF0F3`。
+- [ ] **Step 5:** 模拟器早测（Task 8 的截图脚本最小版）：确认 rpx 写在变量里生效、遮罩图标能显示；不生效则改用 px 变量并记录到 DESIGN_SYSTEM。
+
+### Task 3: 首页主页面与底栏
+
+**Files:** Modify `miniprogram/pages/home/index.wxml:9-72,182-188`、`miniprogram/pages/home/index.wxss`
+
+- [ ] **Step 1:** WXML：
+  - `.home-hero` 内帮助钮改为 `<button class="circle-button" bindtap="openHelp" aria-label="帮助"><text class="icon icon-circle-help" aria-hidden="true"></text></button>`；设备胶囊改为 `<button class="device-pill {{connected ? 'connected' : ''}}" bindtap="openDevices"><text class="icon {{connected ? 'icon-bluetooth-connected' : 'icon-bluetooth'}}" aria-hidden="true"></text><text class="device-label">{{connectionLabel}}</text><text class="icon icon-chevron-right" aria-hidden="true"></text></button>`。
+  - 删除 `heading-icon`；“打印历史/全部”改为文字按钮 + `icon-history` / `icon-chevron-right`；“更多”同理。
+  - 空状态：`friendly-empty` 内加 `<view class="glyph-badge"><text class="icon icon-tags"></text></view>` 与说明“从模板开始，或新建一张空白标签”；三个按钮等宽。
+  - 项目卡元信息合并为一行 `{{item.sizeText}} · {{item.updatedText}}`。
+  - `scan-banner` 的 `⌗` 改为 `<view class="scan-symbol"><text class="icon icon-scan-line"></text></view>`。
+  - 草稿卡加 `icon-rotate-ccw` 图标底板。
+  - 底栏：`nav-icon` 改为 `<text class="nav-icon icon icon-house"></text>` 等（house / layout-grid / tags / circle-user-round），`create-nav` 内为 `<text class="icon icon-plus"></text>`。
+- [ ] **Step 2:** WXSS：删除页面级 `page`/`button` 重置与弹层通用样式（已移入 app.wxss）；`.app-shell.route-home` 顶部渐变 `linear-gradient(180deg, #FFE6E3 0, #FFF4F2 320rpx, var(--color-bg) 620rpx) no-repeat`；品牌块、胶囊、卡片、网格、底栏按 spec §6 与 §3 取值。
+- [ ] **Step 3:** `npm.cmd test` → 旧测试全绿（顺序与文案断言），`ui-*` 中与首页主路由相关部分转绿。
+
+### Task 4: 首页其余路由（模板、标签、批量、我的）
+
+**Files:** Modify `miniprogram/pages/home/index.wxml:74-180`、`miniprogram/pages/home/index.wxss`
+
+- [ ] **Step 1:** 模板页：页头保留唯一的导入按钮（加 `icon-file-input`）；搜索框与筛选移入 `<view class="page-toolbar">`；一级行（行业 + 行业库 + 我的）排在前面，样式为文字 Tab（`filter-tab`，选中下划线）；二级行（分类或场景）为 `filter-chip`；行业库尺寸行同为 `filter-chip`。空状态图标 `icon-search-x`。
+- [ ] **Step 2:** 标签页：页头“新建”按钮带 `icon-plus`；搜索移入 `page-toolbar`；`delete-card` 改为图标按钮 `icon-trash-2`（保留 `aria-label`）；空状态图标 `icon-tags`。
+- [ ] **Step 3:** 批量页：“添加行”带 `icon-plus`；导入/导出带 `icon-file-input` / `icon-download`；删除行按钮改 `icon-x` 并加 `aria-label="删除第 {{index + 1}} 行"`；`picker-field` 箭头改 `icon-chevron-right`。
+- [ ] **Step 4:** 我的：头部渐变 + 头像块 + 标题旁“本地模式”标识（`icon-shield-check`）；菜单图标：printer / sliders-horizontal / history / sheet / wifi / upload / download / circle-help；右箭头 `icon-chevron-right`。
+- [ ] **Step 5:** `npm.cmd test`。
+
+### Task 5: 首页弹层与引导
+
+**Files:** Modify `miniprogram/pages/home/index.wxml:191-252`、`miniprogram/pages/home/index.wxss`、`miniprogram/pages/home/index.js`（`confirmColor`）
+
+- [ ] **Step 1:** 所有关闭按钮内容 `×` → `<text class="icon icon-x"></text>`，并加 `aria-label="关闭"`。
+- [ ] **Step 2:** 标签纸预设：当前尺寸加 `active`（`settings.stockWidthMm == item.widthMm && settings.stockHeightMm == item.heightMm`）并显示 `icon-check`。
+- [ ] **Step 3:** 打印历史状态：`icon-check` / `icon-triangle-alert` 放在 `.history-status` 内（成功/失败仍有文字“打开/仅记录”与颜色双重区分）。
+- [ ] **Step 4:** 设置弹层滑块 `activeColor="#E02D26"`，箭头 `icon-chevron-right`；帮助提醒加 `icon-info`。
+- [ ] **Step 5:** 引导：`onboarding-icon` 改为 `<view class="glyph-badge large"><text class="icon {{onboardingStep == 0 ? 'icon-bluetooth' : onboardingStep == 1 ? 'icon-layout-grid' : 'icon-printer'}}"></text></view>`。
+- [ ] **Step 6:** `index.js` 两处 `confirmColor: '#e53935'` → `'#E02D26'`。
+- [ ] **Step 7:** `npm.cmd test` → `ui-tokens` 中首页部分转绿。
+
+### Task 6: 编辑器主体
+
+**Files:** Modify `miniprogram/pages/editor/index.wxml:1-256`、`miniprogram/pages/editor/index.wxss`、`miniprogram/pages/editor/index.js:82-93`
+
+- [ ] **Step 1:** `ELEMENT_TOOLS` 的 `mark` 改为 `icon`：text→`icon-type`、image→`icon-image`、material→`icon-smile`、date→`icon-clock`、barcode→`icon-barcode`、qrcode→`icon-qr-code`、serial→`icon-hash`、rect→`icon-square`、table→`icon-table`、line→`icon-minus`；WXML `<text class="tool-icon"><text class="icon {{item.icon}}"></text></text>`。
+- [ ] **Step 2:** 顶栏按钮内容换图标：x / undo-2 / redo-2 / layers / printer / settings；文档行加 `icon-pencil` 提示、尺寸胶囊、连接点旁显示 `{{connectionLabel}}`。
+- [ ] **Step 3:** 保存状态胶囊：`class="draft-save-status {{saveState == '草稿保存失败，请勿退出，点此重试' ? 'error' : ''}}"`，前置 `icon-check` 或 `icon-circle-alert`；模板提醒条 `⚠` → `icon-triangle-alert`。
+- [ ] **Step 4:** 检查器：多选/复制/锁定/删除加 `icon-list-checks` / `icon-copy` / `icon-lock|icon-lock-open` / `icon-trash-2`；B/I/U/S 改 `icon-bold` / `icon-italic` / `icon-underline` / `icon-strikethrough`（保留 `aria-label`）；镜像/层级加 `icon-flip-horizontal-2` / `icon-flip-vertical-2` / `icon-arrow-down` / `icon-arrow-up`；“扫描填入”`⌗` → `icon-scan-line`；替换图片 `icon-image`；更换素材 `icon-smile`；装饰边框 `icon-frame`；形状选项显示中文（rect→矩形、rounded→圆角、circle→圆形、ellipse→椭圆）；表格步进 `−/＋` → `icon-minus` / `icon-plus`；`picker-field` 箭头 → `icon-chevron-right`；开关 `color="#E02D26"`、滑块 `activeColor="#E02D26"`。
+- [ ] **Step 5:** 底部动作条：`<button class="save-button outline-button"><text class="icon icon-save"></text>保存</button><button class="print-button primary-button"><text class="icon icon-printer"></text>打印</button>`，网格 1fr : 2fr；`.panel-scroll`、`.simple-panel` 高度改为 `calc(100% - 208rpx)`（Tab 88 + 动作条 120）。
+- [ ] **Step 6:** WXSS：画布舞台点阵背景、纸张圆角阴影、面板 Tab 下划线、工具图块、属性区输入块与分段选择器，数值取 spec §3；小屏 `@media (max-height: 700px)` 同步收紧。
+- [ ] **Step 7:** `npm.cmd test`（含 `editor-preview-canvas`、`editor-header-safe-area`、`editor-page` 的 WXML 断言）。
+
+### Task 7: 编辑器弹层
+
+**Files:** Modify `miniprogram/pages/editor/index.wxml:258-357`、`miniprogram/pages/editor/index.wxss`、`miniprogram/pages/editor/index.js`（如有 `confirmColor`）
+
+- [ ] **Step 1:** 所有 `sheet-close` 内容 → `icon-x` + `aria-label="关闭"`。
+- [ ] **Step 2:** 设备弹层：已连接卡 `icon-bluetooth-connected`；设备行前置 `icon-bluetooth` 图块、信号 `icon-signal` + RSSI、`icon-chevron-right`；空状态 `icon-bluetooth-searching`；“连接诊断”加 `icon-activity`。
+- [ ] **Step 3:** 打印弹层：警告卡 `icon-triangle-alert`、错误卡 `icon-circle-alert`；份数步进 `icon-minus` / `icon-plus`；主按钮居中修复（由全局按钮样式保证）。
+- [ ] **Step 4:** 设置弹层：箭头与滑块颜色；图层弹层：状态列 `锁定`→`icon-lock`、`✓`→`icon-check`、`›`→`icon-chevron-right`；素材空图标 `☺` → `icon-smile`。
+- [ ] **Step 5:** `npm.cmd test` → 全部测试（含 `ui-icons`、`ui-tokens`）PASS。
+
+### Task 8: 模拟器验证与修正
+
+**Files:** `<scratchpad>/screens.cjs`（临时截图脚本，不入库）
+
+- [ ] **Step 1:** `npm.cmd run test:wechat -- --cli 'D:\software\微信web开发者工具\cli.bat' --lib 3.17.2` → 7 个用例 PASS，截图入 `artifacts/wechat-smoke/run-*/`。
+- [ ] **Step 2:** 临时脚本基于同一隔离项目，依次截图：首页（空/有数据/草稿）、模板、行业库、我的标签、批量数据、我的、各弹层、编辑器未选中/选中文本/选中条码、设备/打印/设置/图层/素材弹层。
+- [ ] **Step 3:** 逐张检查：文字居中、溢出、间距、图标渲染、渐变过渡、胶囊避让；修正后重跑 Step 1–2。
+- [ ] **Step 4:** 再以 `--lib 2.32.3`（项目最低基础库）跑一次冒烟。
+
+### Task 9: 文档
+
+**Files:** Create `docs/DESIGN_SYSTEM.md`；Modify `docs/README.md`、`docs/UX_SPEC.md:144`
+
+- [ ] **Step 1:** `DESIGN_SYSTEM.md`：变量表、字号/间距/圆角、图标用法与再生成命令、组件清单与 class 名、Figma 文件链接与变量映射规则、真机复核事项。
+- [ ] **Step 2:** `UX_SPEC.md` 4.1 首句改为“顶部为淡红渐变头部，放品牌、帮助和设备胶囊……”；`docs/README.md` 索引加入 DESIGN_SYSTEM。
+- [ ] **Step 3:** `npm.cmd run check`（Markdown 链接校验）PASS。
+
+### Task 10: Figma 设计系统与页面
+
+**Files:** 无代码；Figma 文件（新建）
+
+- [ ] **Step 1:** 加载 `figma:figma-use`、`figma:figma-generate-library`、`figma:figma-generate-design`、`figma:figma-create-new-file` 技能；`create_new_file` 建“商跃标签 · 设计系统”。
+- [ ] **Step 2:** 页面 Cover / Foundations / Components / Screens；变量集合 `Tokens`（color、space、radius，名称与 CSS 变量对应）；文字样式 6 个（Noto Sans SC）。
+- [ ] **Step 3:** 用 `docs/design/icons.json` 建图标组件 `icon/<name>`（24×24，描边绑定 `color/text-1`）。
+- [ ] **Step 4:** 组件（spec §7 清单）带变体与变量绑定。
+- [ ] **Step 5:** 页面 12 张（375×812），用组件实例拼装；模板缩略图上传 `assets/shangyue-thumbs` 中实际图片。
+- [ ] **Step 6:** `get_screenshot` 逐页与模拟器截图对照修正。
+
+### Task 11: 收尾验证
+
+- [ ] **Step 1:** `npm.cmd run verify` PASS（check + test + 公开包门禁）。
+- [ ] **Step 2:** 生成本次改动 diff：`git diff --no-index <scratchpad>/baseline <当前文件>` 汇总为 `<scratchpad>/ui-refresh.diff`，向用户报告文件清单、测试结果、截图位置、Figma 链接和仍需真机验收的事项。

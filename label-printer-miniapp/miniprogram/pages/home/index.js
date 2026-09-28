@@ -477,7 +477,7 @@ Page({
     wx.showModal({
       title: '删除我的模板',
       content: `确定删除“${preview.name}”吗？已用它创建的项目不会被删除。`,
-      confirmColor: '#e53935',
+      confirmColor: '#E02D26',
       success: (result) => {
         if (!result.confirm) return;
         this.repository.deleteUserTemplate(preview.id);
@@ -815,7 +815,7 @@ Page({
                 title: '确认恢复备份',
                 content: `备份含 ${projectCount} 个项目、${templateCount} 个模板。恢复会覆盖本机现有项目、模板、数据和设置，确定继续吗？`,
                 confirmText: '覆盖恢复',
-                confirmColor: '#e53935',
+                confirmColor: '#E02D26',
                 success: (choice) => {
                   if (!choice.confirm) return;
                   try {

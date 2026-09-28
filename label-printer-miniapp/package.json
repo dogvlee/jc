@@ -5,6 +5,7 @@
   "description": "NIIM label design and NIIMBOT BLE printing workflow rebuilt as a native WeChat Mini Program",
   "scripts": {
     "build:vendor": "esbuild qrcode-generator --bundle --platform=browser --format=cjs --minify --legal-comments=inline --outfile=miniprogram/vendor/qrcode.js",
+    "build:icons": "node scripts/build-icons.mjs",
     "test": "node --test tests/*.test.js",
     "test:coverage": "node --test --experimental-test-coverage tests/*.test.js",
     "check": "node scripts/check-project.mjs",
@@ -23,6 +24,7 @@
   },
   "devDependencies": {
     "esbuild": "0.25.12",
+    "lucide-static": "1.48.0",
     "miniprogram-automator": "0.12.1",
     "qrcode-generator": "1.5.2"
   }

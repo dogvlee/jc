@@ -80,16 +80,16 @@ const SIZE_OPTIONS = [
 ];
 
 const ELEMENT_TOOLS = [
-  { type: 'text', label: '文本', mark: 'T' },
-  { type: 'image', label: '图片', mark: '▧' },
-  { type: 'material', label: '素材', mark: '☺' },
-  { type: 'date', label: '时间', mark: '◷' },
-  { type: 'barcode', label: '条码', mark: '▥' },
-  { type: 'qrcode', label: '二维码', mark: '▦' },
-  { type: 'serial', label: '序列号', mark: '#' },
-  { type: 'rect', label: '形状', mark: '□' },
-  { type: 'table', label: '表格', mark: '▤' },
-  { type: 'line', label: '线条', mark: '―' }
+  { type: 'text', label: '文本', icon: 'icon-type' },
+  { type: 'image', label: '图片', icon: 'icon-image' },
+  { type: 'material', label: '素材', icon: 'icon-smile' },
+  { type: 'date', label: '时间', icon: 'icon-clock' },
+  { type: 'barcode', label: '条码', icon: 'icon-barcode' },
+  { type: 'qrcode', label: '二维码', icon: 'icon-qr-code' },
+  { type: 'serial', label: '序列号', icon: 'icon-hash' },
+  { type: 'rect', label: '形状', icon: 'icon-square' },
+  { type: 'table', label: '表格', icon: 'icon-table' },
+  { type: 'line', label: '线条', icon: 'icon-minus' }
 ];
 
 function isLiveStringField(element, field) {
