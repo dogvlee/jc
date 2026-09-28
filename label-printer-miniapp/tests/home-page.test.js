@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { curatedStats } = require('../miniprogram/app/curated/index');
+const { curatedStats, queryCuratedMeta } = require('../miniprogram/app/curated/index');
 
 let pageDefinition = null;
 global.Page = (definition) => { pageDefinition = definition; };
@@ -161,6 +161,40 @@ test('scene templates are a separate curated shelf and stay off the default seed
   assert.doesNotMatch(markup, /行业库/);
   assert.match(markup, /setLibraryScene/);
   assert.match(markup, /setLibrarySize/);
+});
+
+test('showing more scene templates sends only the next page of cards', () => {
+  const patches = [];
+  const page = Object.assign({}, pageDefinition, {
+    data: {
+      templateCategory: '全部',
+      templateIndustry: '场景模板',
+      libraryScene: '全部',
+      librarySize: '全部',
+      templateQuery: '',
+      templateVisibleCount: 24
+    },
+    userTemplates: [],
+    setData(patch) {
+      patches.push(patch);
+      Object.keys(patch).forEach((key) => {
+        const indexed = /^(\w+)\[(\d+)\]$/.exec(key);
+        if (indexed) this.data[indexed[1]][Number(indexed[2])] = patch[key];
+        else this.data[key] = patch[key];
+      });
+    }
+  });
+  page.refreshTemplates();
+  page.loadMoreTemplates();
+  const appended = patches[patches.length - 1];
+  assert.equal(appended.visibleTemplates, undefined);
+  assert.equal(Object.keys(appended).filter((key) => key.startsWith('visibleTemplates[')).length, 24);
+  const ids = page.data.visibleTemplates.map((item) => item.id);
+  assert.deepEqual(ids, queryCuratedMeta({ limit: 48 }).items.map((item) => item.id));
+  assert.ok(page.data.visibleTemplates.every((item) => item.preview && item.preview.nodes.length));
+  // Changing a filter or returning to the tab rebuilds the list from the same 48.
+  page.refreshTemplates();
+  assert.deepEqual(page.data.visibleTemplates.map((item) => item.id), ids);
 });
 
 test('batch picker offers the tagged curated templates only', () => {

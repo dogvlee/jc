@@ -3,6 +3,7 @@
  * paper sizes × fictional sample content. Documents are built on demand so
  * the package carries recipes, not hundreds of generated JSON documents.
  */
+const { cloneDocument } = require('../../core/document');
 const { newDocument } = require('./layout');
 
 const DOMAINS = [
@@ -159,9 +160,18 @@ function buildEntryDocument(entry) {
   return doc;
 }
 
+// Recipes are deterministic, so each template is laid out once per session;
+// callers get their own copy to edit, fill with batch rows or preview.
+const builtDocuments = new Map();
+
+function builtDocument(entry) {
+  if (!builtDocuments.has(entry.id)) builtDocuments.set(entry.id, buildEntryDocument(entry));
+  return builtDocuments.get(entry.id);
+}
+
 function buildCuratedDocument(id) {
   const entry = getCuratedEntry(id);
-  return entry ? buildEntryDocument(entry) : null;
+  return entry ? cloneDocument(builtDocument(entry)) : null;
 }
 
 // Templates offered for CSV / batch data. Their name, price and code fields
@@ -193,7 +203,7 @@ function buildCuratedBatchDocument(id) {
 }
 
 function kindOf(entry) {
-  const elements = buildEntryDocument(entry).elements;
+  const elements = builtDocument(entry).elements;
   if (elements.some((element) => element.type === 'qrcode')) return 'qr';
   if (elements.some((element) => element.type === 'barcode')) return 'barcode';
   return 'accent';

@@ -41,7 +41,15 @@ test('scanning into an existing barcode updates value and format', () => {
   assert.equal(barcode.value, 'ABC-100');
   assert.equal(barcode.format, 'code128');
   assert.equal(inferBarcodeFormat('123456789012', 'CODE_128'), 'code128');
-  assert.equal(inferBarcodeFormat('123456789012', 'barCode'), 'ean13');
+});
+
+test('a generic barcode result prints as EAN-13 only when its check digit proves it', () => {
+  assert.equal(inferBarcodeFormat('6901234567892', 'barCode'), 'ean13');
+  // A wrong check digit cannot be printed as EAN-13; Code 128 keeps the value.
+  assert.equal(inferBarcodeFormat('6901234567890', 'barCode'), 'code128');
+  // Twelve digits would gain a check digit and change meaning as EAN-13.
+  assert.equal(inferBarcodeFormat('123456789012', 'barCode'), 'code128');
+  assert.equal(inferBarcodeFormat('123456789012', ''), 'code128');
 });
 
 test('a QR result cannot silently replace a one-dimensional barcode', () => {

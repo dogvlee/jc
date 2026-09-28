@@ -22,6 +22,13 @@ function checksum(digits) {
   return (10 - (sum % 10)) % 10;
 }
 
+// 13 digits whose last digit is the correct check digit. Twelve digits are not
+// treated as EAN-13: printing them would add a check digit and change the value.
+function isValidEan13(value) {
+  const text = String(value || '');
+  return /^\d{13}$/.test(text) && checksum(text.slice(0, 12)) === Number(text[12]);
+}
+
 function encodeEan13(value) {
   let text = String(value || '').replace(/\s/g, '');
   if (!/^\d{12,13}$/.test(text)) {
@@ -51,4 +58,4 @@ function encodeEan13(value) {
   return { bits, text, moduleCount: bits.length };
 }
 
-module.exports = { checksum, encodeEan13 };
+module.exports = { checksum, encodeEan13, isValidEan13 };

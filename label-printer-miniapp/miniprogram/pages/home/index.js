@@ -100,6 +100,19 @@ function templateView(item) {
   };
 }
 
+// Curated layouts are fixed, so each card preview is drawn once per session
+// instead of again every time the list grows or a filter changes.
+const curatedPreviews = new Map();
+
+function curatedCardView(item) {
+  const view = templateView(item);
+  if (!curatedPreviews.has(item.id)) {
+    curatedPreviews.set(item.id, withPreview({}, buildCuratedDocument(item.id), previewBoxes().card).preview || null);
+  }
+  view.preview = curatedPreviews.get(item.id);
+  return view;
+}
+
 function projectView(item, index) {
   const document = item.document || {};
   const elements = Array.isArray(document.elements) ? document.elements : [];
@@ -323,21 +336,13 @@ Page({
   refreshTemplates() {
     const category = this.data.templateCategory;
     const industry = this.data.templateIndustry;
-    const libraryScene = this.data.libraryScene;
-    const librarySize = this.data.librarySize;
     const query = String(this.data.templateQuery || '').trim().toLowerCase();
     if (industry === '场景模板') {
-      const page = queryCuratedMeta({
-        category: libraryScene,
-        size: librarySize,
-        query,
-        limit: this.data.templateVisibleCount
-      });
+      const page = this.queryCuratedPage(0, this.data.templateVisibleCount);
       this.filteredTemplates = page.items;
-      const box = previewBoxes().card;
       this.setData({
         templateTotal: page.total,
-        visibleTemplates: page.items.map((item) => withPreview(templateView(item), buildCuratedDocument(item.id), box))
+        visibleTemplates: page.items.map(curatedCardView)
       });
       return;
     }
@@ -443,8 +448,31 @@ Page({
     }, () => this.refreshTemplates());
   },
 
+  queryCuratedPage(offset, limit) {
+    return queryCuratedMeta({
+      category: this.data.libraryScene,
+      size: this.data.librarySize,
+      query: String(this.data.templateQuery || '').trim().toLowerCase(),
+      offset,
+      limit
+    });
+  },
+
   loadMoreTemplates() {
-    this.setData({ templateVisibleCount: this.data.templateVisibleCount + PAGE_SIZE }, () => this.refreshTemplates());
+    if (this.data.templateIndustry !== '场景模板') {
+      this.setData({ templateVisibleCount: this.data.templateVisibleCount + PAGE_SIZE }, () => this.refreshTemplates());
+      return;
+    }
+    // Append only the next page (about 50 KB): re-sending every card already on
+    // screen made each setData grow with the list, to about 530 KB at 300 cards.
+    const offset = this.data.visibleTemplates.length;
+    const page = this.queryCuratedPage(offset, PAGE_SIZE);
+    const patch = { templateTotal: page.total, templateVisibleCount: offset + PAGE_SIZE };
+    page.items.forEach((item, index) => {
+      patch[`visibleTemplates[${offset + index}]`] = curatedCardView(item);
+    });
+    this.filteredTemplates = (this.filteredTemplates || []).concat(page.items);
+    this.setData(patch);
   },
 
   resolveTemplate(id) {

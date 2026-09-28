@@ -1,6 +1,6 @@
 const { createDocument, createElement } = require('./document');
 const { codePrintMetrics } = require('./code-quality');
-const { checksum: ean13Checksum } = require('./ean13');
+const { checksum: ean13Checksum, isValidEan13 } = require('./ean13');
 
 const MAX_SCAN_VALUE_LENGTH = 500;
 const MAX_BARCODE_VALUE_LENGTH = 80;
@@ -44,7 +44,7 @@ function inferBarcodeFormat(value, scanType) {
   const type = normalizedScanType(scanType);
   if (type.includes('EAN13')) return 'ean13';
   if (type && type !== 'BARCODE') return 'code128';
-  return /^\d{12,13}$/.test(String(value || '')) ? 'ean13' : 'code128';
+  return isValidEan13(value) ? 'ean13' : 'code128';
 }
 
 /**

@@ -3,15 +3,17 @@ const assert = require('node:assert/strict');
 
 const {
   CURATED_INDEX,
+  buildCuratedBatchDocument,
   buildCuratedDocument,
   catalogMeta,
+  curatedBatchTemplates,
   curatedCategoryChips,
   curatedSizeChips,
   curatedStats,
   getCuratedEntry,
   queryCuratedMeta
 } = require('../miniprogram/app/curated/index');
-const { auditLibraryDocument, exactFingerprint } = require('../miniprogram/app/curated/quality');
+const { auditLibraryDocument, exactFingerprint, layoutFingerprint } = require('../miniprogram/app/curated/quality');
 const { validateDocument } = require('../miniprogram/core/renderer');
 
 const documents = CURATED_INDEX.map((entry) => [entry, buildCuratedDocument(entry.id)]);
@@ -56,6 +58,31 @@ test('curated templates are Shangyue originals built only from native vector ele
     for (const value of texts(document)) {
       assert.doesNotMatch(value, /undefined|NaN|SY\/[A-Z]{2}-|NIIMBOT|精臣/i, `${entry.id}: ${value}`);
     }
+  }
+});
+
+test('each template is laid out once and every caller gets an independent copy', () => {
+  const id = CURATED_INDEX[0].id;
+  const first = buildCuratedDocument(id);
+  const second = buildCuratedDocument(id);
+  assert.notEqual(first, second);
+  assert.deepEqual(first, second);
+  first.elements[0].text = '改过的文字';
+  first.elements.pop();
+  assert.deepEqual(buildCuratedDocument(id), second);
+
+  const batchId = curatedBatchTemplates()[0].id;
+  assert.equal(buildCuratedBatchDocument(batchId).templateMeta.batchCompatible, true);
+  assert.equal(buildCuratedDocument(batchId).templateMeta.batchCompatible, false);
+});
+
+test('different scenes never share a layout; only sample content varies within one', () => {
+  const owners = new Map();
+  for (const [entry, document] of documents) {
+    const layout = layoutFingerprint(document);
+    const owner = owners.get(layout);
+    assert.ok(!owner || owner.recipe === entry.recipe, `${entry.id} reuses the layout of ${owner && owner.id}`);
+    if (!owner) owners.set(layout, entry);
   }
 });
 

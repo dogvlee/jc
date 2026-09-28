@@ -84,6 +84,22 @@ test("explicit bind fields fill only the tagged elements", () => {
   assert.equal(document.name, "赣南脐橙");
 });
 
+test("tagged and untagged templates agree on when a code prints as EAN-13", () => {
+  const tagged = () => ({
+    widthMm: 40,
+    heightMm: 30,
+    elements: [{ id: "code", type: "barcode", value: "0", format: "code128", bindField: "code" }]
+  });
+  const untagged = () => buildTemplateDocument(getTemplate("product-simple"));
+  const formats = (code) => [tagged(), untagged()].map((document) => {
+    applyRowToDocument(document, { name: "样品", code });
+    return document.elements.find((item) => item.type === "barcode").format;
+  });
+  assert.deepEqual(formats("6901234567892"), ["ean13", "ean13"]);
+  assert.deepEqual(formats("6901234567890"), ["code128", "code128"]);
+  assert.deepEqual(formats("123456789012"), ["code128", "code128"]);
+});
+
 test("curated batch templates bind every row and still pass print validation", () => {
   const { curatedBatchTemplates, buildCuratedBatchDocument } = require("../miniprogram/app/curated/index");
   const { validateDocument } = require("../miniprogram/core/renderer");

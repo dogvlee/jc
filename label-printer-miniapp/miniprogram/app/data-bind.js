@@ -3,11 +3,11 @@
  * Roles: name, code, price, date → text / barcode / qrcode / date elements.
  */
 
-const { checksum } = require('../core/ean13');
+const { isValidEan13 } = require('../core/ean13');
 
-// 13 digits with a valid check digit; anything else prints as Code 128.
-function isEan13(value) {
-  return /^\d{13}$/.test(value) && checksum(value.slice(0, 12)) === Number(value[12]);
+// Only a complete EAN-13 prints as EAN-13; anything else prints as Code 128.
+function barcodeFormatFor(value) {
+  return isValidEan13(value) ? 'ean13' : 'code128';
 }
 
 function looksLikePrice(text) {
@@ -64,7 +64,7 @@ function applyRowToDocument(documentValue, row, options) {
       if (!value) return;
       if (element.type === 'barcode') {
         element.value = value;
-        element.format = isEan13(value) ? 'ean13' : 'code128';
+        element.format = barcodeFormatFor(value);
         delete element.unsupportedCodeType;
         delete element.requiresFormatConfirmation;
       } else if (element.type === 'qrcode') {
@@ -115,7 +115,7 @@ function applyRowToDocument(documentValue, row, options) {
   barcodes.forEach((barcode) => {
     if (!code) return;
     barcode.value = code;
-    barcode.format = /^\d{12,13}$/.test(code) ? 'ean13' : 'code128';
+    barcode.format = barcodeFormatFor(code);
     delete barcode.unsupportedCodeType;
     delete barcode.requiresFormatConfirmation;
     confirmBoundValue(barcode);
