@@ -102,12 +102,7 @@ test('template shelf contains only approved originals, authorized redesigns, and
   assert.ok(page.data.visibleTemplates.some((item) => item.id === 'user-visible'));
   assert.ok(page.data.visibleTemplates.some((item) => item.id === 'shangyue-wish-card'));
   assert.ok(page.data.visibleTemplates.some((item) => item.source === 'shangyue-original'));
-  assert.ok(page.data.visibleTemplates.some((item) => item.source === 'shangyue-authorized-redesign'));
-  assert.ok(page.data.visibleTemplates.every((item) => (
-    item.source === 'shangyue-original'
-      || item.source === 'shangyue-authorized-redesign'
-      || item.source === 'user'
-  )));
+  assert.ok(page.data.visibleTemplates.every((item) => item.source === 'shangyue-original' || item.source === 'user'));
   assert.equal(page.data.visibleTemplates.some((item) => item.source === 'builtin-base'), false);
   assert.equal(page.data.visibleTemplates.some((item) => item.id === 'remote-hidden'), false);
   assert.equal(pageDefinition.data.recommendedTemplates.length, 6);
@@ -116,13 +111,14 @@ test('template shelf contains only approved originals, authorized redesigns, and
   assert.equal(pageDefinition.data.recommendedTemplates[0].badge, '原创');
   assert.equal(pageDefinition.data.recommendedTemplates[0].copyright, '© 2026 商跃');
   assert.ok(pageDefinition.data.recommendedTemplates.every((item) => (
-    item.id.startsWith('shangyue-') && ['原创', '授权改编'].includes(item.badge)
+    item.id.startsWith('shangyue-') && item.badge === '原创'
   )));
   const markup = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'home', 'index.wxml'), 'utf8');
   assert.match(markup, /wx:if="\{\{item\.thumbSrc\}\}"[^>]+src="\{\{item\.thumbSrc\}\}"/);
   assert.match(markup, /wx:if="\{\{item\.badge\}\}"[^>]*>\{\{item\.badge\}\}/);
   assert.match(markup, /previewTemplate\.copyright/);
-  assert.match(markup, /商跃原创与精诚授权改编/);
+  assert.match(markup, /公开货架均为商跃原创模板/);
+  assert.doesNotMatch(markup, /授权改编/);
   assert.match(markup, /20 款 OFL 开源中文字库/);
 });
 
@@ -140,9 +136,7 @@ test('industry library is a separate owned-matrix shelf and stays off the defaul
     setData(patch) { Object.assign(this.data, patch); }
   });
   page.refreshTemplates();
-  assert.ok(page.data.visibleTemplates.every((item) => (
-    item.source === 'shangyue-original' || item.source === 'shangyue-authorized-redesign'
-  )));
+  assert.ok(page.data.visibleTemplates.every((item) => item.source === 'shangyue-original'));
   assert.equal(page.data.visibleTemplates.some((item) => String(item.id).startsWith('sy-lib-')), false);
 
   const shape = ownedLibraryShape();

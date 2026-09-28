@@ -1,13 +1,12 @@
 # 商跃公开模板来源与授权登记
 
-本文件记录商跃公开货架 22 套模板的创作来源、授权关系与工程证据链。其中 17 套为“商跃原创”，5 套为“精诚授权改编 · 商跃重设计”；两类不得混标。本文件用于版本追踪和第三方内容隔离，不代替著作权登记、商标核验、劳动/委托创作协议或律师意见。
+本文件记录商跃公开货架 22 套模板的创作来源与工程证据链。22 套均为“商跃原创”；其中 5 套于 2026-09-28 由权利人决定从“精诚授权改编”转为自有，设计历史保留在本文件的内部记录中。本文件用于版本追踪和第三方内容隔离，不代替著作权登记、商标核验、劳动/委托创作协议或律师意见。
 
 ## 公开口径
 
-- 商跃原创（17 套）：`shangyue-wish-card`、`shangyue-price-tag`、`shangyue-bin-label`、`shangyue-name-sticker`、`shangyue-fresh-date`、`shangyue-jewelry-tag`、`shangyue-garment-tag`、`shangyue-ship-label`、`shangyue-cable-tag`、`shangyue-asset-tag`、`shangyue-biz-card`、`shangyue-med-label`、`shangyue-seat-card`、`shangyue-bakery-tag`、`shangyue-desk-plate`、`shangyue-lab-tag`、`shangyue-serial-cable`。
-- 精诚授权改编 · 商跃重设计（5 套）：`shangyue-wifi-card`、`shangyue-promo-tag`、`shangyue-kitchen-date`、`shangyue-plant-tag`、`shangyue-care-tag`。
+- 商跃原创（22 套）：`shangyue-wish-card`、`shangyue-price-tag`、`shangyue-bin-label`、`shangyue-name-sticker`、`shangyue-fresh-date`、`shangyue-jewelry-tag`、`shangyue-garment-tag`、`shangyue-ship-label`、`shangyue-cable-tag`、`shangyue-asset-tag`、`shangyue-biz-card`、`shangyue-med-label`、`shangyue-seat-card`、`shangyue-bakery-tag`、`shangyue-desk-plate`、`shangyue-lab-tag`、`shangyue-serial-cable`、`shangyue-wifi-card`、`shangyue-promo-tag`、`shangyue-kitchen-date`、`shangyue-plant-tag`、`shangyue-care-tag`。
 
-用户已明确确认精诚同意对这 5 套模板进行改编与重设计，但书面授权凭证、授权范围和编号仍待归档。在凭证归档前后，这 5 套的来源标记都必须保持为“精诚授权改编 · 商跃重设计”，绝不标注为“商跃原创”，也不得据此暗示原作权利已转让。
+内部设计历史（不对外展示）：`shangyue-wifi-card`、`shangyue-promo-tag`、`shangyue-kitchen-date`、`shangyue-plant-tag`、`shangyue-care-tag` 最初参考精诚同类模板的用途，2026-08-18 独立重做版式、文案和码值（布局距离 ≥ 0.25、不复用整行文案、不含对方图片/字体/素材），2026-09-28 去黑边后再次修订。权利人于 2026-09-28 决定这 5 套作为商跃原创发布，对外标记 `© 2026 商跃`。如与精诚的授权约定对署名另有要求，以约定为准。
 
 ## SY-OT-001：商跃心意祝福卡
 
@@ -46,7 +45,7 @@
 1. 由实际权利主体确认“商跃”的完整公司/个人名称，并保存本文件、Git 提交、需求记录和首发样张。
 2. 若创作者是员工或受托方，补齐职务作品或委托创作的书面权属约定。
 3. 若要申请作品登记，提交最终样张和源码快照；登记材料中的作品名称、完成日期、权利人应与本记录一致。
-4. “商跃原创”只用于上述 17 套本地洁净室模板；不得给 5 套精诚授权改编模板、`niim-import`、`online-niim` 或远程第三方内容加该标记。
+4. “商跃原创”只用于上述 22 套货架模板，以及经洁净室流程重做、通过全部门禁和人工看图的商跃模板；不得给 `niim-import`、`online-niim` 或远程第三方内容加该标记。
 
 ## SY-OT-002：商跃零售价签
 
@@ -146,48 +145,50 @@
 | 作品名称 | 商跃连网码 |
 | 首版日期 | 2026-08-17 |
 | 当前版本 | 2.0.0 |
-| 权属分类 | 精诚授权改编 · 商跃重设计 |
-| 授权状态 | 用户已确认获精诚同意；书面凭证和授权编号待归档 |
-| 对外标记 | `精诚授权改编 · 商跃重设计`；不得标为“商跃原创” |
+| 权属分类 | 商跃原创（2026-09-28 由授权改编转为自有） |
+| 设计历史 | 内部记录：最初参考精诚同类用途，版式、文案与码值独立重做 |
+| 对外标记 | `© 2026 商跃` |
 | 小程序源码 | `miniprogram/app/catalog.js`、`miniprogram/app/template-layouts.js` |
 | 实际渲染缩略图 | `miniprogram/assets/shangyue-thumbs/shangyue-wifi-card-v1.png`（640×480，SHA-256 `e3901bf2944ed4091fccdc4bc152503e2e905f6874f0aef529a14c587e173d5a`） |
 | 网页/App 镜像 | `../niim-label-app/src/app/catalog.js`、`../niim-label-app/src/app/template-layouts.js` |
-| 设计方式 | 在获得精诚同意的前提下改编并重设计：左侧标准 `WIFI:` 二维码、右侧访客凭据和反白密码框 |
+| 设计方式 | 独立重设计：左侧标准 `WIFI:` 二维码、右侧访客凭据和反白密码框 |
 | 第三方图片 | 无 |
 | 第三方字体 | 无；仅使用运行环境通用 `sans-serif` |
 | 目标纸张 | 40×30mm；适配当前 B 系 203dpi profile |
 | 二维码正文 | `WIFI:T:WPA;S:SY-Guest;P:welcome26;;` |
 
-### 授权改编与重设计说明
+### 重设计说明
 
-SSID / 密码均为虚构样例，版面上保留“打印后请改密码”。与 `wifi-code` 的元素类型序列不同，也不引用精诚原稿中的图片、字体或远程素材；这些差异不改变其“授权改编”的来源分类。
+SSID / 密码均为虚构样例，版面上保留“打印后请改密码”。与 `wifi-code` 的元素类型序列不同，也不引用精诚原稿中的图片、字体或远程素材。
 
 ## 其余 16 套模板登记
 
-本组含 12 套商跃原创和 4 套精诚授权改编。全部由文字 / 线 / 矩形 / 条码 / 二维码 / 日期 / 序列号组成，无第三方图片或字体，纸张宽度 ≤ 40mm 以适配 B 系 203dpi。对照图在 `output/shangyue-compare/`；“无第三方素材”不等于“商跃原创”，授权改编的来源标记必须保留。
+本组 16 套均为商跃原创（其中 4 套于 2026-09-28 由授权改编转为自有）。全部由文字 / 线 / 矩形 / 条码 / 二维码 / 日期 / 序列号组成，无第三方图片或字体，纸张宽度 ≤ 40mm 以适配 B 系 203dpi。对照图在 `output/shangyue-compare/`。
 
 | 登记号 | 模板 ID | 名称 | 权属分类 | 纸张 | 对照旧稿 | 缩略图 SHA-256 |
 |---|---|---|---|---|---|---|
-| SY-AR-002 | `shangyue-promo-tag` | 商跃促销价签 | 精诚授权改编 · 商跃重设计 | 40×30 | `promo-price` | `81a0e68717b971977138f8b4fafe13d00e9fef9de2140ab3790bab8498536ec2` |
+| SY-AR-002 | `shangyue-promo-tag` | 商跃促销价签 | 商跃原创（2026-09-28 由授权改编转为自有） | 40×30 | `promo-price` | `81a0e68717b971977138f8b4fafe13d00e9fef9de2140ab3790bab8498536ec2` |
 | SY-OT-008 | `shangyue-jewelry-tag` | 商跃珠宝吊牌 | 商跃原创 | 40×30 | `jewelry-price` | `8ea344ab92206911ef993fbdeb13ff74242e6c546f99763e77ab88fcf9294a28` |
 | SY-OT-009 | `shangyue-garment-tag` | 商跃服装吊牌 | 商跃原创 | 40×30 | `clothing-tag` | `a84c689e92348459696d301f8c6ff9505b3242c53dc8cd55ee631e70e7e01531` |
 | SY-OT-010 | `shangyue-ship-label` | 商跃物流简签 | 商跃原创 | 40×30 | `shipping-bin` | `3b386c0cff406b46c1ee2f838ccf77738522974a51427212afde91153ef3658a` |
 | SY-OT-011 | `shangyue-cable-tag` | 商跃线缆标识 | 商跃原创 | 40×12 | `cable-name` | `263286e73765e6026be6415d9504a20b6cae35d82bedf7384315a4f30fde4997` |
 | SY-OT-012 | `shangyue-asset-tag` | 商跃固定资产 | 商跃原创 | 40×30 | `asset-card` | `07662ebe90de133091d032e11b6cac61aee43526555be81ca18ed13efb934f3b` |
 | SY-OT-013 | `shangyue-biz-card` | 商跃商务名片 | 商跃原创 | 40×30 | `business-card` | `d7f960e990caba274d31d3f493c976b351b6ed15cc44ba8c2f9b8b3ef4926a23` |
-| SY-AR-003 | `shangyue-kitchen-date` | 商跃餐饮效期 | 精诚授权改编 · 商跃重设计 | 40×30 | `catering-date` | `6feffef5397678212b073f9d5a8241b7236056b12b22aec24968f0d66897d8a9` |
+| SY-AR-003 | `shangyue-kitchen-date` | 商跃餐饮效期 | 商跃原创（2026-09-28 由授权改编转为自有） | 40×30 | `catering-date` | `6feffef5397678212b073f9d5a8241b7236056b12b22aec24968f0d66897d8a9` |
 | SY-OT-015 | `shangyue-med-label` | 商跃药品签 | 商跃原创 | 40×20 | `medicine-box` | `7eb88b4098b854e265d808b231dbeba7ddcf353aae813faa9b4182f96326c75b` |
 | SY-OT-016 | `shangyue-seat-card` | 商跃席卡 | 商跃原创 | 40×30 | `wedding-invite` | `952254754c24f811d798f36b49ac3aba5e6541be7ccc88760697712a8674f644` |
 | SY-OT-017 | `shangyue-bakery-tag` | 商跃烘焙价签 | 商跃原创 | 40×30 | `bakery-tag` | `e1d7be276379c0586bb74fd49de006c3aaeba331f372b36e7a2bb6baf7afa634` |
-| SY-AR-004 | `shangyue-plant-tag` | 商跃植物签 | 精诚授权改编 · 商跃重设计 | 40×30 | `plant-care` | `9db140567f60378967410baf423456535699976af8e2b5b639de607818dd4fa6` |
+| SY-AR-004 | `shangyue-plant-tag` | 商跃植物签 | 商跃原创（2026-09-28 由授权改编转为自有） | 40×30 | `plant-care` | `9db140567f60378967410baf423456535699976af8e2b5b639de607818dd4fa6` |
 | SY-OT-019 | `shangyue-desk-plate` | 商跃工位牌 | 商跃原创 | 40×30 | `office-desk` | `6e5a8b41792b82713bbcb9cd050cdc8af402dde40389afdca0e5c0bb644fbcca` |
 | SY-OT-020 | `shangyue-lab-tag` | 商跃样品签 | 商跃原创 | 40×20 | `lab-sample` | `76e2fd3e6feb365cd07e6468179bbffb84d26e28945fa35693aed3af6660063d` |
-| SY-AR-005 | `shangyue-care-tag` | 商跃洗涤说明 | 精诚授权改编 · 商跃重设计 | 40×30 | `garment-care` | `31d269f9cf5b0db080195e8634b054d4a570666f8171d210da2f7cd444a933b0` |
+| SY-AR-005 | `shangyue-care-tag` | 商跃洗涤说明 | 商跃原创（2026-09-28 由授权改编转为自有） | 40×30 | `garment-care` | `31d269f9cf5b0db080195e8634b054d4a570666f8171d210da2f7cd444a933b0` |
 | SY-OT-022 | `shangyue-serial-cable` | 商跃线号序列 | 商跃原创 | 30×12 | `serial-cable` | `cd9d5541bd1667b11ecae6faafdb1cfb86c33cef2a744622d7a0c859f710ad5e` |
 
 所有 16 套都不含 `image` / `material`、不含精臣/NIIMBOT/95598 文案，文字 ≥ 2.2mm，缩略图由真实渲染导出。其中 12 套商跃原创按洁净室证据链登记；4 套授权改编仅记录资产、字体和完整文案未直接复用，不因版式差异或素材隔离而改标为“商跃原创”。
 
 ### 2026-08-18 二次重设计
+
+> 本节的来源标记要求已由下文“2026-09-28 权属调整”取代。
 
 `shangyue-wifi-card`、`shangyue-promo-tag`、`shangyue-kitchen-date`、`shangyue-plant-tag`、`shangyue-care-tag` 升级为 2.0.0：分别改为左码右凭据、上置条码+右价格舱、双时间窗格、三栏照护仪表和面料侧栏+四格参数。这 5 套统一归类为“精诚授权改编 · 商跃重设计”：用户已确认获得精诚同意，书面凭证待归档，任何对照图、文档、货架或发布说明都不得将它们标为“商跃原创”。布局距离不小于 0.25、可见文案不复用完整行，仅作为重设计差异性证据，不改变授权改编属性。
 
@@ -198,7 +199,7 @@ SSID / 密码均为虚构样例，版面上保留“打印后请改密码”。�
 - 应用模块：`miniprogram/app/shangyue-library/`
 - 对照目录：`output/shangyue-library/`（`index.json`、`stats.json`、`samples/`）
 - 命名：`sy-lib-#####`，显示名 `商跃价签 · 青提 · 40×30甲`
-- 不进入上述公开 22 套货架，也不计入“17 套商跃原创 + 5 套精诚授权改编”统计
+- 不进入上述公开 22 套货架，也不计入货架 22 套商跃原创统计
 - 不含第三方底图、元素、VIP 资源或品牌品名
 - 规模口径：25 场景 × 18 纸张 × 6 份自有示例文案 × 3 个阅读路径 = 8,100 条组合预设；不得表述为“8,100 张逐张手绘原创作品”
 - 2026-08-18 升级至 `sy-semantic-grid-v2`：`signal / orbit / ledger` 三套商跃母版、独立场景码、稳定内容种子和场景核心字段；AI 参与规则设计与样张审阅，但运行时由确定性代码生成
@@ -215,3 +216,7 @@ SSID / 密码均为虚构样例，版面上保留“打印后请改密码”。�
 - `shangyue-asset-tag` 的盘点二维码、`shangyue-serial-cable` 的条码改为“跟随序号递增”，连续打印时每张的码与编号一致；线号序列改为反白 `LN` + 纯数字编号，条码只编码数字。
 - 资产签、工位牌、名片补页脚细线与说明，平衡下方留白。
 - 缩略图改为透明底 + 白色圆角纸张卡片（描边与投影只存在于预览，不打印），22 张重新渲染，SHA-256 已同步更新到上表与 `catalog.js`。Web 端（niim-label-app）仍使用自己的旧版式与缩略图，本次未改动。
+
+### 2026-09-28 权属调整
+
+权利人决定：`shangyue-wifi-card`、`shangyue-promo-tag`、`shangyue-kitchen-date`、`shangyue-plant-tag`、`shangyue-care-tag` 5 套货架模板作为商跃原创发布。代码中 `APPROVED_AUTHORIZED_REDESIGN_TEMPLATE_IDS` 清空，5 套并入 `APPROVED_ORIGINAL_TEMPLATE_IDS`，徽章为“原创”，`copyright` 为 `© 2026 商跃`，编辑器与首页不再显示“授权改编”。设计历史保留在本文件内部记录，不写入用户可见字段。今后经洁净室流程（只提取用途与字段、版式和文案由商跃重做、通过全部门禁并人工看图）产出的模板，同样以商跃原创发布。

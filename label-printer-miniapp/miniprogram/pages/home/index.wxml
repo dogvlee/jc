@@ -260,7 +260,7 @@
 
 <view wx:if="{{showHelpSheet}}" class="modal-layer">
   <view class="modal-backdrop" bindtap="closeHelp"></view>
-  <view class="bottom-sheet help-sheet"><view class="sheet-handle"></view><view class="sheet-heading"><text class="sheet-title">使用帮助</text><button class="close-button" bindtap="closeHelp" aria-label="关闭"><text class="icon icon-x" aria-hidden="true"></text></button></view><view class="help-copy"><text>商跃标签是独立开发的本地标签制作工具。</text><text>公开货架含商跃原创与精诚授权改编，两类来源均明确标识；行业场景预设由商跃程序化生成。</text><text>字体库含 20 款 OFL 开源中文字库，按需联网加载。</text><text>1. 从首页选择模板或新建空白标签。</text><text>2. 在编辑器点选元素，修改内容、样式和位置。</text><text>3. 打印前连接热敏打印机，确认机型、纸张和浓度。</text><text>4. 项目、模板、批量数据和历史默认只保存在本机，请定期导出备份。</text><view class="help-warning"><text class="icon icon-info" aria-hidden="true"></text><text>实体打印受手机、打印机型号与固件影响；首次使用请执行连接诊断和样张验收。</text></view></view></view>
+  <view class="bottom-sheet help-sheet"><view class="sheet-handle"></view><view class="sheet-heading"><text class="sheet-title">使用帮助</text><button class="close-button" bindtap="closeHelp" aria-label="关闭"><text class="icon icon-x" aria-hidden="true"></text></button></view><view class="help-copy"><text>商跃标签是独立开发的本地标签制作工具。</text><text>公开货架均为商跃原创模板；行业场景预设由商跃程序化生成。</text><text>字体库含 20 款 OFL 开源中文字库，按需联网加载。</text><text>1. 从首页选择模板或新建空白标签。</text><text>2. 在编辑器点选元素，修改内容、样式和位置。</text><text>3. 打印前连接热敏打印机，确认机型、纸张和浓度。</text><text>4. 项目、模板、批量数据和历史默认只保存在本机，请定期导出备份。</text><view class="help-warning"><text class="icon icon-info" aria-hidden="true"></text><text>实体打印受手机、打印机型号与固件影响；首次使用请执行连接诊断和样张验收。</text></view></view></view>
 </view>
 
 <view wx:if="{{showOnboarding}}" class="modal-layer onboarding-layer">

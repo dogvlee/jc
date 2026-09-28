@@ -110,29 +110,6 @@ function shangyueOriginalMeta(industry, stock, extra) {
   }, extra || {});
 }
 
-function shangyueAuthorizedRedesignMeta(industry, stock, extra) {
-  return Object.assign({
-    industry,
-    stock,
-    source: 'shangyue-authorized-redesign',
-    origin: 'shangyue-authorized-redesign',
-    authorship: 'shangyue-independent-redesign',
-    authorizationStatus: 'operator-confirmed-document-reference-pending',
-    authorizationReference: '',
-    authorizedRedesign: true,
-    designVersion: '2.0.0',
-    createdAt: '2026-08-18',
-    copyright: '精诚授权改编 · 商跃重设计',
-    thirdPartyAssets: false,
-    approvedOriginal: false,
-    approvalStatus: 'authorized',
-    publicCatalog: true,
-    releaseApproved: true,
-    manualReviewStatus: 'approved-2026-08-18',
-    batchCompatible: false
-  }, extra || {});
-}
-
 /** 商品价格 · 40×30 · 条码价签 */
 function layoutProductPrice() {
   const doc = createDocument(40, 30);
@@ -505,7 +482,7 @@ function layoutShangyueFreshDate() {
   return finish(doc, '商跃效期签', shangyueOriginalMeta('生活', '40×30'));
 }
 
-/** 精诚授权改编 · 商跃连网码 · 40×30 · 左码右凭据的信息卡 */
+/** 商跃原创连网码 · 40×30 · 左码右凭据的信息卡 */
 function layoutShangyueWifiCard() {
   const doc = createDocument(40, 30);
   doc.elements = [
@@ -553,12 +530,12 @@ function layoutShangyueWifiCard() {
       text: '商跃连网 · 临时凭据', fontSize: 2.2
     })
   ];
-  return finish(doc, '商跃连网码', shangyueAuthorizedRedesignMeta('办公', '40×30', {
+  return finish(doc, '商跃连网码', shangyueOriginalMeta('办公', '40×30', {
     designVersion: '2.1.0', createdAt: '2026-08-18'
   }));
 }
 
-/** 精诚授权改编 · 商跃促销价签 · 40×30 · 上置条码 + 右侧反白价格舱 */
+/** 商跃原创促销价签 · 40×30 · 上置条码 + 右侧反白价格舱 */
 function layoutShangyuePromoTag() {
   const doc = createDocument(40, 30);
   doc.elements = [
@@ -575,7 +552,7 @@ function layoutShangyuePromoTag() {
     text(doc, { x: 24.4, y: 21.0, width: 12.8, height: 3.0, text: '立省 5.10', fontSize: 2.2, reverse: true, align: 'center' }),
     text(doc, { x: 24.4, y: 24.2, width: 12.8, height: 2.8, text: '售完为止', fontSize: 2.2, reverse: true, align: 'center' })
   ];
-  return finish(doc, '商跃促销价签', shangyueAuthorizedRedesignMeta('零售', '40×30', {
+  return finish(doc, '商跃促销价签', shangyueOriginalMeta('零售', '40×30', {
     designVersion: '2.1.0', createdAt: '2026-08-18'
   }));
 }
@@ -670,7 +647,7 @@ function layoutShangyueBizCard() {
   return finish(doc, '商跃商务名片', shangyueOriginalMeta('办公', '40×30'));
 }
 
-/** 精诚授权改编 · 商跃餐饮效期 · 40×30 · 双时间窗格 */
+/** 商跃原创餐饮效期 · 40×30 · 双时间窗格 */
 function layoutShangyueKitchenDate() {
   const doc = createDocument(40, 30);
   doc.elements = [
@@ -687,7 +664,7 @@ function layoutShangyueKitchenDate() {
     text(doc, { x: 2.0, y: 22.8, width: 36.0, height: 2.8, text: '□ 已密封   □ 已复核   □ 已贴签', fontSize: 2.2 }),
     text(doc, { x: 2.0, y: 25.6, width: 36.0, height: 2.4, text: '商跃后厨 · 超时即弃', fontSize: 2.2, align: 'right' })
   ];
-  return finish(doc, '商跃餐饮效期', shangyueAuthorizedRedesignMeta('生活', '40×30', {
+  return finish(doc, '商跃餐饮效期', shangyueOriginalMeta('生活', '40×30', {
     designVersion: '2.1.0', createdAt: '2026-08-18'
   }));
 }
@@ -735,7 +712,7 @@ function layoutShangyueBakeryTag() {
   return finish(doc, '商跃烘焙价签', shangyueOriginalMeta('零售', '40×30'));
 }
 
-/** 精诚授权改编 · 商跃植物签 · 40×30 · 三栏照护仪表 */
+/** 商跃原创植物签 · 40×30 · 三栏照护仪表 */
 function layoutShangyuePlantTag() {
   const doc = createDocument(40, 30);
   doc.elements = [
@@ -754,7 +731,7 @@ function layoutShangyuePlantTag() {
     text(doc, { x: 2.8, y: 24.0, width: 22.0, height: 3.0, text: '新芽期 · 7 天一检', fontSize: 2.2, bold: true, reverse: true }),
     text(doc, { x: 25.0, y: 24.0, width: 12.2, height: 3.0, text: '商跃园艺', fontSize: 2.2, reverse: true, align: 'right' })
   ];
-  return finish(doc, '商跃植物签', shangyueAuthorizedRedesignMeta('生活', '40×30', {
+  return finish(doc, '商跃植物签', shangyueOriginalMeta('生活', '40×30', {
     designVersion: '2.1.0', createdAt: '2026-08-18'
   }));
 }
@@ -789,7 +766,7 @@ function layoutShangyueLabTag() {
   return finish(doc, '商跃样品签', shangyueOriginalMeta('行业', '40×20'));
 }
 
-/** 精诚授权改编 · 商跃洗涤说明 · 40×30 · 面料侧栏 + 四格参数 */
+/** 商跃原创洗涤说明 · 40×30 · 面料侧栏 + 四格参数 */
 function layoutShangyueCareTag() {
   const doc = createDocument(40, 30);
   doc.elements = [
@@ -810,7 +787,7 @@ function layoutShangyueCareTag() {
     text(doc, { x: 26.9, y: 17.6, width: 10.6, height: 5.0, text: '蒸汽\n低温', fontSize: 2.2, bold: true, align: 'center' }),
     text(doc, { x: 13.4, y: 25.0, width: 24.6, height: 2.6, text: '深浅分洗 · 反面整理', fontSize: 2.2, align: 'right' })
   ];
-  return finish(doc, '商跃洗涤说明', shangyueAuthorizedRedesignMeta('零售', '40×30', {
+  return finish(doc, '商跃洗涤说明', shangyueOriginalMeta('零售', '40×30', {
     designVersion: '2.1.0', createdAt: '2026-08-18'
   }));
 }

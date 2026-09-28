@@ -122,7 +122,7 @@ Page({
     remoteTemplateHasMore: false,
     remoteTemplateLoading: false,
     remoteTemplateError: '',
-    remoteTemplateStatusText: '公开货架仅含商跃原创、精诚授权改编和我的模板',
+    remoteTemplateStatusText: '公开货架仅含商跃原创模板和我的模板',
     remoteAssetLoading: false,
     recentProjects: [],
     allProjects: [],

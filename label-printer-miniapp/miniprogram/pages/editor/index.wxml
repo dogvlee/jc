@@ -244,7 +244,7 @@
       <text class="simple-title">内置基础与我的模板</text>
       <picker mode="selector" range="{{templateNames}}" bindchange="loadTemplate"><view class="picker-field"><text>{{templateNames.length ? '选择模板' : '暂无模板'}}</text><text class="icon icon-chevron-right" aria-hidden="true"></text></view></picker>
       <button class="outline-wide" bindtap="saveTemplate"><text class="icon icon-save" aria-hidden="true"></text>将当前标签保存为模板</button>
-      <text class="helper-text">商跃原创与精诚授权改编模板请从首页“模板”进入；其余内置基础版式保留编辑能力，来源待审。</text>
+      <text class="helper-text">商跃原创模板请从首页“模板”进入；其余内置基础版式保留编辑能力，来源待审。</text>
     </view>
 
     <view wx:else class="simple-panel">

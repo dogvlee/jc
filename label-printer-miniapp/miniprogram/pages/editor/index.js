@@ -549,7 +549,7 @@ Page({
       .map((item) => ({
         id: item.id,
         name: item.name,
-        displayName: `${item.name} · ${item.authorizedRedesign === true ? '精诚授权改编' : '商跃原创'}`,
+        displayName: `${item.name} · 商跃原创`,
         document: buildTemplateDocument(item),
         source: item.source,
         approvalStatus: item.approvalStatus

@@ -13,10 +13,9 @@ const { buildTemplateDocument } = require('../miniprogram/app/template-layouts')
 
 const miniRoot = path.join(__dirname, '..', 'miniprogram');
 
-test('public catalog excludes crawled packs and labels original versus authorized redesigns', () => {
+test('public catalog excludes crawled packs and contains only Shangyue originals', () => {
   assert.equal(templates.length, 22);
-  assert.equal(templates.filter((item) => item.source === 'shangyue-original').length, 17);
-  assert.equal(templates.filter((item) => item.source === 'shangyue-authorized-redesign').length, 5);
+  assert.equal(templates.filter((item) => item.source === 'shangyue-original').length, 22);
   assert.ok(templates.every((item) => item.releaseApproved === true && item.publicCatalog === true));
   assert.equal(templates.some((item) => item.source === 'online-niim' || item.source === 'niim-import'), false);
   assert.ok(ONLINE_TEMPLATES.length >= 80);

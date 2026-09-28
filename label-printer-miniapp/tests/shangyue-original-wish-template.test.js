@@ -110,7 +110,7 @@ test('original wish card does not reuse the referenced online blessing layout', 
 
 test('only explicitly approved originals are publicly attributable to Shangyue', () => {
   assert.equal(APPROVED_ORIGINAL_TEMPLATES[0].id, TEMPLATE_ID);
-  assert.equal(APPROVED_ORIGINAL_TEMPLATES.length, 17);
+  assert.equal(APPROVED_ORIGINAL_TEMPLATES.length, 22);
   assert.ok(APPROVED_ORIGINAL_TEMPLATES.every((template) => template.id.startsWith('shangyue-')));
   assert.equal(BUILTIN_BASE_TEMPLATES.length, 32);
   assert.ok(BUILTIN_BASE_TEMPLATES.every((template) => (

@@ -77,9 +77,9 @@ function encodeQr(value, errorCorrection) {
 
 test('approved original pack is the clean-room Shangyue seed set', () => {
   assert.deepEqual(APPROVED_ORIGINAL_TEMPLATES.map((item) => item.id), EXPECTED_IDS);
-  assert.equal(APPROVED_ORIGINAL_TEMPLATES.length, 17);
-  assert.equal(APPROVED_AUTHORIZED_REDESIGN_TEMPLATES.length, 5);
-  assert.ok(APPROVED_AUTHORIZED_REDESIGN_TEMPLATE_IDS.every((id) => !EXPECTED_IDS.includes(id)));
+  assert.equal(APPROVED_ORIGINAL_TEMPLATES.length, 22);
+  assert.deepEqual(APPROVED_AUTHORIZED_REDESIGN_TEMPLATE_IDS, []);
+  assert.equal(APPROVED_AUTHORIZED_REDESIGN_TEMPLATES.length, 0);
   assert.ok(EXPECTED_IDS.every((id) => BATCH_TEMPLATES.every((item) => item.id !== id)));
 });
 
@@ -135,35 +135,6 @@ for (const templateId of EXPECTED_IDS) {
 
     assert.doesNotThrow(() => validateDocument(document, 203));
     assert.equal(evaluatePrintability(document, getProfile('b1')).ok, true);
-  });
-}
-
-for (const templateId of APPROVED_AUTHORIZED_REDESIGN_TEMPLATE_IDS) {
-  test(`${templateId} is explicitly labeled as an authorized redesign`, () => {
-    const template = getTemplate(templateId);
-    assert.ok(template);
-    assert.equal(template.origin, 'shangyue-authorized-redesign');
-    assert.equal(template.source, 'shangyue-authorized-redesign');
-    assert.equal(template.authorizedRedesign, true);
-    assert.equal(template.approvedOriginal, false);
-    assert.equal(template.authorizationStatus, 'operator-confirmed-document-reference-pending');
-    assert.equal(template.badge, '授权改编');
-    assert.match(template.copyright, /授权改编.*商跃重设计/);
-    assert.equal(template.publicCatalog, true);
-    assert.equal(template.releaseApproved, true);
-
-    const filename = path.join(__dirname, '..', 'miniprogram', template.thumbSrc);
-    const png = fs.readFileSync(filename);
-    assert.equal(crypto.createHash('sha256').update(png).digest('hex'), template.thumbSha256);
-
-    const document = buildTemplateDocument(template);
-    assert.equal(document.templateMeta.origin, 'shangyue-authorized-redesign');
-    assert.equal(document.templateMeta.authorizedRedesign, true);
-    assert.equal(document.templateMeta.approvedOriginal, false);
-    assert.equal(document.templateMeta.releaseApproved, true);
-    assert.equal(document.templateMeta.thirdPartyAssets, false);
-    assert.ok(document.elements.every((element) => !['image', 'material'].includes(element.type)));
-    assert.doesNotThrow(() => validateDocument(document, 203));
   });
 }
 

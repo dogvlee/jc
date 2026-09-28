@@ -58,17 +58,13 @@ test('editor template panel keeps base layouts available with accurate source la
   });
   editor.loadTemplates();
   assert.equal(editor.data.templates.filter((item) => item.source === 'builtin-base').length, 0);
-  assert.equal(editor.data.templates.filter((item) => item.source === 'shangyue-original').length, 17);
-  assert.equal(editor.data.templates.filter((item) => item.source === 'shangyue-authorized-redesign').length, 5);
+  assert.equal(editor.data.templates.filter((item) => item.source === 'shangyue-original').length, 22);
+  assert.equal(editor.data.templates.filter((item) => item.source === 'shangyue-authorized-redesign').length, 0);
   assert.ok(editor.data.templates.some((item) => item.id === 'mine' && item.source === 'user'));
-  assert.ok(editor.data.templates.every((item) => (
-    item.source === 'shangyue-original'
-      || item.source === 'shangyue-authorized-redesign'
-      || item.source === 'user'
-  )));
+  assert.ok(editor.data.templates.every((item) => item.source === 'shangyue-original' || item.source === 'user'));
   assert.equal(editor.data.templateNames.some((name) => name.includes('· 内置基础')), false);
   assert.ok(editor.data.templateNames.some((name) => name.includes('· 商跃原创')));
-  assert.ok(editor.data.templateNames.some((name) => name.includes('· 精诚授权改编')));
+  assert.equal(editor.data.templateNames.some((name) => name.includes('授权改编')), false);
 });
 
 test('print preflight identifies the exact low-density code and exposes repair controls', () => {
