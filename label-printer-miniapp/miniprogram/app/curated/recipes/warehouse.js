@@ -3,7 +3,8 @@
  * stay narrow (Code 128 packs the digits), and carton numbers auto-increment.
  */
 const {
-  barcode, chip, cols, date, divider, frame, hline, infoRows, panel, qrcode, rows, safeBox, scaleFor, serial, text, titleWithTag
+  barcode, chip, cols, date, divider, frame, hline, infoRows, inset, outline, panel, qrcode, rows, safeBox, scaleFor,
+  serial, text, titleWithTag, vline
 } = require('../layout');
 
 const MATERIALS = [
@@ -62,6 +63,37 @@ function materialCard(doc, W, H, m) {
   date(doc, caption, { role: 'made', label: '入库', format: 'MM-DD', align: 'center', max: Math.min(3.6, 2.8 * k) });
 }
 
+/** 表格物料卡：品名与状态在上，字段排成两列表格，底部物料条码。 */
+function materialCardGrid(doc, W, H, m) {
+  const k = scaleFor(W, H);
+  const safe = safeBox(W, H);
+  if (H < 36) {
+    const [top, info, code] = rows(safe, [1, 0.9, 1.5], 0.5);
+    titleWithTag(doc, top, m.name, m.status, { max: 4.4, tagMax: 2.8 });
+    text(doc, info, `${m.qty} · 批次 ${m.batch}`, { max: 3 });
+    barcode(doc, code, m.code, { showText: true });
+    return;
+  }
+  const [top, grid, code] = rows(safe, [1.1, 2.6, 1.5], 0.8);
+  titleWithTag(doc, top, m.name, m.status, { max: Math.min(6.4, 5 * k), tagMax: Math.min(3.8, 3 * k) });
+  const cells = [['规格', m.spec], ['数量', m.qty], ['批次', m.batch], ['供应商', m.supplier]];
+  const [left, right] = cols(grid, [1, 1], 1.6);
+  const size = Math.min(4, 3.2 * k);
+  [left, right].forEach((column, side) => {
+    const slots = rows(column, [1, 1], 0.6);
+    slots.forEach((slot, row) => {
+      const [caption, value] = cells[row * 2 + side];
+      const [top2, bottom] = rows(slot, [1, 1.3], 0.1);
+      text(doc, top2, caption, { max: Math.min(3.2, 2.6 * k) });
+      text(doc, bottom, value, { bold: true, max: size });
+    });
+  });
+  hline(doc, grid.x, grid.y + grid.h / 2, grid.w, { weight: 0.25 });
+  vline(doc, grid.x + left.w + 0.8, grid.y, grid.h, { weight: 0.25 });
+  const codeW = Math.min(code.w, Math.max(34, code.w * 0.7));
+  barcode(doc, frame(code.x + (code.w - codeW) / 2, code.y, codeW, code.h), m.code, { fontSize: 2.4 });
+}
+
 /** 库位 / 货架标签：大号库位号 + 区排层 + 库位条码。 */
 function binLocation(doc, W, H, b) {
   const k = scaleFor(W, H);
@@ -82,6 +114,25 @@ function binLocation(doc, W, H, b) {
   barcode(doc, scan, b.scan, { showText: false, bind: 'code' });
 }
 
+/** 二维码库位：左侧库位二维码，右侧大号库位号、区排层与用途。 */
+function binLocationQr(doc, W, H, b) {
+  const k = scaleFor(W, H);
+  const safe = safeBox(W, H);
+  const side = Math.min(safe.h, safe.w * 0.42);
+  const [code, info] = cols(safe, [-side, 1], 1.4);
+  qrcode(doc, code, b.scan);
+  if (H < 26) {
+    const [number, note] = rows(info, [1.4, 1], 0.4);
+    text(doc, number, b.code, { bold: true, max: 6 });
+    chip(doc, info.x, note.y, note.h, b.note, { max: 3 });
+    return;
+  }
+  const [number, where, note] = rows(info, [1.6, 1, 1], 0.4);
+  text(doc, number, b.code, { bold: true, max: Math.min(10, 7.6 * k) });
+  text(doc, where, `${b.zone} ${b.row} ${b.level}`, { max: Math.min(4, 3.2 * k) });
+  chip(doc, info.x, note.y, note.h, b.note, { max: Math.min(3.6, 2.8 * k) });
+}
+
 /** 箱唛：品名、装箱数、批次、目的仓，箱号自动递增。 */
 function cartonLabel(doc, W, H, c) {
   const k = scaleFor(W, H);
@@ -93,6 +144,27 @@ function cartonLabel(doc, W, H, c) {
   const [number, packed] = cols(bottom, [1.1, 1], 1);
   serial(doc, number, { prefix: '箱号 ', start: 1, digits: 2, suffix: ` / ${c.total}`, bold: true, max: Math.min(5.4, 4.2 * k) });
   date(doc, packed, { role: 'made', label: '装箱', format: 'MM-DD', align: 'right', max: Math.min(4, 3.2 * k) });
+}
+
+/** 箱号大框：反白顶栏写品名与目的仓，右侧大框写箱号。 */
+function cartonLabelNumber(doc, W, H, c) {
+  const k = scaleFor(W, H);
+  const safe = safeBox(W, H);
+  const headH = Math.min(8, Math.max(5, H * 0.16));
+  const [head, body] = rows(safe, [-headH, 1], 1);
+  const inner = panel(doc, head);
+  const [name, dest] = cols(inner, [2, 1], 0.8);
+  text(doc, name, c.name, { bold: true, reverse: true, max: headH * 0.62 });
+  text(doc, dest, `发往 ${c.dest}`, { reverse: true, align: 'right', max: headH * 0.5 });
+  const [info, box] = cols(body, [1.3, 1], 1.6);
+  const [lines, packed] = rows(info, [3, 1], 0.4);
+  infoRows(doc, lines, [['装箱', c.qty], ['批次', c.batch]], { max: Math.min(4.4, 3.4 * k) });
+  date(doc, packed, { role: 'made', label: '装箱日期', format: 'MM-DD', max: Math.min(3.8, 3 * k) });
+  outline(doc, box, { rounded: true, weight: 0.4 });
+  const [caption, number, total] = rows(inset(box, 1, 0.8), [1, 2.2, 1], 0.3);
+  text(doc, caption, '箱号', { max: Math.min(3.6, 2.8 * k), align: 'center' });
+  serial(doc, number, { start: 1, digits: 2, bold: true, align: 'center', max: Math.min(16, 12 * k) });
+  text(doc, total, `共 ${c.total} 箱`, { max: Math.min(3.6, 2.8 * k), align: 'center' });
 }
 
 /** 收件信息：收件人、电话、地址与订单条码。 */
@@ -111,6 +183,24 @@ function parcelLabel(doc, W, H, p) {
   barcode(doc, frame(safe.x + (safe.w - codeW) / 2, code.y, codeW, code.h), p.order, { fontSize: 2.4 });
 }
 
+/** 二维码收件单：左侧订单二维码与单号，右侧收件人、地址与寄件方。 */
+function parcelLabelQr(doc, W, H, p) {
+  const k = scaleFor(W, H);
+  const safe = safeBox(W, H);
+  const side = Math.min(safe.h * 0.7, safe.w * 0.34);
+  const [left, right] = cols(safe, [-side, 1], 1.6);
+  const [qr, order] = rows(left, [-side, -Math.min(4, 3.2 * k)], 0.6);
+  qrcode(doc, qr, p.order);
+  text(doc, order, p.order, { max: Math.min(3, 2.6 * k), align: 'center' });
+  const [head, address, from] = rows(right, [1.1, 2, -3.2 * Math.min(k, 1.2)], 0.6);
+  const [name, phone] = cols(head, [1, 1.5], 1);
+  text(doc, name, p.name, { bold: true, max: Math.min(6.4, 5 * k) });
+  text(doc, phone, p.phone, { max: Math.min(4.4, 3.4 * k), align: 'right' });
+  text(doc, address, p.address, { max: Math.min(4.2, 3.2 * k) });
+  divider(doc, address, from, { dashed: true });
+  text(doc, from, '寄件：商跃小店 · 400-000-0000', { max: Math.min(3.2, 2.6 * k) });
+}
+
 /** 取件码：大号取件码 + 货架位置 + 到店日期。 */
 function pickupCode(doc, W, H, p) {
   const k = scaleFor(W, H);
@@ -123,13 +213,48 @@ function pickupCode(doc, W, H, p) {
   text(doc, foot, `${p.shelf} · ${p.note}`, { max: Math.min(3.6, 2.8 * k), align: 'center' });
 }
 
+/** 反白取件码：取件码印在反白块里，货架与到店日期在上下。 */
+function pickupCodeBlock(doc, W, H, p) {
+  const k = scaleFor(W, H);
+  const safe = safeBox(W, H);
+  const [top, block, foot] = rows(safe, [1, 2.3, 1], 0.5);
+  const [caption, shelf] = cols(top, [1, 1], 1);
+  text(doc, caption, '取件码', { bold: true, max: Math.min(4, 3.2 * k) });
+  text(doc, shelf, p.shelf, { bold: true, max: Math.min(4, 3.2 * k), align: 'right' });
+  const inner = panel(doc, block);
+  text(doc, inner, p.code, { bold: true, reverse: true, max: Math.min(12, 9 * k), align: 'center' });
+  const [note, arrived] = cols(foot, [1.4, 1], 1);
+  text(doc, note, p.note, { max: Math.min(3.4, 2.6 * k) });
+  date(doc, arrived, { role: 'made', label: '到店', format: 'MM-DD', align: 'right', max: Math.min(3.4, 2.6 * k) });
+}
+
 module.exports = {
   CONTENT: { MATERIALS, BINS, CARTONS, PARCELS, PICKUPS },
   RECIPES: {
-    materialCard: { build: materialCard, content: 'MATERIALS', scene: '物料标识', category: '仓储' },
-    binLocation: { build: binLocation, content: 'BINS', scene: '库位标签', category: '仓储' },
-    cartonLabel: { build: cartonLabel, content: 'CARTONS', scene: '箱唛', category: '仓储' },
-    parcelLabel: { build: parcelLabel, content: 'PARCELS', scene: '收件信息', category: '物流' },
-    pickupCode: { build: pickupCode, content: 'PICKUPS', scene: '取件码', category: '物流' }
+    materialCard: {
+      styles: [materialCard, materialCardGrid],
+      blurbs: ['物料标识卡：编码、规格、数量、批次、供应商与状态', '字段排成两列表格，底部物料条码'],
+      content: 'MATERIALS', scene: '物料标识', category: '仓储'
+    },
+    binLocation: {
+      styles: [binLocation, binLocationQr],
+      blurbs: ['库位标签：大号库位号 + 区排层 + 库位条码', '库位二维码在左，大号库位号与用途在右'],
+      content: 'BINS', scene: '库位标签', category: '仓储'
+    },
+    cartonLabel: {
+      styles: [cartonLabel, cartonLabelNumber],
+      blurbs: ['箱唛：装箱数、批次、目的仓，箱号自动递增', '反白顶栏写品名目的仓，箱号放进右侧大框'],
+      content: 'CARTONS', scene: '箱唛', category: '仓储'
+    },
+    parcelLabel: {
+      styles: [parcelLabel, parcelLabelQr],
+      blurbs: ['收件信息：收件人、电话、地址与订单条码', '订单二维码在左，收件人地址与寄件方在右'],
+      content: 'PARCELS', scene: '收件信息', category: '物流'
+    },
+    pickupCode: {
+      styles: [pickupCode, pickupCodeBlock],
+      blurbs: ['取件码：大号取件码 + 货架位置 + 到店日期', '取件码印在反白块里，货架与到店日期在上下'],
+      content: 'PICKUPS', scene: '取件码', category: '物流'
+    }
   }
 };

@@ -126,9 +126,9 @@ try {
   delete require.cache[require.resolve(libraryQualityPath)];
   const quality = require(libraryQualityPath);
   const fingerprints = new Set();
-  // Same recipe and size with different sample content may share a layout;
-  // two different scenes sharing one layout would be a disguised duplicate.
-  const layoutOwners = new Map();
+  // Every template on a given paper must be its own layout, not the same
+  // layout with new words (see quality.layoutSkeleton).
+  const looks = new Map();
   for (const entry of entries) {
     const item = library.catalogMeta(entry);
     if (item.origin !== 'shangyue-original'
@@ -161,10 +161,9 @@ try {
     const fingerprint = quality.exactFingerprint(documentValue);
     if (fingerprints.has(fingerprint)) failures.push(`场景模板完全重复：${entry.id}`);
     fingerprints.add(fingerprint);
-    const layout = quality.layoutFingerprint(documentValue);
-    const owner = layoutOwners.get(layout);
-    if (owner && owner.recipe !== entry.recipe) failures.push(`场景模板跨场景撞版：${owner.id} / ${entry.id}`);
-    if (!owner) layoutOwners.set(layout, entry);
+    const look = `${entry.widthMm}x${entry.heightMm}|${quality.layoutSkeleton(documentValue)}`;
+    if (looks.has(look)) failures.push(`场景模板撞版：${looks.get(look)} / ${entry.id}`);
+    else looks.set(look, entry.id);
   }
 
   delete require.cache[require.resolve(materialsPath)];

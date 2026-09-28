@@ -110,12 +110,12 @@ function text(doc, box, value, options) {
   }), opts);
 }
 
-/** Reverse (white on black) tag hugging its text; `right` anchors it at x. */
+/** Reverse (white on black) tag hugging its text; `right` / `center` anchor it at x. */
 function chip(doc, x, y, height, value, options) {
   const opts = options || {};
   const size = floorTenth(opts.size || Math.max(MIN_FONT, Math.min(opts.max || 2.8, height * 0.64)));
   const width = textWidthMm(value, size, true) * FIT_SLACK + height * 0.8 + 0.1;
-  const left = opts.right ? x - width : x;
+  const left = opts.right ? x - width : opts.center ? x - width / 2 : x;
   return text(doc, frame(left, y, width, height), value, { size, bold: true, reverse: true, align: 'center' });
 }
 
@@ -261,6 +261,25 @@ function panel(doc, box) {
 }
 
 /**
+ * Square-cornered filled block. Unlike a rounded panel it loses no width to
+ * the corners, so a narrow column still holds large reverse text.
+ */
+function slab(doc, box) {
+  band(doc, box, { square: true });
+  const pad = Math.max(0.5, Math.min(1, Math.min(box.w, box.h) * 0.08));
+  return inset(box, pad, pad * 0.7);
+}
+
+/** Filled circle centred in the box; returns the square its reverse text may use. */
+function disc(doc, box) {
+  const side = Math.min(box.w, box.h);
+  const square = frame(box.x + (box.w - side) / 2, box.y + (box.h - side) / 2, side, side);
+  const element = place(createElement('rect', doc), square);
+  push(doc, Object.assign(element, { filled: true, shapeKind: 'circle', lineWidth: 0.2, dashed: false, locked: true }));
+  return inset(square, side * 0.17);
+}
+
+/**
  * Big bold price with its unit set right after it ("¥16.80 元/盒"). The price
  * box hugs the text so the two never overlap; `right` pushes both to the right.
  */
@@ -335,6 +354,7 @@ module.exports = {
   chip,
   cols,
   date,
+  disc,
   divider,
   fitFont,
   frame,
@@ -351,6 +371,7 @@ module.exports = {
   safeBox,
   scaleFor,
   serial,
+  slab,
   stacked,
   text,
   titleWithTag,

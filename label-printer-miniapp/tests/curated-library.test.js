@@ -13,7 +13,7 @@ const {
   getCuratedEntry,
   queryCuratedMeta
 } = require('../miniprogram/app/curated/index');
-const { auditLibraryDocument, exactFingerprint, layoutFingerprint } = require('../miniprogram/app/curated/quality');
+const { auditLibraryDocument, exactFingerprint, layoutSkeleton } = require('../miniprogram/app/curated/quality');
 const { validateDocument } = require('../miniprogram/core/renderer');
 
 const documents = CURATED_INDEX.map((entry) => [entry, buildCuratedDocument(entry.id)]);
@@ -76,14 +76,48 @@ test('each template is laid out once and every caller gets an independent copy',
   assert.equal(buildCuratedDocument(batchId).templateMeta.batchCompatible, false);
 });
 
-test('different scenes never share a layout; only sample content varies within one', () => {
+test('every template on the same paper has its own layout, not just new words', () => {
   const owners = new Map();
   for (const [entry, document] of documents) {
-    const layout = layoutFingerprint(document);
-    const owner = owners.get(layout);
-    assert.ok(!owner || owner.recipe === entry.recipe, `${entry.id} reuses the layout of ${owner && owner.id}`);
-    if (!owner) owners.set(layout, entry);
+    const look = `${entry.widthMm}x${entry.heightMm}|${layoutSkeleton(document)}`;
+    assert.ok(!owners.has(look), `${entry.id} looks the same as ${owners.get(look)}`);
+    owners.set(look, entry.id);
   }
+  // New words alone do not make a new layout; a new reverse block does.
+  const [entry, document] = documents[0];
+  const words = JSON.parse(JSON.stringify(document));
+  words.elements.forEach((element) => { if (element.type === 'text') element.text = '换了文字'; });
+  assert.equal(layoutSkeleton(words), layoutSkeleton(document), entry.id);
+  const block = JSON.parse(JSON.stringify(document));
+  block.elements.push({ type: 'rect', filled: true, x: 2, y: 2, width: 8, height: 8 });
+  assert.notEqual(layoutSkeleton(block), layoutSkeleton(document), entry.id);
+});
+
+test('each scene comes in more than one style, and a style never repeats on one paper', () => {
+  const styles = new Map();
+  for (const entry of CURATED_INDEX) {
+    const key = `${entry.recipe}|${entry.widthMm}x${entry.heightMm}`;
+    const seen = styles.get(key) || new Set();
+    assert.ok(!seen.has(entry.style), entry.id);
+    seen.add(entry.style);
+    styles.set(key, seen);
+  }
+  const multiStyle = new Set(CURATED_INDEX.filter((entry) => entry.style > 0).map((entry) => entry.recipe));
+  assert.ok(multiStyle.size >= 45, `${multiStyle.size} scenes have a second style`);
+});
+
+test('no two printed items overlap on any curated template', () => {
+  const printed = new Set(['text', 'date', 'serial', 'barcode', 'qrcode']);
+  const overlaps = [];
+  for (const [entry, document] of documents) {
+    const boxes = document.elements.filter((element) => printed.has(element.type));
+    boxes.forEach((a, index) => boxes.slice(index + 1).forEach((b) => {
+      const width = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+      const height = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+      if (width > 0 && height > 0 && width * height > 0.3) overlaps.push(`${entry.id}: ${a.id} × ${b.id}`);
+    }));
+  }
+  assert.deepEqual(overlaps, []);
 });
 
 test('no two curated templates are the same document', () => {

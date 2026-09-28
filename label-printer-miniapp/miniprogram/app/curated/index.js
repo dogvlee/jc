@@ -26,57 +26,59 @@ DOMAINS.forEach((domain) => {
   });
 });
 
-// [recipe, sizes, content indexes, blurb]; the mix follows how often each
-// scene appears in the market catalogue (price tags first, then dates, ...).
+// [recipe, paper sizes, samples]. Every size gets each of the recipe's styles
+// (or only those listed third, e.g. [50, 30, [0, 1]]), so no two templates
+// share a layout, and the samples rotate across styles and sizes. The mix
+// follows how often each scene appears in the market catalogue.
 const PLAN = [
-  ['priceStandard', [[70, 38], [60, 40], [60, 30], [50, 30]], [0, 1, 2], '明码标价格式：品名、产地、规格、等级 + 零售价'],
-  ['priceSimple', [[40, 30], [50, 30], [60, 40], [40, 20], [30, 20], [50, 25], [40, 15]], [0, 4, 5], '品名、规格产地与售价，40×30 起带商品条码'],
-  ['pricePromo', [[40, 30], [50, 30], [60, 40], [70, 38]], [1, 2], '限时特价：划线原价 + 促销价 + 活动截止日'],
-  ['priceMember', [[50, 30], [60, 40], [40, 30]], [0, 3], '零售价与会员价并列，会员价反白突出'],
-  ['priceWeighed', [[40, 30], [50, 30], [60, 40]], [0, 1, 2], '散称或按个计价：单价、计价单位、产地与保质'],
-  ['priceBarcode', [[40, 30], [50, 30], [60, 40], [50, 25]], [0, 3], '品名规格 + 售价 + EAN-13 商品条码'],
-  ['pricePharmacy', [[70, 38], [60, 40], [50, 30]], [0, 1, 2], '药品标价签：规格、剂型、生产企业、医保类别'],
-  ['priceTobacco', [[50, 30], [60, 40], [70, 38]], [0, 1], '卷烟价签：单盒价、整条价、类型与焦油量'],
-  ['priceTea', [[50, 30], [60, 40]], [0, 1], '茶叶价签：品名、等级、产地与按斤计价'],
-  ['priceJewelry', [[40, 20], [50, 30]], [0, 1], '珠宝标签：材质、克重、编号与售价'],
-  ['dateShelf', [[40, 30], [50, 30], [60, 40], [40, 20], [30, 20]], [0, 1], '生产日期与保质期至，打印时按保质期自动计算'],
-  ['dateOpened', [[40, 30], [50, 30], [40, 20]], [0, 1], '开封时间与用完期限，精确到分钟'],
-  ['prepLabel', [[40, 30], [50, 30], [60, 40]], [0, 1], '后厨备料或解冻：制作、到期、储存与操作人'],
-  ['sampleRetention', [[50, 30], [60, 40], [70, 50]], [0, 1], '食品留样：餐次、菜品、留样 48 小时后可销毁'],
-  ['frozenLabel', [[40, 30], [50, 30]], [0], '冷冻入库：入库日期、保质期、存放位置与批号'],
-  ['cupSticker', [[40, 30], [50, 30]], [0, 1, 2], '饮品杯贴：取餐号自动递增，规格甜度温度一行看清'],
-  ['takeoutSeal', [[50, 30], [60, 40]], [0, 1], '外卖封签：店名、取餐号、备注与封口提示'],
-  ['flavorSticker', [[30, 20], [40, 20], [30, 15]], [0, 1], '口味贴：口味大字 + 一行说明'],
-  ['materialCard', [[70, 50], [80, 50], [60, 40], [50, 30]], [0, 1], '物料标识卡：编码、规格、数量、批次、供应商与状态'],
-  ['binLocation', [[40, 30], [50, 30], [60, 40], [40, 20]], [0, 1], '库位标签：大号库位号 + 区排层 + 库位条码'],
-  ['cartonLabel', [[70, 50], [80, 50], [60, 40]], [0, 1], '箱唛：装箱数、批次、目的仓，箱号自动递增'],
-  ['parcelLabel', [[70, 50], [80, 50], [60, 40]], [0, 1], '收件信息：收件人、电话、地址与订单条码'],
-  ['pickupCode', [[50, 30], [40, 30]], [0], '取件码：大号取件码 + 货架位置 + 到店日期'],
-  ['assetTag', [[50, 30], [60, 40], [40, 20]], [0, 1, 2], '固定资产：编号自动递增，盘点二维码跟随编号'],
-  ['deviceTag', [[60, 40], [70, 50], [50, 30]], [0, 1], '设备标识：型号、编号、保养周期与下次保养日期'],
-  ['fileBox', [[60, 40], [70, 50], [50, 30]], [0, 1], '档案盒：案卷名称、编号、部门与保管期限'],
-  ['folderTab', [[50, 15], [40, 15]], [0, 1], '文件夹标签条：名称 + 编号'],
-  ['storageTag', [[30, 15], [40, 20], [30, 20]], [0, 1], '收纳分类：大字名称 + 一行说明'],
-  ['staffBadge', [[70, 40], [60, 40], [70, 50], [50, 30]], [0, 1], '员工名牌：公司、姓名、部门职务与工号'],
-  ['nameSticker', [[40, 20], [30, 15], [50, 25], [40, 30]], [0, 1], '学生姓名贴：姓名大字 + 班级学号'],
-  ['visitorPass', [[60, 40], [70, 50]], [0], '访客证：编号自动递增，有效时间精确到分钟'],
-  ['statusTag', [[40, 30], [50, 30]], [0, 1, 2, 3], '状态标识：合格、待检、不合格、暂停使用'],
-  ['qcCertificate', [[40, 30], [50, 30], [40, 20]], [0, 1], '合格证：产品、型号、检验员、批号与检验日期'],
-  ['machineStatus', [[60, 40], [70, 50]], [0, 1], '设备状态牌：运行 / 停机 / 维修勾选与责任人'],
-  ['safetySign', [[50, 30], [60, 40]], [0, 1, 2], '温馨提示：大字提示 + 一行说明'],
-  ['cableFlag', [[40, 12], [50, 15], [30, 15]], [0, 1], '线缆标识：编号 + 起止位置'],
-  ['circuitLabel', [[40, 15], [50, 20]], [0, 1], '配电回路：回路编号、用途与额定电流'],
-  ['networkTag', [[50, 30]], [0, 1], '网络设备：名称、IP、位置与管理员'],
-  ['labSample', [[40, 30], [50, 30], [40, 20], [30, 20]], [0, 1], '样品标签：编号自动递增，条码或二维码跟随编号'],
-  ['reagentLabel', [[40, 30]], [0, 1], '试剂标签：浓度、配制与有效期、配制人'],
-  ['medicationGuide', [[60, 40], [50, 30], [40, 30]], [0, 1], '服药提醒：用法用量、早中晚勾选与饭前饭后'],
-  ['sterilePack', [[50, 30], [40, 30]], [0, 1], '灭菌包：灭菌与失效日期、锅号批次与操作人'],
-  ['bedCard', [[60, 40], [70, 50]], [0, 1], '床头卡：床号大字、护理级别、饮食与过敏提示'],
-  ['garmentTag', [[40, 60], [50, 80], [40, 30], [50, 30]], [0, 1], '服装吊牌：货号、成分、执行标准、安全类别与条码'],
-  ['greetingCard', [[40, 30], [70, 50]], [0, 1, 2, 3], '祝福卡：大字祝福 + 一句话 + 落款'],
-  ['giftTag', [[40, 30]], [0, 1], '礼品标签：To / From 与一句祝福'],
-  ['wifiCard', [[40, 30], [50, 30], [60, 40], [50, 50]], [0], 'Wi-Fi 卡：扫码连接，附网络名与密码'],
-  ['pantryJar', [[40, 30], [30, 20]], [0, 1, 2], '收纳罐：名称大字、装罐日期与保存提示']
+  ['priceStandard', [[70, 38], [60, 40], [60, 30], [50, 30, [0, 1]]], [0, 1, 2]],
+  ['priceSimple', [[40, 30], [50, 30], [60, 40], [50, 40], [50, 25, [0, 1]], [40, 20, [0, 1]], [30, 20, [0, 1]], [40, 15, [0, 1]]], [0, 4, 5]],
+  ['pricePromo', [[40, 30], [50, 30], [60, 40], [70, 38]], [1, 2]],
+  ['priceMember', [[50, 30], [60, 40], [40, 30]], [0, 3]],
+  ['priceWeighed', [[40, 30], [50, 30], [60, 40], [50, 40]], [0, 1, 2]],
+  ['priceBarcode', [[40, 30], [50, 30], [60, 40], [50, 25]], [0, 3]],
+  ['pricePharmacy', [[70, 38], [60, 40], [50, 30], [60, 30]], [0, 1, 2]],
+  ['priceTobacco', [[50, 30], [60, 40], [70, 38]], [0, 1]],
+  ['priceTea', [[50, 30], [60, 40]], [0, 1]],
+  ['priceJewelry', [[40, 20], [50, 30]], [0, 1]],
+  ['dateShelf', [[40, 30], [50, 30], [60, 40], [40, 20], [30, 20]], [0, 1, 2, 3]],
+  ['dateOpened', [[40, 30], [50, 30], [40, 20]], [0, 1, 2]],
+  ['prepLabel', [[40, 30], [50, 30], [60, 40]], [0, 1]],
+  ['sampleRetention', [[50, 30], [60, 40], [70, 50]], [0, 1]],
+  ['frozenLabel', [[40, 30], [50, 30]], [0, 1]],
+  ['cupSticker', [[40, 30], [50, 30]], [0, 1, 2]],
+  ['takeoutSeal', [[50, 30], [60, 40]], [0, 1]],
+  ['flavorSticker', [[30, 20], [40, 20], [30, 15]], [0, 1, 2]],
+  ['materialCard', [[70, 50], [80, 50], [60, 40], [50, 30]], [0, 1, 2]],
+  ['binLocation', [[40, 30], [50, 30], [60, 40], [40, 20]], [0, 1, 2]],
+  ['cartonLabel', [[70, 50], [80, 50], [60, 40]], [0, 1]],
+  ['parcelLabel', [[70, 50], [80, 50], [60, 40]], [0, 1]],
+  ['pickupCode', [[50, 30], [40, 30]], [0, 1]],
+  ['assetTag', [[50, 30], [60, 40], [40, 20], [40, 30]], [0, 1, 2]],
+  ['deviceTag', [[60, 40], [70, 50], [50, 30]], [0, 1]],
+  ['fileBox', [[60, 40], [70, 50], [50, 30]], [0, 1]],
+  ['folderTab', [[50, 15], [40, 15]], [0, 1, 2]],
+  ['storageTag', [[30, 15], [40, 20], [30, 20]], [0, 1, 2, 3]],
+  ['staffBadge', [[70, 40], [60, 40], [70, 50], [50, 30]], [0, 1]],
+  ['nameSticker', [[40, 20], [30, 15], [50, 25], [40, 30]], [0, 1]],
+  ['visitorPass', [[60, 40], [70, 50]], [0, 1]],
+  ['statusTag', [[40, 30], [50, 30], [60, 40], [70, 50]], [0, 1, 2, 3]],
+  ['qcCertificate', [[40, 30], [50, 30], [40, 20]], [0, 1]],
+  ['machineStatus', [[60, 40], [70, 50]], [0, 1]],
+  ['safetySign', [[50, 30], [60, 40], [70, 50]], [0, 1, 2]],
+  ['cableFlag', [[40, 12], [50, 15], [30, 15, [0]]], [0, 1]],
+  ['circuitLabel', [[40, 15], [50, 20]], [0, 1]],
+  ['networkTag', [[50, 30], [60, 40]], [0, 1]],
+  ['labSample', [[40, 30], [50, 30], [40, 20], [30, 20, [0]]], [0, 1]],
+  ['reagentLabel', [[40, 30], [50, 30]], [0, 1]],
+  ['medicationGuide', [[60, 40], [50, 30], [40, 30]], [0, 1]],
+  ['sterilePack', [[50, 30], [40, 30]], [0, 1]],
+  ['bedCard', [[60, 40], [70, 50]], [0, 1]],
+  ['garmentTag', [[40, 60], [50, 80], [40, 30], [50, 30]], [0, 1]],
+  ['greetingCard', [[40, 30], [50, 30], [70, 50]], [0, 1, 2, 3]],
+  ['giftTag', [[40, 30], [50, 30]], [0, 1]],
+  ['wifiCard', [[40, 30], [50, 30], [60, 40], [50, 50]], [0]],
+  ['pantryJar', [[40, 30], [30, 20, [0]], [50, 30]], [0, 1, 2]]
 ];
 
 function pad(value, length) {
@@ -89,23 +91,27 @@ function itemName(item) {
 }
 
 const CURATED_INDEX = [];
-PLAN.forEach(([recipeKey, paperSizes, indexes, blurb]) => {
+PLAN.forEach(([recipeKey, paperSizes, samples]) => {
   const recipe = RECIPES[recipeKey];
   if (!recipe) throw new Error(`unknown recipe ${recipeKey}`);
-  paperSizes.forEach(([widthMm, heightMm]) => {
-    indexes.forEach((index) => {
+  if (recipe.styles.length !== recipe.blurbs.length) throw new Error(`${recipeKey}: one blurb per style`);
+  paperSizes.forEach(([widthMm, heightMm, only], sizeIndex) => {
+    (only || recipe.styles.map((build, style) => style)).forEach((style) => {
+      const index = samples[(style + sizeIndex) % samples.length];
       const item = CONTENT[recipe.content][index];
       if (!item) throw new Error(`missing ${recipe.content}[${index}]`);
+      if (!recipe.styles[style]) throw new Error(`${recipeKey} has no style ${style}`);
       CURATED_INDEX.push({
-        id: `sy-tpl-${recipeKey}-${widthMm}x${heightMm}-${pad(index, 2)}`,
+        id: `sy-tpl-${recipeKey}-${widthMm}x${heightMm}-${pad(style, 2)}`,
         recipe: recipeKey,
+        style,
         widthMm,
         heightMm,
         index,
         scene: recipe.scene,
         category: recipe.category,
         name: `${recipe.scene} · ${itemName(item)}`,
-        blurb
+        blurb: recipe.blurbs[style]
       });
     });
   });
@@ -137,7 +143,7 @@ function getCuratedEntry(id) {
 function buildEntryDocument(entry) {
   const recipe = RECIPES[entry.recipe];
   const doc = newDocument(entry.widthMm, entry.heightMm);
-  recipe.build(doc, entry.widthMm, entry.heightMm, CONTENT[recipe.content][entry.index]);
+  recipe.styles[entry.style](doc, entry.widthMm, entry.heightMm, CONTENT[recipe.content][entry.index]);
   doc.name = entry.name;
   doc.templateMeta = {
     origin: 'shangyue-original',
@@ -145,6 +151,7 @@ function buildEntryDocument(entry) {
     library: 'shangyue-curated',
     libraryId: entry.id,
     recipe: entry.recipe,
+    style: entry.style,
     scene: entry.scene,
     copyright: '© 2026 商跃',
     thirdPartyAssets: false,
@@ -154,7 +161,7 @@ function buildEntryDocument(entry) {
     releaseApproved: true,
     batchCompatible: false,
     designSystem: 'sy-curated-v1',
-    designVersion: '1.0.0',
+    designVersion: '1.1.0',
     createdAt: '2026-09-28'
   };
   return doc;
@@ -182,7 +189,7 @@ const BATCH_PICKS = [
   ['sy-tpl-priceBarcode-50x25-00', '条码价签 50×25 · 品名 / 价格 / 条码'],
   ['sy-tpl-priceStandard-70x38-00', '明码标价签 70×38 · 品名 / 价格'],
   ['sy-tpl-priceStandard-60x40-00', '明码标价签 60×40 · 品名 / 价格'],
-  ['sy-tpl-pricePromo-50x30-01', '促销价签 50×30 · 品名 / 价格'],
+  ['sy-tpl-pricePromo-50x30-00', '促销价签 50×30 · 品名 / 价格'],
   ['sy-tpl-priceWeighed-50x30-00', '散称价签 50×30 · 品名 / 价格'],
   ['sy-tpl-dateShelf-40x30-00', '效期标签 40×30 · 品名（日期自动）'],
   ['sy-tpl-binLocation-40x30-00', '库位标签 40×30 · 编码 / 条码'],

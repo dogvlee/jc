@@ -438,6 +438,37 @@ function structuralElement(element) {
   };
 }
 
+/**
+ * Coarse look of a layout, used to keep every template visibly different.
+ * Each printed element becomes its kind and emphasis (reverse, bold, type
+ * size against the paper height) plus the 3×3 cell of its centre and a width
+ * class. Words, exact sizes and text-hugging widths are ignored, and so are
+ * rules, because a divider alone does not make a new design: two templates
+ * on the same paper with the same skeleton are one layout with new words.
+ */
+function layoutSkeleton(document) {
+  const width = Number(document && document.widthMm) || 1;
+  const height = Number(document && document.heightMm) || 1;
+  return (Array.isArray(document && document.elements) ? document.elements : []).map((element) => {
+    const type = String(element && element.type || '');
+    const box = geometryOf(element);
+    let kind = null;
+    if (type === 'text' || type === 'date' || type === 'serial') {
+      const ratio = (finiteNumber(element.fontSize) || 0) / height;
+      kind = `T${element.reverse ? 'r' : ''}${element.bold ? 'b' : ''}${ratio < 0.12 ? 's' : ratio < 0.24 ? 'm' : 'l'}`;
+    } else if (type === 'barcode' || type === 'qrcode') {
+      kind = type === 'barcode' ? 'B' : 'Q';
+    } else if (type === 'rect' && Math.min(box.width, box.height) >= 0.8) {
+      kind = element.filled ? 'F' : 'O';
+    }
+    if (!kind || !validGeometry(box)) return null;
+    const column = Math.min(2, Math.floor(((box.x + box.width / 2) / width) * 3));
+    const row = Math.min(2, Math.floor(((box.y + box.height / 2) / height) * 3));
+    const share = box.width / width;
+    return `${kind}@${column}${row}${share < 0.4 ? 'n' : share < 0.75 ? 'm' : 'w'}`;
+  }).filter(Boolean).sort().join(' ');
+}
+
 function layoutFingerprint(document) {
   return JSON.stringify({
     widthMm: rounded(document && document.widthMm),
@@ -576,5 +607,6 @@ module.exports = {
   auditLibrary,
   auditLibraryDocument,
   exactFingerprint,
-  layoutFingerprint
+  layoutFingerprint,
+  layoutSkeleton
 };
