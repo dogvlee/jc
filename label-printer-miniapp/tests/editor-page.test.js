@@ -404,8 +404,7 @@ test('cancelling while connection validation is pending never starts a print', a
     },
     refreshPrintBlock() { return false; },
     applyConnectionResult() {},
-    evaluatePrintBlock() { return null; },
-    async ensureImagesReady() {},
+    evaluatePrintBlock() { return null; },
     recordPrintSafely() { return true; },
     renderAll() {},
     setData(patch) { Object.assign(this.data, patch); }
@@ -447,135 +446,6 @@ test('onUnload detaches listeners synchronously before asynchronous BLE cleanup'
   assert.equal(managerRemoved, true);
   releaseClose();
   await unloading;
-});
-
-function remoteAssetWxMock() {
-  return {
-    env: { USER_DATA_PATH: 'wxfile://usr' },
-    getFileSystemManager() {
-      return {
-        access(options) { options.fail({ errMsg: 'not found' }); },
-        mkdir(options) { options.success({}); },
-        saveFile(options) { options.success({ savedFilePath: options.filePath }); }
-      };
-    },
-    downloadFile(options) {
-      options.success({ statusCode: 200, tempFilePath: 'wxfile://tmp/catalog.png' });
-    },
-    showModal() {}
-  };
-}
-
-test('an online material is cached locally before insertion into the editable document', async () => {
-  global.wx = remoteAssetWxMock();
-  const document = createDocument(40, 30);
-  document.elements = [];
-  const editor = Object.assign({}, pageDefinition, {
-    pageActive: true,
-    document,
-    data: { materialAssetLoadingId: '', showMaterialSheet: true },
-    remoteMaterials: [{
-      id: 'niim-remote-test-1',
-      label: '远程素材',
-      asset: 'https://oss-print.niimbot.com/public_resources/material/editor-test-1.png',
-      sourceUrl: 'https://oss-print.niimbot.com/public_resources/material/editor-test-1.png',
-      source: 'remote-niim-material'
-    }],
-    selectedId: '',
-    selectedIds: [],
-    multiSelect: false,
-    replaceMaterial: false,
-    setData(patch) { Object.assign(this.data, patch); },
-    commit(mutator) { mutator(this.document); },
-    invalidateImage() {},
-    setSelection(ids) { this.selectedIds = ids; this.selectedId = ids[0] || ''; }
-  });
-  await editor.pickMaterial({ currentTarget: { dataset: { id: 'niim-remote-test-1' } } });
-  assert.equal(document.elements.length, 1);
-  assert.equal(document.elements[0].type, 'material');
-  assert.equal(document.elements[0].materialId, 'niim-remote-test-1');
-  assert.match(document.elements[0].path, /^wxfile:\/\/usr\/niim-online-assets\//);
-  assert.equal(editor.data.showMaterialSheet, false);
-  assert.equal(editor.data.editorPanelTab, 'elements');
-  delete global.wx;
-});
-
-test('an online border is cached and inserted as the bottom image layer', async () => {
-  global.wx = remoteAssetWxMock();
-  const document = createDocument(50, 30);
-  const text = createElement('text', document);
-  document.elements = [text];
-  const editor = Object.assign({}, pageDefinition, {
-    pageActive: true,
-    document,
-    data: { borderAssetLoadingId: '', showBorderSheet: true },
-    remoteBorders: [{
-      id: 'niim-border-remote-test-1',
-      label: '远程边框',
-      asset: 'https://oss-print.niimbot.com/public_resources/material/editor-border-test-1.png',
-      sourceUrl: 'https://oss-print.niimbot.com/public_resources/material/editor-border-test-1.png',
-      source: 'remote-niim-border',
-      ninePatch: { identity: true }
-    }],
-    selectedId: text.id,
-    selectedIds: [text.id],
-    multiSelect: false,
-    setData(patch) { Object.assign(this.data, patch); },
-    commit(mutator) { mutator(this.document); },
-    invalidateImage() {},
-    setSelection(ids) { this.selectedIds = ids; this.selectedId = ids[0] || ''; }
-  });
-  await editor.pickBorder({ currentTarget: { dataset: { id: 'niim-border-remote-test-1' } } });
-  assert.equal(document.elements.length, 2);
-  assert.equal(document.elements[0].type, 'image');
-  assert.equal(document.elements[0].onlineBorderId, 'niim-border-remote-test-1');
-  assert.equal(document.elements[0].width, 50);
-  assert.equal(document.elements[0].height, 30);
-  assert.equal(document.elements[0].locked, true);
-  assert.match(document.elements[0].path, /^wxfile:\/\/usr\/niim-online-assets\//);
-  assert.equal(document.elements[1].id, text.id);
-  assert.equal(editor.data.showBorderSheet, false);
-  assert.equal(editor.data.editorPanelTab, 'elements');
-  delete global.wx;
-});
-
-test('online and programmatic borders share one slot instead of stacking', async () => {
-  global.wx = remoteAssetWxMock();
-  const document = createDocument(50, 30);
-  const programmatic = createElement('rect', document);
-  programmatic.borderStyle = 'double';
-  programmatic.decorativeBorder = true;
-  document.elements = [programmatic];
-  const editor = Object.assign({}, pageDefinition, {
-    pageActive: true,
-    document,
-    data: { borderAssetLoadingId: '', showBorderSheet: true },
-    remoteBorders: [{
-      id: 'niim-border-remote-exclusive',
-      label: '远程边框',
-      asset: 'https://oss-print.niimbot.com/public_resources/material/exclusive.png',
-      source: 'remote-niim-border'
-    }],
-    selectedId: programmatic.id,
-    selectedIds: [programmatic.id],
-    multiSelect: false,
-    setData(patch) { Object.assign(this.data, patch); },
-    commit(mutator) { mutator(this.document); },
-    invalidateImage() {},
-    setSelection(ids) { this.selectedIds = ids; this.selectedId = ids[0] || ''; }
-  });
-
-  await editor.pickBorder({ currentTarget: { dataset: { id: 'niim-border-remote-exclusive' } } });
-  assert.equal(document.elements.filter((item) => item.type === 'rect' && item.decorativeBorder).length, 0);
-  assert.equal(document.elements.filter((item) => item.onlineBorderId).length, 1);
-  assert.equal(editor.data.editorPanelTab, 'elements');
-
-  editor.data.showBorderSheet = true;
-  await editor.pickBorder({ currentTarget: { dataset: { id: 'double' } } });
-  assert.equal(document.elements.filter((item) => item.onlineBorderId).length, 0);
-  assert.equal(document.elements.filter((item) => item.type === 'rect' && item.decorativeBorder).length, 1);
-  assert.equal(editor.data.editorPanelTab, 'elements');
-  delete global.wx;
 });
 
 test('closing the editor with unsaved changes prompts before exiting', () => {
@@ -945,4 +815,36 @@ test('a card tap opens the same apply confirmation as the old picker', (t) => {
 
   modal.success({ confirm: true });
   assert.equal(editor.document.name, editor.data.templates[card.index].name);
+});
+
+test('the material sheet filters its symbols with the catalogue chips', () => {
+  const { MATERIAL_CATALOG, MATERIAL_CHIPS } = require('../miniprogram/core/materials');
+  const editor = Object.assign({}, pageDefinition, {
+    data: Object.assign({}, pageDefinition.data),
+    setData(patch) { Object.assign(this.data, patch); }
+  });
+
+  assert.deepEqual(editor.data.materialChips, ['全部'].concat(MATERIAL_CHIPS));
+  assert.equal(editor.data.materialChip, '全部');
+
+  const all = editor.materialOptionsFor('全部');
+  assert.equal(all.length, MATERIAL_CATALOG.length, 'every symbol is reachable');
+  assert.ok(all.every((item) => typeof item.category === 'string' && Array.isArray(item.tags)));
+
+  const warning = editor.materialOptionsFor('警示');
+  assert.ok(warning.length > 0 && warning.length < all.length);
+  assert.ok(warning.every((item) => item.category === '警示' || item.tags.includes('警示')));
+
+  editor.selectMaterialChip({ currentTarget: { dataset: { chip: '物流' } } });
+  assert.equal(editor.data.materialChip, '物流');
+  assert.ok(editor.data.materialOptions.length > 0);
+  assert.ok(editor.data.materialOptions.every((item) => item.category === '物流' || item.tags.includes('物流')));
+
+  editor.selectMaterialChip({ currentTarget: { dataset: { chip: '全部' } } });
+  assert.equal(editor.data.materialOptions.length, MATERIAL_CATALOG.length);
+
+  const markup = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'editor', 'index.wxml'), 'utf8');
+  assert.match(markup, /wx:for="\{\{materialChips\}\}"[^>]*bindtap="selectMaterialChip"/);
+  assert.match(markup, /wx:for="\{\{materialOptions\}\}"/);
+  assert.match(markup, /这一类还没有素材/);
 });

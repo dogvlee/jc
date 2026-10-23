@@ -189,3 +189,38 @@
 新增 2 条测试：卡片字段与搜索（含尺寸归一化、清空恢复）、卡片点击走同一套确认流程。全套 **862 pass**。
 
 顺带说明：`templateNames` 仍在下发，但界面已不再使用，目前只被既有测试断言；等下一轮清理时连同测试一起删。
+
+---
+
+# 第七轮：素材分类 + 死代码清理
+
+## 素材分类
+
+素材弹层原来是 129 个条目平铺、缩略图全是同一个占位图标，core/materials.js 里现成的 15 个分类（最新/警示/物流…）完全没用。
+
+- materialOption 补回 category 与 tags；
+- 弹层标题下加一行分类 chip（「全部」+ 目录自带的 15 类），点一下按 category / 标签过滤，列表在弹层内独立滚动；
+- 分类为空时给「这一类还没有素材，换个分类看看」；
+- 切换分类只重建过滤后的列表，不改素材本身。
+
+新增 1 条测试：chip 列表、「全部」等于全量、按「警示」「物流」过滤、清空恢复、markup 绑定。
+
+## 死代码清理
+
+| 位置 | 删除内容 | 依据 |
+|---|---|---|
+| core/renderer.js | contentHandleLocalMm | 与 geometry.selectionBox 重复的第二套手柄数学，无人调用 |
+| core/geometry.js | selectionHandleMode（毫米版命中测试） | 只有测试在调；实际走 selectionHandleModeAtPoint（CSS 像素版） |
+| pages/editor/index.js | ensureImagesReady | 打印路径用的是 preparePrintImages |
+| pages/editor/index.js | remoteMaterial* / remoteBorder* 12 个 data 键、4 个空实现、pickMaterial 与 pickBorder 的远程分支、materialAssetLoadingId / borderAssetLoadingId | 没有任何代码填充远程目录；内置素材是矢量绘制，边框是程序化生成 |
+| pages/home/index.js | remoteTemplate* 9 个 data 键、3 个空实现、resolveTemplate 远程分支、remoteAssetLoading | 同上；公开货架只有商跃原创和我的模板 |
+| pages/home/index.js | usePreviewTemplate 的远程分支 | 改成「有 https 图片才落地本地」，行为不变但不再依赖一个不存在的来源 |
+| pages/editor/index.wxml | 素材 / 边框格子的 loading、disabled 绑定 | 不再有下载态 |
+
+同步删除 4 条只测已删代码的用例，并更新 MODULE_REFERENCE.md（手柄 / 渲染器导出）与 TECHNICAL_ARCHITECTURE.md（打印前图片门禁的函数名）。
+
+全套 **859 pass**，check-project.mjs PASS。
+
+## 这一轮之后
+
+走查报告里的结构清单只剩**属性面板 3.4 屏、位置尺寸沉底**一项没动；其余（模板 picker、素材分类、死代码、表格窗口化、误触与可见性、键盘与画布）都已落地。

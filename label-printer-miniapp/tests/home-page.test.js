@@ -164,10 +164,6 @@ test('template shelf contains only approved originals, authorized redesigns, and
       templateQuery: '',
       templateVisibleCount: 500
     },
-    remoteTemplates: [{
-      id: 'remote-hidden', name: '远程模板', category: '线上', industry: '行业模板',
-      size: [40, 30], source: 'remote-niim'
-    }],
     userTemplates: [{
       id: 'user-visible', name: '我的常用价签',
       document: { widthMm: 40, heightMm: 30, elements: [] }
@@ -180,7 +176,6 @@ test('template shelf contains only approved originals, authorized redesigns, and
   assert.ok(page.data.visibleTemplates.some((item) => item.source === 'shangyue-original'));
   assert.ok(page.data.visibleTemplates.every((item) => item.source === 'shangyue-original' || item.source === 'user'));
   assert.equal(page.data.visibleTemplates.some((item) => item.source === 'builtin-base'), false);
-  assert.equal(page.data.visibleTemplates.some((item) => item.id === 'remote-hidden'), false);
   assert.equal(pageDefinition.data.recommendedTemplates.length, 6);
   assert.equal(pageDefinition.data.recommendedTemplates[0].id, 'shangyue-wish-card');
   assert.equal(pageDefinition.data.recommendedTemplates[0].thumbSrc, '/assets/shangyue-thumbs/shangyue-wish-card-v1.png');
@@ -427,7 +422,7 @@ test('template preview names the printers that fit and the paper, not element co
   assert.doesNotMatch(markup, /elementSummary|elementCount|个元素/);
 });
 
-test('the preview warns when the remembered printer cannot print a template but still opens it', () => {
+test('the preview warns when the remembered printer cannot print a template but still opens it', async () => {
   let opened = null;
   const page = homePage({ userTemplates: [], openEditor(document) { opened = document; } });
   page.data.printerFamily = '5';
@@ -436,7 +431,7 @@ test('the preview warns when the remembered printer cannot print a template but 
   page.previewTemplate(tap({ id: 'sy-tpl-priceStandard-60x40-00' }));
   assert.equal(page.data.previewTemplate.fitLabel, '80mm');
   assert.equal(page.data.previewTemplate.fitNotice, '你的打印机（58mm）打印不了这个尺寸，可以换一个模板');
-  page.usePreviewTemplate();
+  await page.usePreviewTemplate();
   assert.equal(opened.widthMm, 60);
   page.previewTemplate(tap({ id: 'shangyue-price-tag' }));
   assert.equal(page.data.previewTemplate.fitNotice, '');

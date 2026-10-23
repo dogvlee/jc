@@ -1322,25 +1322,6 @@ function drawSelectionHandles(context, element, box, canvasSize, dpi, scale) {
   context.stroke();
 }
 
-function contentHandleLocalMm(element) {
-  const hw = (Number(element.width) || 1) / 2;
-  const hh = (Number(element.height) || 1) / 2;
-  const fit = element._fit;
-  if (!fit || !Number.isFinite(fit.w)) {
-    return { e: { x: hw, y: 0 }, s: { x: 0, y: hh }, se: { x: hw, y: hh } };
-  }
-  // local origin = element center; content rect from left-top of element
-  const left = -hw + fit.left * element.width;
-  const top = -hh + fit.top * element.height;
-  const cw = fit.w * element.width;
-  const ch = fit.h * element.height;
-  return {
-    e: { x: left + cw, y: top + ch / 2 },
-    s: { x: left + cw / 2, y: top + ch },
-    se: { x: left + cw, y: top + ch }
-  };
-}
-
 module.exports = {
   binarizeImageData,
   fitText,
@@ -1353,7 +1334,6 @@ module.exports = {
   formatTimeChip,
   mmToDots,
   renderDocument,
-  contentHandleLocalMm,
   renderSelection,
   resolveDateTime,
   serialValue,

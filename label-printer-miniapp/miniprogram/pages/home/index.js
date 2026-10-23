@@ -434,15 +434,6 @@ Page({
     templateVisibleCount: PAGE_SIZE,
     templateTotal: templates.length,
     visibleTemplates: [],
-    remoteTemplatePage: 0,
-    remoteTemplateTotal: 0,
-    remoteTemplateLoaded: 0,
-    remoteTemplateScanned: 0,
-    remoteTemplateHasMore: false,
-    remoteTemplateLoading: false,
-    remoteTemplateError: '',
-    remoteTemplateStatusText: '公开货架仅含商跃原创模板和我的模板',
-    remoteAssetLoading: false,
     recentProjects: [],
     allProjects: [],
     // Totals for counts and stats; allProjects follows the search box.
@@ -518,7 +509,6 @@ Page({
     this.authService = app && app.globalData && app.globalData.authService || null;
     this.bindAuthState();
     this.editorSession = new EditorSession(this.repository);
-    this.remoteTemplates = [];
     this.setData({ safeTop, headerTop });
     this.enableSharing();
     this.bindConnectionState();
@@ -905,17 +895,8 @@ Page({
     });
   },
 
-  ensureRemoteTemplateCatalog() {
-    return Promise.resolve();
-  },
 
-  loadRemoteTemplatePage() {
-    return Promise.resolve();
-  },
 
-  loadMoreRemoteTemplates() {
-    return Promise.resolve();
-  },
 
   setTemplateCategory(event) {
     this.setData({ templateCategory: event.currentTarget.dataset.value, templateVisibleCount: PAGE_SIZE }, () => this.refreshTemplates());
@@ -1059,8 +1040,6 @@ Page({
       source: 'user',
       document: user.document
     }, family), document: user.document };
-    const remote = (this.remoteTemplates || []).find((item) => item.id === id);
-    if (remote) return { meta: templateView(remote, family), document: remote.document };
     const meta = templates.find((item) => item.id === id);
     if (!meta) return null;
     return { meta: templateView(meta, family), document: buildTemplateDocument(meta) };
@@ -1087,28 +1066,31 @@ Page({
   },
 
   async usePreviewTemplate() {
-    if (!this.previewDocument || this.data.remoteAssetLoading) return;
-    if (!this.data.previewTemplate || this.data.previewTemplate.source !== 'remote-niim') {
-      this.openEditor(this.previewDocument, '');
+    if (!this.previewDocument) return;
+    const document = this.previewDocument;
+    // A template may still carry https pictures; they are written to disk before
+    // the editor opens so the canvas never depends on a CDN's CORS headers.
+    const elements = Array.isArray(document.elements) ? document.elements : [];
+    const hasRemoteImages = elements.some((element) => element
+      && (element.type === 'image' || element.type === 'material')
+      && /^https?:\/\//i.test(String(element.path || '')));
+    if (!hasRemoteImages) {
+      this.openEditor(document, '');
       return;
     }
-    const document = this.previewDocument;
-    const previewId = this.data.previewTemplate.id;
-    this.setData({ remoteAssetLoading: true });
+    let localized = document;
     try {
-      const localized = await localizeDocumentImages(wx, document);
-      if (!this.data.showTemplatePreview || !this.data.previewTemplate || this.data.previewTemplate.id !== previewId) return;
-      this.previewDocument = localized;
-      this.openEditor(localized, '');
+      localized = await localizeDocumentImages(wx, document);
     } catch (error) {
       wx.showModal({
         title: '模板图片加载失败',
-        content: `${error && error.message ? error.message : '请检查网络后重试'}。仅支持你自己导入的图片。`,
+        content: `${error && error.message ? error.message : '请检查网络后重试'}。`,
         showCancel: false
       });
-    } finally {
-      if (this.pageActive !== false) this.setData({ remoteAssetLoading: false });
+      return;
     }
+    if (!this.pageActive) return;
+    this.openEditor(localized, '');
   },
 
   deletePreviewTemplate() {

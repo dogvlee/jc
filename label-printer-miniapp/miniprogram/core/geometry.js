@@ -178,17 +178,6 @@ function localPoint(element, point) {
   };
 }
 
-/** Millimetre-tolerance hit test of the handles (kept for callers without a canvas). */
-function selectionHandleMode(element, point, tolerance) {
-  if (!element || !point) return 'move';
-  const local = localPoint(element, point);
-  const handles = selectionContentHandles(element);
-  const limit = Math.max(0.1, Number(tolerance) || 1);
-  const near = (target) => Math.abs(local.x - target.x) <= limit && Math.abs(local.y - target.y) <= limit;
-  const hit = ['se', 'rotate', 'e', 's'].find((name) => near(handles[name]));
-  return hit ? HANDLE_MODES[hit] : 'move';
-}
-
 /**
  * Hit the four visible selection handles in CSS pixels. The editor draws the
  * handles at a fixed visual size, so a millimetre tolerance becomes too small
@@ -447,7 +436,6 @@ module.exports = {
   resizeRotatedElement,
   scaleRotatedElement,
   selectionContentHandles,
-  selectionHandleMode,
   selectionHandleModeAtPoint,
   snapElementPosition,
   snapScalar

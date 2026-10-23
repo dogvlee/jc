@@ -836,6 +836,33 @@ button.outline-wide .icon {
 
 /* Template picker: a searchable list of cards instead of a 70-item native
    wheel, so a template can be found by name and seen before it is applied. */
+/* Material sheet: the catalogue's chips filter the 129 symbols. */
+.material-chips {
+  flex: none;
+  white-space: nowrap;
+}
+
+.material-chip-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 8rpx 0 16rpx;
+}
+
+.material-empty {
+  padding: 48rpx 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+  color: var(--color-text-3);
+  font-size: var(--font-caption);
+}
+
+.material-empty .icon {
+  font-size: 48rpx;
+}
+
 .template-panel {
   display: flex;
   flex-direction: column;

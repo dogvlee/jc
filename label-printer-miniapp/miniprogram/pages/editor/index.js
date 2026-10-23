@@ -29,7 +29,7 @@ const {
   snapElementPosition
 } = require('../../core/geometry');
 const { BORDER_CATALOG } = require('../../core/borders');
-const { MATERIAL_CATALOG } = require('../../core/materials');
+const { MATERIAL_CATALOG, MATERIAL_CHIPS } = require('../../core/materials');
 const {
   cropImageData,
   evaluatePrintability,
@@ -64,7 +64,6 @@ const { createImageCacheRegistry } = require('../../core/image-cache');
 const { applyScanToElement } = require('../../core/scan-label');
 const { linkedCodeValue, syncLinkedCodes } = require('../../core/linked-codes');
 const { applySerialAdvance, serialAdvancePlan } = require('../../core/serial-advance');
-const { localizeUrl } = require('../../services/remote-image-cache');
 const { DOCUMENT_LIMITS, KEYS, Repository, normalizeDocument } = require('../../services/repository');
 const { STOCK_PRESETS } = require('../../app/stock-presets');
 const { scanCode, showScanFailure } = require('../../services/scanner');
@@ -430,18 +429,21 @@ function materialOption(item) {
     label: item.label,
     previewSrc: previewAssetPath(item.asset),
     symbol: item.symbol || '',
-    remote: item.source === 'remote-niim-material',
-    vip: Boolean(item.vip)
+    // The chips below the title filter on these; the catalogue already carries them.
+    category: item.category || '',
+    tags: Array.isArray(item.tags) ? item.tags.slice() : []
   };
 }
+
+const MATERIAL_CHIP_ALL = '全部';
+// '全部' first, then the catalogue's own groups (最新/警示/物流…).
+const MATERIAL_CHIP_LIST = [MATERIAL_CHIP_ALL].concat(MATERIAL_CHIPS);
 
 function borderOption(item) {
   return {
     id: item.id,
     label: item.label,
-    previewSrc: previewAssetPath(item.previewSrc || item.asset),
-    remote: item.source === 'remote-niim-border',
-    vip: Boolean(item.vip)
+    previewSrc: previewAssetPath(item.previewSrc || item.asset)
   };
 }
 
@@ -588,22 +590,10 @@ Page({
     editorPanelTab: 'elements',
     elementTools: ELEMENT_TOOLS,
     textModeOptions: TEXT_MODE_OPTIONS,
+    materialChips: MATERIAL_CHIP_LIST,
+    materialChip: MATERIAL_CHIP_ALL,
     materialOptions: MATERIAL_CATALOG.map(materialOption),
     borderOptions: BORDER_CATALOG.map(borderOption),
-    remoteMaterialPage: 0,
-    remoteMaterialTotal: 0,
-    remoteMaterialHasMore: false,
-    remoteMaterialLoading: false,
-    remoteMaterialError: '',
-    remoteMaterialStatusText: '仅使用商跃内置素材',
-    materialAssetLoadingId: '',
-    remoteBorderPage: 0,
-    remoteBorderTotal: 0,
-    remoteBorderHasMore: false,
-    remoteBorderLoading: false,
-    remoteBorderError: '',
-    remoteBorderStatusText: '仅使用商跃程序化边框',
-    borderAssetLoadingId: '',
     showPrintSheet: false,
     showSettingsSheet: false,
     showLayersSheet: false,
@@ -658,8 +648,6 @@ Page({
     this.loadOptions = options;
     this.pageActive = true;
     this.canvasInstanceId = `preview-${Date.now().toString(36)}-${++previewCanvasInstanceSequence}`;
-    this.remoteMaterials = [];
-    this.remoteBorders = [];
     this.printTaskGeneration = 0;
     this.bindKeyboard();
     const app = getApp();
@@ -1286,20 +1274,6 @@ Page({
     delete this.imageLoadPromises[id];
   },
 
-  async ensureImagesReady() {
-    const required = this.document.elements.filter((item) => (
-      (item.type === 'image' || item.type === 'material') && item.path
-    ));
-    if (!required.length) {
-      return;
-    }
-    await Promise.all(this.loadDocumentImages());
-    const missing = required.find((item) => !this.images[item.id]);
-    if (missing) {
-      throw new Error('标签中的图片或素材加载失败，请重新选择后再打印');
-    }
-  },
-
   recordSnapshot(snapshot) {
     this.undoStack.push(snapshot);
     if (this.undoStack.length > 30) {
@@ -1648,7 +1622,7 @@ Page({
     }
     if (type === 'material') {
       this.replaceMaterial = false;
-      this.setData({ showMaterialSheet: true }, () => this.ensureRemoteMaterialCatalog());
+      this.setData({ showMaterialSheet: true, materialOptions: this.materialOptionsFor(this.data.materialChip) });
       return;
     }
     this.commit((document) => {
@@ -2321,29 +2295,29 @@ Page({
 
   openMaterialSheet() {
     this.replaceMaterial = Boolean(this.selectedElement() && this.selectedElement().type === 'material');
-    this.setData({ showMaterialSheet: true }, () => this.ensureRemoteMaterialCatalog());
+    this.setData({
+      showMaterialSheet: true,
+      materialOptions: this.materialOptionsFor(this.data.materialChip)
+    });
+  },
+
+  /** Materials in one chip: '全部', or the category/tag the catalogue gave it. */
+  materialOptionsFor(chip) {
+    if (!this.materialCatalog) this.materialCatalog = MATERIAL_CATALOG.map(materialOption);
+    const selected = String(chip || MATERIAL_CHIP_ALL);
+    if (selected === MATERIAL_CHIP_ALL) return this.materialCatalog;
+    return this.materialCatalog.filter((item) => item.category === selected || item.tags.indexOf(selected) >= 0);
+  },
+
+  selectMaterialChip(event) {
+    const materialChip = String((event.currentTarget.dataset.chip) || MATERIAL_CHIP_ALL);
+    this.setData({ materialChip, materialOptions: this.materialOptionsFor(materialChip) });
   },
   closeMaterialSheet() { this.setData({ showMaterialSheet: false }); },
   openBorderSheet() {
-    this.setData({ showBorderSheet: true }, () => this.ensureRemoteBorderCatalog());
+    this.setData({ showBorderSheet: true });
   },
   closeBorderSheet() { this.setData({ showBorderSheet: false }); },
-
-  ensureRemoteMaterialCatalog() {
-    return Promise.resolve();
-  },
-
-  loadMoreRemoteMaterials() {
-    return Promise.resolve();
-  },
-
-  ensureRemoteBorderCatalog() {
-    return Promise.resolve();
-  },
-
-  loadMoreRemoteBorders() {
-    return Promise.resolve();
-  },
 
   selectLayer(event) {
     const id = event.currentTarget.dataset.id;
@@ -2378,25 +2352,11 @@ Page({
     wx.showToast({ title: `已选择 ${decision.ids.length} 个元素`, icon: 'none' });
   },
 
-  async pickMaterial(event) {
+  pickMaterial(event) {
     const id = event.currentTarget.dataset.id;
-    const material = MATERIAL_CATALOG.find((item) => item.id === id)
-      || (this.remoteMaterials || []).find((item) => item.id === id);
+    const material = MATERIAL_CATALOG.find((item) => item.id === id);
     if (!material) return;
-    let asset = material.asset || '';
-    if (material.source === 'remote-niim-material') {
-      if (this.data.materialAssetLoadingId) return;
-      this.setData({ materialAssetLoadingId: material.id });
-      try {
-        asset = await localizeUrl(wx, material.asset);
-      } catch (error) {
-        wx.showModal({ title: '素材图片加载失败', content: error.message || '请检查网络后重试', showCancel: false });
-        return;
-      } finally {
-        if (this.pageActive) this.setData({ materialAssetLoadingId: '' });
-      }
-      if (!this.pageActive) return;
-    }
+    const asset = material.asset || '';
     this.commit((document) => {
       let element = this.replaceMaterial && this.selectedElement();
       if (!element || element.type !== 'material') {
@@ -2408,64 +2368,18 @@ Page({
       element.label = material.label;
       element.path = asset;
       element.symbol = material.symbol || (asset ? element.symbol : material.id);
-      if (material.sourceUrl) element.sourceUrl = material.sourceUrl;
       this.invalidateImage(element.id);
     });
     this.replaceMaterial = false;
     this.setData({ showMaterialSheet: false, editorPanelTab: 'elements' });
   },
 
-  async pickBorder(event) {
+  pickBorder(event) {
     const id = event.currentTarget.dataset.id;
-    const border = BORDER_CATALOG.find((item) => item.id === id)
-      || (this.remoteBorders || []).find((item) => item.id === id);
+    const border = BORDER_CATALOG.find((item) => item.id === id);
     if (!border) return;
-    if (border.source === 'remote-niim-border') {
-      if (this.data.borderAssetLoadingId) return;
-      this.setData({ borderAssetLoadingId: border.id });
-      let asset;
-      try {
-        asset = await localizeUrl(wx, border.asset);
-      } catch (error) {
-        wx.showModal({ title: '边框图片加载失败', content: error.message || '请检查网络后重试', showCancel: false });
-        return;
-      } finally {
-        if (this.pageActive) this.setData({ borderAssetLoadingId: '' });
-      }
-      if (!this.pageActive) return;
-      const selectedProgrammaticBorderId = this.selectedId;
-      this.commit((document) => {
-        let element = document.elements.find((item) => item.type === 'image' && item.onlineBorderId);
-        if (!element) element = createElement('image', document);
-        document.elements = document.elements.filter((item) => !(
-          item.type === 'rect'
-          && item.borderStyle
-          && (item.decorativeBorder || item.id === selectedProgrammaticBorderId)
-        ));
-        element.x = 0;
-        element.y = 0;
-        element.width = document.widthMm;
-        element.height = document.heightMm;
-        element.rotation = 0;
-        // Online borders are full-canvas background layers. Lock them by
-        // default so a normal content drag cannot shift the frame by mistake;
-        // the inspector still exposes an explicit unlock action.
-        element.locked = true;
-        element.path = asset;
-        element.threshold = 180;
-        element.onlineBorderId = border.id;
-        element.label = border.label;
-        element.ninePatch = border.ninePatch || null;
-        if (border.sourceUrl) element.sourceUrl = border.sourceUrl;
-        document.elements = document.elements.filter((item) => item.id !== element.id);
-        document.elements.unshift(element);
-        this.invalidateImage(element.id);
-        this.setSelection([element.id], false);
-      });
-      this.setData({ showBorderSheet: false, editorPanelTab: 'elements' });
-      return;
-    }
     this.commit((document) => {
+      // A decorative border replaces any full-canvas image frame left behind.
       document.elements = document.elements.filter((item) => !(item.type === 'image' && item.onlineBorderId));
       let element = this.selectedElement();
       if (!element || element.type !== 'rect') {

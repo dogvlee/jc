@@ -395,8 +395,17 @@
   <view class="modal-backdrop" bindtap="closeMaterialSheet"></view>
   <view class="bottom-sheet material-sheet">
     <view class="sheet-handle"></view><view class="sheet-heading"><view><text class="sheet-title">素材库</text><text class="sheet-subtitle">点一下加到标签上</text></view><button class="sheet-close" bindtap="closeMaterialSheet" aria-label="关闭"><text class="icon icon-x" aria-hidden="true"></text></button></view>
+    <scroll-view class="material-chips" scroll-x enhanced show-scrollbar="{{false}}">
+      <view class="material-chip-row">
+        <button wx:for="{{materialChips}}" wx:key="*this" class="chip {{materialChip == item ? 'active' : ''}}" data-chip="{{item}}" bindtap="selectMaterialChip">{{item}}</button>
+      </view>
+    </scroll-view>
     <scroll-view class="asset-grid" scroll-y enhanced show-scrollbar="{{false}}">
-      <button wx:for="{{materialOptions}}" wx:key="id" data-id="{{item.id}}" bindtap="pickMaterial" loading="{{materialAssetLoadingId == item.id}}" disabled="{{materialAssetLoadingId != ''}}"><image wx:if="{{item.previewSrc}}" src="{{item.previewSrc}}" mode="aspectFit" lazy-load="true"></image><view wx:else class="asset-symbol"><text class="icon icon-smile" aria-hidden="true"></text></view><text>{{item.label}}</text></button>
+      <view wx:if="{{!materialOptions.length}}" class="material-empty">
+        <text class="icon icon-search-x" aria-hidden="true"></text>
+        <text>这一类还没有素材，换个分类看看</text>
+      </view>
+      <button wx:for="{{materialOptions}}" wx:key="id" data-id="{{item.id}}" bindtap="pickMaterial"><image wx:if="{{item.previewSrc}}" src="{{item.previewSrc}}" mode="aspectFit" lazy-load="true"></image><view wx:else class="asset-symbol"><text class="icon icon-smile" aria-hidden="true"></text></view><text>{{item.label}}</text></button>
     </scroll-view>
   </view>
 </block>
@@ -406,7 +415,7 @@
   <view class="bottom-sheet border-sheet">
     <view class="sheet-handle"></view><view class="sheet-heading"><view><text class="sheet-title">装饰边框</text><text class="sheet-subtitle">点一下给方框换上边框</text></view><button class="sheet-close" bindtap="closeBorderSheet" aria-label="关闭"><text class="icon icon-x" aria-hidden="true"></text></button></view>
     <scroll-view class="border-grid" scroll-y enhanced show-scrollbar="{{false}}">
-      <button wx:for="{{borderOptions}}" wx:key="id" class="{{selected.borderStyle == item.id || selected.onlineBorderId == item.id ? 'active' : ''}}" data-id="{{item.id}}" bindtap="pickBorder" loading="{{borderAssetLoadingId == item.id}}" disabled="{{borderAssetLoadingId != ''}}"><image wx:if="{{item.previewSrc}}" class="border-image" src="{{item.previewSrc}}" mode="aspectFit" lazy-load="true"></image><view wx:else class="border-sample {{item.id}}"></view><text>{{item.label}}</text></button>
+      <button wx:for="{{borderOptions}}" wx:key="id" class="{{selected.borderStyle == item.id || selected.onlineBorderId == item.id ? 'active' : ''}}" data-id="{{item.id}}" bindtap="pickBorder"><image wx:if="{{item.previewSrc}}" class="border-image" src="{{item.previewSrc}}" mode="aspectFit" lazy-load="true"></image><view wx:else class="border-sample {{item.id}}"></view><text>{{item.label}}</text></button>
     </scroll-view>
   </view>
 </block>

@@ -8,8 +8,7 @@ const {
   normalizeAngleDelta,
   pointerAngle,
   resizeRotatedElement,
-  scaleRotatedElement,
-  selectionHandleMode
+  scaleRotatedElement,
 } = require('../miniprogram/core/geometry');
 
 function rotateLocalPoint(element, localX, localY) {
@@ -83,19 +82,6 @@ test('promoting a rotated fit box preserves its visible handle coordinates', () 
     assert.ok(Math.abs(promotedSe.x - visibleSe.x) < 1e-9, `${rotation}° x`);
     assert.ok(Math.abs(promotedSe.y - visibleSe.y) < 1e-9, `${rotation}° y`);
   }
-});
-
-test('selection hit testing follows the visible content-fitted handles', () => {
-  const element = {
-    x: 2, y: 3, width: 30, height: 6, rotation: 0,
-    _fit: { left: 0, top: 0, w: 1 / 6, h: 1 }
-  };
-  assert.equal(selectionHandleMode(element, { x: 7, y: 6 }, 0.4), 'resize-e');
-  assert.equal(selectionHandleMode(element, { x: 4.5, y: 9 }, 0.4), 'resize-s');
-  assert.equal(selectionHandleMode(element, { x: 7, y: 9 }, 0.4), 'scale');
-  // Without a canvas the rotate handle sits 3 mm above the visible box.
-  assert.equal(selectionHandleMode(element, { x: 4.5, y: 0 }, 0.4), 'rotate');
-  assert.equal(selectionHandleMode(element, { x: 32, y: 6 }, 0.4), 'move');
 });
 
 test('vertical text direction reshapes a wide text box and restores its horizontal size', () => {
