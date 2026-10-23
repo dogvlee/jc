@@ -1169,3 +1169,37 @@ test('adding a row says so and jumps to it in a long table', () => {
     delete global.wx;
   }
 });
+
+test('the label card keeps its delete button away from the thumbnail', () => {
+  const markup = readHome('index.wxml');
+  const card = markup.slice(markup.indexOf('class="project-card project-manage-card"'), markup.indexOf('</view>', markup.indexOf('project-delete')));
+  assert.doesNotMatch(card, /class="delete-card"/, 'nothing is overlaid on the artwork');
+  assert.match(card, /class="project-delete"[^>]*bindtap="deleteProject"/);
+  // Opening still works from the thumbnail and from the name row.
+  assert.match(card, /class="project-open"[^>]*bindtap="openProject"/);
+  assert.match(card, /class="project-card-text"[^>]*bindtap="openProject"/);
+  const wxss = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'home', 'index.wxss'), 'utf8');
+  assert.doesNotMatch(wxss, /button\.delete-card/, 'the old overlaid button is gone');
+  assert.match(wxss, /\.project-card-copy \{[^}]*display: flex/);
+});
+
+test('a print history row shows two lines of the reason and opens the whole text', () => {
+  const markup = readHome('index.wxml');
+  assert.match(markup, /class="history-message \{\{item\.result\}\}"/);
+  assert.match(markup, /class="history-item"[^>]*bindtap="openHistoryDetail"/);
+  assert.match(markup, /class="history-action"[^>]*catchtap="openHistoryItem"/, 'the open button must not also open the detail');
+  const wxss = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'home', 'index.wxss'), 'utf8');
+  assert.match(wxss, /\.history-message \{[^}]*-webkit-line-clamp: 2/);
+
+  const modals = [];
+  global.wx = { showModal(options) { modals.push(options); } };
+  try {
+    const page = homePage();
+    page.data.printHistory = [{ id: 'h1', name: '价签', atText: '10月21日 10:12', statusLabel: '失败', message: '打印机没有响应；可能是没开机' }];
+    page.openHistoryDetail({ currentTarget: { dataset: { id: 'h1' } } });
+    assert.equal(modals.length, 1);
+    assert.match(modals[0].content, /打印机没有响应；可能是没开机/, 'the whole reason is readable');
+  } finally {
+    delete global.wx;
+  }
+});

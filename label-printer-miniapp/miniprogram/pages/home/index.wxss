@@ -404,6 +404,36 @@ button.template-card {
   padding: 18rpx 20rpx 22rpx;
 }
 
+/* The project card's copy row holds the text and the delete button side by side,
+   so deleting never sits on the thumbnail the way it used to. */
+.project-card-copy {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.project-card-text {
+  flex: 1;
+  min-width: 0;
+}
+
+button.project-delete {
+  flex: none;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-3);
+  font-size: 28rpx;
+}
+
+button.project-delete.button-hover {
+  color: var(--color-primary-pressed);
+  background: var(--color-danger-soft);
+}
+
 /* Source label (原创 / 授权改编 / 商跃生成) sits in the meta row so it never
    covers the thumbnail artwork. */
 .template-meta {
@@ -776,32 +806,6 @@ button.filter-tab.active::before {
 
 button.load-more {
   margin-top: 24rpx;
-}
-
-/* Projects: the delete button is a 72 rpx touch target; its icon draws the
-   56 rpx circle in the same place as before. */
-button.delete-card {
-  position: absolute;
-  top: 4rpx;
-  right: 4rpx;
-  width: 72rpx;
-  height: 72rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-text-2);
-  font-size: 28rpx;
-}
-
-button.delete-card .icon {
-  width: 56rpx;
-  height: 56rpx;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: var(--shadow-card);
 }
 
 /* Batch data */
@@ -1337,6 +1341,32 @@ button.profile-account-button {
   /* 4.18:1 with the brand red; the pressed red reaches 5.3:1. */
   color: var(--color-primary-pressed);
   background: var(--color-danger-soft);
+}
+
+.history-time {
+  display: block;
+  margin-top: 2rpx;
+  color: var(--color-text-3);
+  font-size: var(--font-small);
+}
+
+/* A failure reason is the reason the owner came back for; two lines, not one
+   clipped line. The row opens the full text in a dialog. */
+.history-message {
+  display: -webkit-box;
+  margin-top: 4rpx;
+  overflow: hidden;
+  color: var(--color-text-3);
+  font-size: var(--font-caption);
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+}
+
+.history-message.failed,
+.history-message.error {
+  color: var(--color-warning-text);
 }
 
 .history-copy {

@@ -1361,6 +1361,19 @@ Page({
 
   // A record holds the label as it was printed. It opens as a new label: tied
   // to its saved label, saving it would overwrite a newer version.
+  // The row shows two lines of the reason; the dialog has the whole thing.
+  openHistoryDetail(event) {
+    const id = event && event.currentTarget && event.currentTarget.dataset ? event.currentTarget.dataset.id : '';
+    const entry = (this.data.printHistory || []).find((item) => String(item.id) === String(id));
+    if (!entry) return;
+    wx.showModal({
+      title: entry.name,
+      content: [entry.atText, entry.statusLabel, entry.message].filter(Boolean).join('\n'),
+      showCancel: false,
+      confirmText: '知道了'
+    });
+  },
+
   openHistoryItem(event) {
     const record = (this.printHistoryRecords || []).find((item) => item.id === event.currentTarget.dataset.id);
     if (!record || !record.document) {

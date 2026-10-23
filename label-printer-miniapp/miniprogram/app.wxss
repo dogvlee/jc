@@ -215,7 +215,8 @@ button.full-button {
 /* Chips: shape, weight and colour all change when selected. */
 .chip {
   flex: none;
-  min-height: 60rpx;
+  /* 36px: filter rows of chips are tapped far more often than they are read. */
+  min-height: 72rpx;
   padding: 0 28rpx;
   border: 1rpx solid transparent;
   border-radius: var(--radius-full);

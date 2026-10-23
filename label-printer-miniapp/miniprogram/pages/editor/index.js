@@ -1736,13 +1736,37 @@ Page({
     if (!deletedIds.length) {
       return;
     }
-    this.commit((document) => {
-      document.elements = document.elements.filter((item) => !deletedIds.includes(item.id));
-      deletedIds.forEach((id) => {
-        this.invalidateImage(id);
+    const what = deletedIds.length > 1
+      ? `${deletedIds.length} 个元素`
+      : (() => {
+        const element = this.document.elements.find((item) => item.id === deletedIds[0]);
+        return element ? `「${elementTypeLabel(element.type)}」` : '这个元素';
+      })();
+    const remove = () => {
+      this.commit((document) => {
+        document.elements = document.elements.filter((item) => !deletedIds.includes(item.id));
+        deletedIds.forEach((id) => {
+          this.invalidateImage(id);
+        });
+        this.setSelection([], false);
       });
-      this.setSelection([], false);
-    });
+      // Deletion has no dialog of its own, so say what happened and where undo is.
+      if (typeof wx !== 'undefined' && typeof wx.showToast === 'function') {
+        wx.showToast({ title: `已删除${what}，可点左上角撤销`, icon: 'none' });
+      }
+    };
+    if (deletedIds.length > 1 && typeof wx !== 'undefined' && typeof wx.showModal === 'function') {
+      wx.showModal({
+        title: `删除这 ${deletedIds.length} 个元素？`,
+        content: '删掉后可以点左上角的撤销找回来。',
+        confirmText: '删除',
+        cancelText: '取消',
+        confirmColor: '#E02D26',
+        success: (result) => { if (result && result.confirm) remove(); }
+      });
+      return;
+    }
+    remove();
   },
 
   duplicateSelected() {

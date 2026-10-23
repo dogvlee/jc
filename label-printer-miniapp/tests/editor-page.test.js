@@ -845,3 +845,43 @@ test('the bottom panel lifts above an open keyboard instead of being covered', (
   const markup = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'editor', 'index.wxml'), 'utf8');
   assert.match(markup, /class="editor-page" style="padding-bottom: \{\{keyboardHeight\}\}px;"/);
 });
+
+test('deleting an element says so, and a multi-selection asks first', () => {
+  const calls = { toasts: [], modals: [] };
+  global.wx = {
+    showToast(options) { calls.toasts.push(options.title); },
+    showModal(options) { calls.modals.push(options); }
+  };
+  try {
+    const documentValue = createDocument(40, 30);
+    const elements = [createElement('text', documentValue), createElement('text', documentValue), createElement('rect', documentValue)];
+    documentValue.elements = elements;
+    const editor = Object.assign({}, pageDefinition, {
+      data: { copies: 1 },
+      document: documentValue,
+      selectedId: elements[0].id,
+      selectedIds: [elements[0].id],
+      undoStack: [],
+      redoStack: [],
+      setData(patch, callback) { Object.assign(this.data, patch); if (callback) callback(); },
+      commit(mutator) { mutator(this.document); },
+      setSelection(ids) { this.selectedIds = ids; },
+      invalidateImage() {}
+    });
+
+    editor.deleteSelected();
+    assert.equal(documentValue.elements.length, 2);
+    assert.match(calls.toasts[0], /已删除「文本」，可点左上角撤销/);
+
+    // Two at once asks first: many deletions deserve a question.
+    editor.selectedIds = [elements[1].id, elements[2].id];
+    editor.selectedId = elements[1].id;
+    editor.deleteSelected();
+    assert.equal(documentValue.elements.length, 2, 'nothing goes until the dialog is confirmed');
+    assert.match(calls.modals[0].title, /删除这 2 个元素/);
+    calls.modals[0].success({ confirm: true });
+    assert.equal(documentValue.elements.length, 0);
+  } finally {
+    delete global.wx;
+  }
+});
