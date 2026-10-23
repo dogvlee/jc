@@ -834,6 +834,127 @@ button.outline-wide .icon {
   margin-top: 16rpx;
 }
 
+/* Template picker: a searchable list of cards instead of a 70-item native
+   wheel, so a template can be found by name and seen before it is applied. */
+.template-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  padding-bottom: 16rpx;
+}
+
+.template-search {
+  flex: none;
+  min-height: 72rpx;
+  padding: 0 20rpx;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  color: var(--color-text-3);
+  background: var(--color-fill);
+  font-size: var(--font-body);
+}
+
+.template-search input {
+  flex: 1;
+  min-width: 0;
+}
+
+.template-pick-scroll {
+  flex: 1;
+  min-height: 0;
+}
+
+button.template-pick {
+  width: 100%;
+  min-height: 112rpx;
+  padding: 16rpx 8rpx;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  text-align: left;
+  border-bottom: 1rpx solid var(--color-divider);
+}
+
+button.template-pick.button-hover {
+  background: var(--color-fill);
+}
+
+.template-pick-thumb {
+  flex: none;
+  width: 112rpx;
+  height: 80rpx;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: var(--color-text-3);
+  background: var(--color-fill);
+  font-size: 36rpx;
+}
+
+.template-pick-thumb image {
+  width: 100%;
+  height: 100%;
+}
+
+.template-pick-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.template-pick-name {
+  overflow: hidden;
+  color: var(--color-text-1);
+  font-size: var(--font-body);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.template-pick-meta {
+  overflow: hidden;
+  color: var(--color-text-3);
+  font-size: var(--font-caption);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.template-pick-chevron {
+  flex: none;
+  color: var(--color-text-3);
+  font-size: 28rpx;
+}
+
+.template-pick-empty {
+  padding: 64rpx 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+  color: var(--color-text-3);
+}
+
+.template-pick-empty-icon {
+  font-size: 56rpx;
+  color: var(--color-text-3);
+}
+
+.template-pick-empty-title {
+  color: var(--color-text-1);
+  font-size: var(--font-body);
+  font-weight: 600;
+}
+
+.template-pick-empty-note {
+  font-size: var(--font-caption);
+}
+
 /* Save is secondary; print stays the prominent primary action. */
 .editor-actions {
   position: absolute;

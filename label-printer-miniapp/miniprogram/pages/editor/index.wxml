@@ -278,11 +278,27 @@
       <view wx:else class="panel-hint"><text>点击上方元素添加到标签</text><text>添加后点选画布元素，可编辑内容、样式和位置</text></view>
     </scroll-view>
 
-    <view wx:elif="{{editorPanelTab == 'templates'}}" class="simple-panel">
-      <text class="simple-title">内置模板与我的模板</text>
-      <picker mode="selector" range="{{templateNames}}" bindchange="loadTemplate"><view class="picker-field"><text>{{templateNames.length ? '选择模板' : '暂无模板'}}</text><text class="icon icon-chevron-right" aria-hidden="true"></text></view></picker>
+    <view wx:elif="{{editorPanelTab == 'templates'}}" class="simple-panel template-panel">
+      <view class="search-box template-search"><text class="icon icon-search" aria-hidden="true"></text><input value="{{templateQuery}}" bindinput="onTemplateSearch" placeholder="搜模板名称或尺寸" placeholder-class="search-placeholder" confirm-type="search" /></view>
+      <scroll-view class="template-pick-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+        <view wx:if="{{!templateCards.length}}" class="template-pick-empty">
+          <text class="icon icon-search-x template-pick-empty-icon" aria-hidden="true"></text>
+          <text class="template-pick-empty-title">没有找到模板</text>
+          <text class="template-pick-empty-note">换个关键词，或清空搜索</text>
+        </view>
+        <button wx:for="{{templateCards}}" wx:key="index" class="template-pick" data-index="{{item.index}}" bindtap="loadTemplate" aria-label="套用模板 {{item.name}}">
+          <view class="template-pick-thumb">
+            <image wx:if="{{item.thumbSrc}}" src="{{item.thumbSrc}}" mode="aspectFit" lazy-load="true" />
+            <text wx:else class="icon {{item.kind == 'qr' ? 'icon-qr-code' : item.kind == 'barcode' ? 'icon-barcode' : 'icon-layout-grid'}}" aria-hidden="true"></text>
+          </view>
+          <view class="template-pick-copy">
+            <text class="template-pick-name">{{item.name}}</text>
+            <text class="template-pick-meta">{{item.sizeText}}{{item.sizeText ? ' · ' : ''}}{{item.sourceLabel}}</text>
+          </view>
+          <text class="icon icon-chevron-right template-pick-chevron" aria-hidden="true"></text>
+        </button>
+      </scroll-view>
       <button class="outline-wide" bindtap="saveTemplate"><text class="icon icon-save" aria-hidden="true"></text>将当前标签保存为模板</button>
-      <text class="helper-text">这里可以快速套用内置模板和你保存的模板。更多模板请回首页「模板」挑选。</text>
     </view>
 
     <view wx:else class="simple-panel">

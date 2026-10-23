@@ -885,3 +885,64 @@ test('deleting an element says so, and a multi-selection asks first', () => {
     delete global.wx;
   }
 });
+
+test('the template tab is a searchable list with size and source on every card', () => {
+  const editor = Object.assign({}, pageDefinition, {
+    data: {},
+    repository: {
+      getUserTemplates: () => [{ id: 'mine', name: '我的价签模板', document: { widthMm: 40, heightMm: 30, elements: [] } }]
+    },
+    setData(patch) { Object.assign(this.data, patch); }
+  });
+  editor.loadTemplates({ widthMm: 50, heightMm: 30, elements: [] });
+
+  const cards = editor.data.templateCards;
+  assert.ok(cards.length >= 50, 'every template has a card');
+  assert.deepEqual(Object.keys(cards[0]).sort(), ['id', 'index', 'kind', 'name', 'sizeText', 'sourceLabel', 'thumbSrc']);
+  assert.equal(cards[0].index, 0, 'the card knows its place in the list');
+  assert.match(cards[0].sizeText, /^\d+×\d+ mm$/);
+  assert.ok(['场景模板', '商跃原创', '我的'].includes(cards[0].sourceLabel));
+  const mine = cards.find((card) => card.id === 'mine');
+  assert.equal(mine.sourceLabel, '我的');
+  assert.equal(mine.sizeText, '40×30 mm');
+
+  // Search matches names and sizes, and the list says so when nothing matches.
+  editor.onTemplateSearch({ detail: { value: '我的价签' } });
+  assert.deepEqual(editor.data.templateCards.map((card) => card.id), ['mine']);
+  editor.onTemplateSearch({ detail: { value: '50x30' } });
+  assert.ok(editor.data.templateCards.length > 0);
+  editor.onTemplateSearch({ detail: { value: '不存在的模板' } });
+  assert.deepEqual(editor.data.templateCards, []);
+  editor.onTemplateSearch({ detail: { value: '' } });
+  assert.equal(editor.data.templateCards.length, cards.length, 'clearing the search restores the list');
+});
+
+test('a card tap opens the same apply confirmation as the old picker', (t) => {
+  let modal = null;
+  global.wx = { showModal(options) { modal = options; }, showToast() {} };
+  t.after(() => { delete global.wx; });
+  const document = createDocument(50, 30);
+  const editor = Object.assign({}, pageDefinition, {
+    data: {},
+    document,
+    selectedId: '',
+    selectedIds: [],
+    undoStack: [],
+    redoStack: [],
+    dirtySinceSave: true,
+    repository: { getUserTemplates: () => [] },
+    setData(patch, callback) { Object.assign(this.data, patch); if (callback) callback(); },
+    syncPageData(callback) { if (callback) callback(); },
+    persistDocument() { return true; },
+    refreshCanvas() {}
+  });
+  editor.loadTemplates();
+  const card = editor.data.templateCards[3];
+
+  editor.loadTemplate({ currentTarget: { dataset: { index: card.index } } });
+  assert.ok(modal, 'applying a template still asks first');
+  assert.match(modal.title, new RegExp(editor.data.templates[card.index].name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+
+  modal.success({ confirm: true });
+  assert.equal(editor.document.name, editor.data.templates[card.index].name);
+});

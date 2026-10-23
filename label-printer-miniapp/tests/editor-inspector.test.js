@@ -846,7 +846,11 @@ test('title, font chips and template panel use their new bindings and plain word
   assert.match(wxml, /class="document-title"[^>]*bindinput="previewDocumentName"[^>]*bindblur="updateDocumentName"/);
   assert.match(wxml, /class="chip font-chip [^"]*\{\{fontLoading\[item\.id\] \? 'loading' : ''\}\}/);
   assert.match(read('index.wxss'), /\.font-chip\.loading\s*\{[^}]*animation:/);
-  assert.match(wxml, /这里可以快速套用内置模板和你保存的模板。更多模板请回首页「模板」挑选。/);
+  // The template tab is a searchable list now, not a 70-item native wheel.
+  assert.match(wxml, /class="search-box template-search"/);
+  assert.match(wxml, /<input value="\{\{templateQuery\}\}" bindinput="onTemplateSearch"/);
+  assert.match(wxml, /wx:for="\{\{templateCards\}\}"[^>]*bindtap="loadTemplate"/);
+  assert.doesNotMatch(wxml, /<picker mode="selector" range="\{\{templateNames\}\}"/);
   assert.doesNotMatch(wxml, /来源待审/);
 });
 

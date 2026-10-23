@@ -5,7 +5,7 @@ const { sweepOrphanImages } = require('../../services/image-files');
 const { templates: catalogTemplates } = require('../../app/catalog');
 const { assertBatchCompatible, buildBatchDocuments } = require('../../app/data-bind');
 const { buildTemplateDocument } = require('../../app/template-layouts');
-const { buildCuratedDocument, queryCuratedMeta } = require('../../app/curated');
+const { buildCuratedDocument, normalizeSearchText, queryCuratedMeta } = require('../../app/curated');
 const {
   clampElement,
   cloneDocument,
@@ -574,6 +574,8 @@ Page({
     canRedo: false,
     templates: [],
     templateNames: [],
+    templateQuery: '',
+    templateCards: [],
     showDevices: false,
     codeScanning: false,
     connectionState: 'disconnected',
@@ -849,7 +851,9 @@ Page({
         builtinId: item.id,
         sameSize: item.size[0] === widthMm && item.size[1] === heightMm,
         source: item.source,
-        approvalStatus: item.approvalStatus
+        approvalStatus: item.approvalStatus,
+        thumbSrc: item.thumbSrc || '',
+        kind: item.kind || ''
       }));
     const scenes = widthMm && heightMm
       ? queryCuratedMeta({ size, family: this.profile ? this.profile.family : '', limit: 300 }).items.map((item) => ({
@@ -858,7 +862,10 @@ Page({
         displayName: `${item.name}（${size}）`,
         curatedId: item.id,
         source: item.source,
-        approvalStatus: item.approvalStatus
+        approvalStatus: item.approvalStatus,
+        // The card shows the paper size and the kind of code it carries.
+        size: Array.isArray(item.size) ? item.size : null,
+        kind: item.kind || ''
       }))
       : [];
     const userTemplates = this.repository.getUserTemplates().map((item) => Object.assign({ source: 'user' }, item, {
@@ -868,7 +875,58 @@ Page({
       .concat(scenes, userTemplates, builtIn.filter((item) => !item.sameSize));
     this.setData({
       templates,
-      templateNames: templates.length ? templates.map((item) => item.displayName || item.name) : ['暂无模板']
+      templateNames: templates.length ? templates.map((item) => item.displayName || item.name) : ['暂无模板'],
+      templateCards: this.templateCardsFor(templates, this.data.templateQuery)
+    });
+  },
+
+  /**
+   * The picker renders a searchable list instead of a 70-item native wheel:
+   * name, paper size and where the template comes from, with the catalogue
+   * thumbnail where there is one.
+   */
+  templateCardsFor(templates, query) {
+    // The same normalisation as the shelf: "50x30", "50*30" and "50 30" all find
+    // a 50×30 template.
+    const needle = normalizeSearchText(String(query == null ? '' : query));
+    const list = Array.isArray(templates) ? templates : [];
+    return list.map((item, index) => ({ item, index }))
+      .filter(({ item }) => {
+        if (!needle) return true;
+        const size = Array.isArray(item.size) ? `${item.size[0]}×${item.size[1]}` : '';
+        return [item.name, item.displayName, item.sceneLabel, item.category, size]
+          .some((value) => normalizeSearchText(value).includes(needle));
+      })
+      .map(({ item, index }) => this.templateCard(item, index));
+  },
+
+  templateCard(item, index) {
+    const document = item.document || null;
+    const size = Array.isArray(item.size)
+      ? `${item.size[0]}×${item.size[1]} mm`
+      : (document && document.widthMm ? `${document.widthMm}×${document.heightMm} mm` : '');
+    let kind = item.kind || '';
+    if (!kind && document && Array.isArray(document.elements)) {
+      kind = document.elements.some((element) => element.type === 'qrcode') ? 'qr'
+        : document.elements.some((element) => element.type === 'barcode') ? 'barcode' : 'accent';
+    }
+    const thumb = String(item.thumbSrc || '').trim();
+    return {
+      index,
+      id: item.id,
+      name: item.name || '未命名模板',
+      sizeText: size,
+      sourceLabel: item.source === 'user' ? '我的' : (item.curatedId ? '场景模板' : '商跃原创'),
+      thumbSrc: thumb && !/^(?:https?:|wxfile:)/i.test(thumb) ? (thumb.startsWith('/') ? thumb : `/${thumb}`) : '',
+      kind: kind || 'accent'
+    };
+  },
+
+  onTemplateSearch(event) {
+    const templateQuery = String(event && event.detail ? event.detail.value : '').trim();
+    this.setData({
+      templateQuery,
+      templateCards: this.templateCardsFor(this.data.templates, templateQuery)
     });
   },
 
@@ -2715,7 +2773,11 @@ Page({
     if (!this.data.templates.length) {
       return;
     }
-    const template = this.data.templates[Number(event.detail.value)];
+    const dataset = event && event.currentTarget && event.currentTarget.dataset;
+    const index = dataset && dataset.index != null
+      ? Number(dataset.index)
+      : Number(event && event.detail ? event.detail.value : NaN);
+    const template = this.data.templates[index];
     if (!template) {
       return;
     }
