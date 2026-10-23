@@ -276,7 +276,7 @@ test('the model row of the print sheet opens the picker and returns to printing'
   editor.onPrinterConnected({ detail: { result: Object.assign({}, EY260) } });
   editor.openPrintSheet();
 
-  assert.match(read('index.wxml'), /class="summary-action"[^>]*bindtap="openProfilePicker"/);
+  assert.match(read('index.wxml'), /class="summary-action[^"]*"[^>]*bindtap="openProfilePicker"/);
   editor.openProfilePicker();
   assert.equal(editor.data.showPrintSheet, false);
   assert.equal(editor.data.showSettingsSheet, true);
@@ -888,4 +888,18 @@ test('a possibly printed failure asks before the same label goes out again', asy
   assert.equal(calls.modals.length, 1);
   assert.match(calls.modals[0].content, /可能已经有标签打出来/);
   assert.equal(printer.prints.length, 0, 'nothing goes out until the owner confirms');
+});
+
+test('an empty label tells the print sheet where the first element comes from', () => {
+  useWx();
+  const empty = label(40, 30);
+  const editor = editorFor(empty, { connectionManager: fakeManager(SYD58) });
+  editor.openPrintSheet();
+  assert.equal(editor.data.printBlock.kind, 'empty');
+  assert.equal(editor.data.printBlock.canAddElement, true);
+
+  editor.closePrintAndAdd();
+  assert.equal(editor.data.showPrintSheet, false);
+  assert.equal(editor.data.editorPanelTab, 'elements');
+  assert.match(read('index.wxml'), /wx:if="\{\{printBlock.canAddElement\}\}"[^>]*bindtap="closePrintAndAdd"/);
 });

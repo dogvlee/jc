@@ -511,6 +511,7 @@ Page({
     copiesInput: '1',
     loadError: '',
     saveState: '',
+    keyboardHeight: 0,
     previewHeightPx: 104,
     canvasInstanceId: '',
     canvasReady: false,
@@ -609,6 +610,7 @@ Page({
     this.remoteMaterials = [];
     this.remoteBorders = [];
     this.printTaskGeneration = 0;
+    this.bindKeyboard();
     const app = getApp();
     const info = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
     this.repository = app && app.globalData && app.globalData.repository
@@ -718,6 +720,7 @@ Page({
     const fieldCommitted = this.commitFieldEditDraft();
     if (!fieldCommitted && this.document && !this.discardedSession && !this.data.loadError) this.persistDocument();
     this.pageActive = false;
+    this.unbindKeyboard();
     this.printCancelRequested = true;
     this.printTaskGeneration = (this.printTaskGeneration || 0) + 1;
     clearTimeout(this.deviceOpenTimer);
@@ -2899,7 +2902,7 @@ Page({
   // An empty label, unfilled placeholders, or a label the printer cannot fit.
   contentPrintBlock(documentValue, profile) {
     if (!documentValue.elements.length) {
-      return { kind: 'empty', message: '请先添加至少一个标签元素。', suggestProfileId: '' };
+      return { kind: 'empty', message: '请先添加至少一个标签元素。', suggestProfileId: '', canAddElement: true };
     }
     for (let index = 0; index < documentValue.elements.length; index += 1) {
       const element = documentValue.elements[index];
@@ -2926,6 +2929,29 @@ Page({
       };
     }
     return null;
+  },
+
+  /**
+   * The page cannot scroll (100vh + overflow hidden), so a keyboard would sit on
+   * top of the property panel and the owner would type blind. Lifting the whole
+   * layout by the keyboard height keeps the panel visible above it.
+   */
+  bindKeyboard() {
+    if (typeof wx.onKeyboardHeightChange !== 'function') return;
+    this.keyboardListener = (event) => {
+      const height = Math.max(0, Math.min(Number(event && event.height) || 0, 420));
+      if (height === this.data.keyboardHeight) return;
+      this.setData({ keyboardHeight: height });
+    };
+    wx.onKeyboardHeightChange(this.keyboardListener);
+  },
+
+  unbindKeyboard() {
+    if (!this.keyboardListener) return;
+    if (typeof wx.offKeyboardHeightChange === 'function') {
+      wx.offKeyboardHeightChange(this.keyboardListener);
+    }
+    this.keyboardListener = null;
   },
 
   /**
@@ -3120,6 +3146,15 @@ Page({
     this.returnToPrintAfterConnect = true;
     this.setData({ showPrintSheet: false });
     this.openDevices();
+  },
+
+  // Leaves the sheet on the 元素 tab, where the first element is added.
+  closePrintAndAdd() {
+    this.setData({
+      showPrintSheet: false,
+      editorPanelTab: 'elements',
+      panelScrollTarget: PANEL_TOP_ID
+    });
   },
 
   focusPrintElement() {

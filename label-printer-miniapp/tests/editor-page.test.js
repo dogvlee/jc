@@ -816,3 +816,32 @@ test('a copies value out of range snaps back in the box the owner is looking at'
   assert.equal(editor.data.copies, 99);
   assert.equal(editor.data.copiesInput, '99');
 });
+
+test('the bottom panel lifts above an open keyboard instead of being covered', () => {
+  const listeners = [];
+  global.wx = {
+    onKeyboardHeightChange(listener) { listeners.push(listener); },
+    offKeyboardHeightChange(listener) { const index = listeners.indexOf(listener); if (index >= 0) listeners.splice(index, 1); }
+  };
+  try {
+    const editor = Object.assign({}, pageDefinition, {
+      data: { keyboardHeight: 0 },
+      setData(patch) { Object.assign(this.data, patch); }
+    });
+    editor.bindKeyboard();
+    assert.equal(listeners.length, 1, 'one listener owns the keyboard state');
+    listeners[0]({ height: 280 });
+    assert.equal(editor.data.keyboardHeight, 280);
+    // Silly heights are clamped, not applied blindly.
+    listeners[0]({ height: 5000 });
+    assert.equal(editor.data.keyboardHeight, 420);
+    listeners[0]({ height: 0 });
+    assert.equal(editor.data.keyboardHeight, 0, 'closing the keyboard restores the layout');
+    editor.unbindKeyboard();
+    assert.equal(listeners.length, 0);
+  } finally {
+    delete global.wx;
+  }
+  const markup = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'editor', 'index.wxml'), 'utf8');
+  assert.match(markup, /class="editor-page" style="padding-bottom: \{\{keyboardHeight\}\}px;"/);
+});

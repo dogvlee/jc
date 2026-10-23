@@ -10,8 +10,11 @@
   <view class="glyph-badge"><text class="icon icon-triangle-alert" aria-hidden="true"></text></view>
   <text class="empty-title">本地标签暂时无法读取</text>
   <text class="muted">{{storageError}}</text>
-  <text class="muted">请重试。不要清除小程序数据，以免丢失本机标签。</text>
+  <text class="muted">请重试。不要清除小程序数据，以免丢失本机标签；还能读出一部分时，先导出一份备份更稳。</text>
   <button class="primary-button btn-l" bindtap="refresh">重新读取</button>
+  <button class="outline-button btn-l" bindtap="exportBackup">先导出一份备份</button>
+  <button class="outline-button btn-l" bindtap="showRecoveryHelp">打不开怎么办</button>
+  <button class="text-button" open-type="feedback">意见反馈</button>
 </view>
 <block wx:else>
 <view class="app-shell route-{{route}}">
@@ -105,7 +108,7 @@
 
   <block wx:if="{{route == 'templates'}}">
     <view class="plain-header" style="padding-top: {{headerTop}}px;">
-      <view class="header-copy"><text class="plain-title">{{templateIndustry == '场景模板' ? '场景模板' : '商跃模板'}}</text><text class="plain-subtitle">{{templateIndustry == '场景模板' ? libraryTotal + ' 套商跃原创，按行业和纸张挑选，改字即可打印' : templateIndustry == '我的' ? '你保存或导入的模板' : '商跃原创模板和我的模板'}}</text></view>
+      <view class="header-copy"><text class="plain-title">{{templateIndustry == '场景模板' ? '场景模板' : templateIndustry == '我的' ? '我的模板' : '商跃模板'}}</text><text class="plain-subtitle">{{templateIndustry == '场景模板' ? libraryTotal + ' 套商跃原创，按行业和纸张挑选，改字即可打印' : templateIndustry == '我的' ? '你保存或导入的模板' : '商跃原创模板和我的模板'}}</text></view>
       <button class="outline-button btn-s" bindtap="importTemplateFile"><text class="icon icon-file-input" aria-hidden="true"></text>导入模板</button>
     </view>
     <view class="page-toolbar">
@@ -308,7 +311,7 @@
     <view class="sheet-handle"></view><view class="sheet-heading"><text class="sheet-title">默认打印设置</text><button class="close-button" bindtap="closeSettingsSheet" aria-label="关闭"><text class="icon icon-x" aria-hidden="true"></text></button></view>
     <view wx:if="{{densityAdjustable}}" class="setting-row"><view class="setting-label"><text>打印浓度</text><text class="setting-value">{{settings.density}}</text></view><slider min="{{densityMin}}" max="{{densityMax}}" step="1" value="{{settings.density}}" data-field="density" bindchange="updateSetting" activeColor="#E02D26" block-size="20" /></view>
     <view class="setting-row"><view class="setting-label"><text>黑白阈值</text><text class="setting-value">{{settings.threshold}}</text></view><text class="setting-help">影响整张标签：数值越大，浅灰越容易打成黑色。默认 180</text><slider min="80" max="240" step="5" value="{{settings.threshold}}" data-field="threshold" bindchange="updateSetting" activeColor="#E02D26" block-size="20" /></view>
-    <view class="setting-row"><view class="setting-label"><text>纸张类型</text></view><picker mode="selector" range="{{labelTypeNames}}" value="{{settings.labelType - 1}}" data-field="labelType" bindchange="updateSetting"><view class="picker-field"><text>{{settings.labelType == 1 ? '间隙纸' : settings.labelType == 2 ? '黑标纸' : settings.labelType == 3 ? '连续纸' : '定孔纸'}}</text><text class="icon icon-chevron-right" aria-hidden="true"></text></view></picker></view>
+    <view class="setting-row"><view class="setting-label"><text>纸张类型</text></view><text class="setting-help">标签之间有缝隙选间隙纸；背面有黑条选黑标纸；整卷没有间隙选连续纸；按孔定位选定孔纸。</text><picker mode="selector" range="{{labelTypeNames}}" value="{{settings.labelType - 1}}" data-field="labelType" bindchange="updateSetting"><view class="picker-field"><text>{{settings.labelType == 1 ? '间隙纸' : settings.labelType == 2 ? '黑标纸' : settings.labelType == 3 ? '连续纸' : '定孔纸'}}</text><text class="icon icon-chevron-right" aria-hidden="true"></text></view></picker></view>
   </view>
 </view>
 

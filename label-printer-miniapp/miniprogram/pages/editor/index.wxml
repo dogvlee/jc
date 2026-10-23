@@ -5,7 +5,7 @@
   <button class="outline-button btn-l" bindtap="returnHome">返回首页</button>
 </view>
 <block wx:else>
-<view class="editor-page">
+<view class="editor-page" style="padding-bottom: {{keyboardHeight}}px;">
   <view class="editor-header" style="padding-top: {{safeTop}}px;">
     <view class="header-main" style="padding-right: {{menuSafeRightPx}}px;">
       <button class="icon-button close" bindtap="closeEditor" aria-label="关闭编辑器"><text class="icon icon-x" aria-hidden="true"></text></button>
@@ -311,6 +311,7 @@
       <view class="warning-head"><text class="icon icon-triangle-alert" aria-hidden="true"></text><text class="warning-title">打印前需要处理</text></view>
       <text>{{printBlock.message}}</text>
       <view class="warning-actions">
+        <button wx:if="{{printBlock.canAddElement}}" bindtap="closePrintAndAdd">去添加元素</button>
         <button wx:if="{{printBlock.canChoosePaperWidth}}" bindtap="choosePrinterPaperWidth" data-width="{{58}}">装的是 58mm 纸</button>
         <button wx:if="{{printBlock.canChoosePaperWidth}}" bindtap="choosePrinterPaperWidth" data-width="{{80}}">装的是 80mm 纸</button>
         <button wx:if="{{printBlock.suggestProfileId}}" bindtap="applySuggestedProfile">切换为 {{suggestedProfileName}}</button>
@@ -322,8 +323,8 @@
     </view>
     <view wx:if="{{printError}}" class="error-card"><view class="warning-head"><text class="icon icon-circle-alert" aria-hidden="true"></text><text class="warning-title">打印未完成</text></view><text>{{printError}}</text><text wx:if="{{printMayHavePrinted}}">为免重复打印，不会自动重打，请先看看已经出来的标签。</text></view>
     <view class="print-summary">
-      <view class="summary-action" hover-class="pressed-row" bindtap="choosePrinterFromPrint" aria-role="button" aria-label="更换打印机"><text>打印机</text><text>{{connectedDevice || (savedPrinterName ? '上次的 ' + savedPrinterName + '，打印时自动连接' : '还没有选择')}}<text class="icon icon-chevron-right summary-chevron" aria-hidden="true"></text></text></view>
-      <view class="summary-action" hover-class="pressed-row" bindtap="openProfilePicker" aria-role="button" aria-label="更换打印机纸宽"><text>打印机纸宽</text><text>{{profileOptions[profileIndex]}}<text class="icon icon-chevron-right summary-chevron" aria-hidden="true"></text></text></view>
+      <view class="summary-action {{printing ? 'disabled' : ''}}" hover-class="{{printing ? 'none' : 'pressed-row'}}" bindtap="choosePrinterFromPrint" aria-role="button" aria-label="更换打印机"><text>打印机</text><text>{{connectedDevice || (savedPrinterName ? '上次的 ' + savedPrinterName + '，打印时自动连接' : '还没有选择')}}<text class="icon icon-chevron-right summary-chevron" aria-hidden="true"></text></text></view>
+      <view class="summary-action {{printing ? 'disabled' : ''}}" hover-class="{{printing ? 'none' : 'pressed-row'}}" bindtap="openProfilePicker" aria-role="button" aria-label="更换打印机纸宽"><text>打印机纸宽</text><text>{{profileOptions[profileIndex]}}<text class="icon icon-chevron-right summary-chevron" aria-hidden="true"></text></text></view>
       <view><text>纸张类型</text><text>{{labelTypeOptions[labelTypeIndex]}}</text></view>
       <view wx:if="{{densityAdjustable}}"><text>浓度</text><text>{{density}}</text></view>
       <view wx:if="{{batchRowCount}}"><text>批量数据</text><text>{{batchRowCount}} 行</text></view>

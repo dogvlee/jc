@@ -477,7 +477,10 @@ Page({
     showHelpSheet: false,
     projectQuery: '',
     labelTypeNames: ['间隙纸', '黑标纸', '连续纸', '定孔纸'],
-    stockPresets: STOCK_PRESETS
+    stockPresets: STOCK_PRESETS.map((item) => Object.assign({}, item, {
+      // The tile already shows 40×12 in large type; the name adds the use.
+      name: item.name.replace(/^\d+×\d+\s*/, '')
+    }))
   }, batchPickerData('', '')),
 
   onLoad() {
@@ -1543,7 +1546,14 @@ Page({
       wx.showToast({ title: `最多 ${MAX_DATA_ROWS} 行`, icon: 'none' });
       return;
     }
-    this.saveDataRows(rows.concat({ id: `row-${Date.now().toString(36)}-${rows.length}`, name: '', code: '', price: '', date: '' }));
+    const next = rows.concat({ id: `row-${Date.now().toString(36)}-${rows.length}`, name: '', code: '', price: '', date: '' });
+    if (!this.saveDataRows(next)) return;
+    // The new row lands at the bottom, off screen in a long table; say so and
+    // jump to it rather than leaving the button looking dead.
+    wx.showToast({ title: `已添加第 ${next.length} 行`, icon: 'none' });
+    if (typeof wx.pageScrollTo === 'function') {
+      wx.pageScrollTo({ selector: `#data-row-${next.length - 1}`, offsetTop: -160, duration: 200 });
+    }
   },
 
   // A row with content is deleted only after a confirmation; a blank row goes at once.
@@ -1781,6 +1791,17 @@ Page({
       displayName: `商跃标签数据-${day}.csv`,
       content: stringifyDataCsv(this.currentDataRows()),
       replacePrefix: ['shangyue-data-', 'niim-label-data']
+    });
+  },
+
+  // The recovery screen cannot open the help sheet (it lives inside the normal
+  // page), so it explains itself in a dialog.
+  showRecoveryHelp() {
+    wx.showModal({
+      title: '打不开本机标签时',
+      content: '先点「重新读取」；还是不行就先「导出一份备份」，再点「意见反馈」告诉我们。不要清除小程序数据，清除会连同标签一起删掉。',
+      showCancel: false,
+      confirmText: '知道了'
     });
   },
 

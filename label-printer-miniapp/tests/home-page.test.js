@@ -1137,3 +1137,35 @@ test('a long table scrolls in its own box so the print buttons stay reachable', 
   assert.match(wxss, /\.data-table-scroll \{[^}]*max-height: 52vh/);
   assert.match(wxss, /grid-template-columns: 64rpx 230rpx 260rpx 180rpx 240rpx 80rpx/);
 });
+
+test('the unreadable-storage screen is not a dead end', () => {
+  const markup = readHome('index.wxml');
+  const screen = markup.slice(markup.indexOf('wx:if="{{storageError}}"'), markup.indexOf('<block wx:else>'));
+  assert.match(screen, /bindtap="refresh"/);
+  assert.match(screen, /bindtap="exportBackup"/, 'a backup can be rescued first');
+  assert.match(screen, /bindtap="showRecoveryHelp"/, 'the help that normally lives in a sheet');
+  assert.match(screen, /open-type="feedback"/, 'and a way to reach a human');
+  assert.equal(typeof pageDefinition.showRecoveryHelp, 'function');
+});
+
+test('adding a row says so and jumps to it in a long table', () => {
+  const calls = { toasts: [], scrolled: [] };
+  global.wx = {
+    showToast(options) { calls.toasts.push(options.title); },
+    pageScrollTo(options) { calls.scrolled.push(options.selector); }
+  };
+  try {
+    const page = homePage({
+      repository: { saveDataRows() {} },
+      tableRows: null,
+      data: Object.assign(structuredClone(pageDefinition.data), { dataRows: [] })
+    });
+    page.addDataRow();
+    assert.deepEqual(calls.toasts, ['已添加第 1 行']);
+    assert.deepEqual(calls.scrolled, ['#data-row-0']);
+    const markup = readHome('index.wxml');
+    assert.match(markup, /id="data-row-\{\{index\}\}"/, 'the selector exists in the table');
+  } finally {
+    delete global.wx;
+  }
+});

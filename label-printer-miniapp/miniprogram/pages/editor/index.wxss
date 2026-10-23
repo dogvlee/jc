@@ -9,6 +9,9 @@ page {
 
 .editor-page {
   height: 100vh;
+  /* The bottom padding grows by the keyboard height (see bindKeyboard), so the
+     panel is lifted instead of being covered. */
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -927,6 +930,11 @@ button.outline-wide .icon {
   background: var(--color-surface);
   font-size: var(--font-caption);
   font-weight: 500;
+}
+
+/* Rows that ignore taps while a job runs say so instead of looking live. */
+.print-summary .summary-action.disabled {
+  opacity: 0.5;
 }
 
 .print-summary view {
