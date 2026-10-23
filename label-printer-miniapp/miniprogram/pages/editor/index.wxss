@@ -243,6 +243,24 @@ button.batch-exit {
   transform: translateX(-200vw);
 }
 
+/* Says why the label looks smaller than the paper: it had to fit the stage. */
+.preview-fit-note {
+  position: absolute;
+  z-index: 3;
+  top: 16rpx;
+  left: var(--gutter);
+  min-height: 48rpx;
+  padding: 0 16rpx;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  color: var(--color-text-3);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow-card);
+  font-size: var(--font-small);
+}
+
 .canvas-loading {
   position: absolute;
   top: 50%;

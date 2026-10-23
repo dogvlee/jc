@@ -94,3 +94,20 @@
 
 - `node --test tests/*.test.js` → 849 pass / 0 fail
 - `node scripts/check-project.mjs` → PASS（主包 90.6%，剩 196 KB：下一批模板/字体必须先分包）
+
+---
+
+# 第三轮：竖长标签整张可见
+
+**P1-1 修完**。原因：`.canvas-stage` 是唯一能滚的区域，但画布上的 `catchtouchmove` 把拖动全吃掉了，空白处又不进入拖动，所以比舞台高的标签下半张既看不见也碰不到。
+
+做法（`editor/index.js`、`index.wxml`、`index.wxss`）：
+
+- 新增 `previewFrameWidth()` / `stageAvailableHeight()` / `previewFitScale()` 三个纯函数，把「舞台还剩多高」从布局里算出来（常量集中在 `PREVIEW_CHROME`，和 `editor/index.wxss` 里 header 152rpx、stage 上下 152rpx、面板 440–640rpx 且不超过 48vh 一一对应，CSS 改了最多让预览略大略小，不会算错）；
+- 标签比舞台高时，**宽高等比缩到整张可见**，`previewWidthPx` 一起下发，`paper-shell` 用内联宽高，画布随之量到新尺寸（mm↔px 一直是实测值，缩放后点选仍然准）；
+- 舞台左上角出现「整张显示 N%」，让用户知道为什么字变小了；
+- 键盘弹起时可用高度随之减少，预览也跟着缩（下一轮同步时生效）。
+
+新增 3 条测试：高标签被缩且保持比例、放得下的标签仍是 100%、键盘占位会压缩可用高度。全套 **852 pass**。
+
+需要注意：小时标签缩小后**点击仍然准确但字会很小**，这是"整张可见"的必然代价；真机上如果觉得难读，下一步应做「双指缩放 + 空白处平移」，而不是回退到裁切。

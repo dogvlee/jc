@@ -95,6 +95,17 @@ const TAP_MAX_MS = 350;
 
 const MILLIMETERS_PER_INCH = 25.4;
 const PREVIEW_WIDTH_RPX = 672;
+// Chrome around the canvas, in rpx; they mirror editor/index.wxss (header 88 +
+// document row 64, stage padding 72 + 80, panel 440…640 capped at 48vh). A CSS
+// change here only makes the fitted preview slightly smaller or larger.
+const PREVIEW_CHROME = Object.freeze({
+  headerRpx: 152,
+  stagePaddingRpx: 152,
+  panelMinRpx: 440,
+  panelMaxRpx: 640,
+  panelViewportRatio: 0.48,
+  safety: 0.96
+});
 let previewCanvasInstanceSequence = 0;
 // The same paper sizes as the home page's paper picker.
 const SIZE_OPTIONS = STOCK_PRESETS.map((item) => ({
@@ -282,19 +293,55 @@ function keepImageFile(source) {
   });
 }
 
-function previewFrameHeight(documentValue, windowInfo) {
+function previewFrameWidth(windowInfo) {
   const windowWidth = Number(windowInfo && windowInfo.windowWidth);
+  if (!Number.isFinite(windowWidth) || windowWidth <= 0) return 0;
+  return windowWidth * PREVIEW_WIDTH_RPX / 750;
+}
+
+function previewFrameHeight(documentValue, windowInfo) {
   const widthMm = Number(documentValue && documentValue.widthMm);
   const heightMm = Number(documentValue && documentValue.heightMm);
-  if (!Number.isFinite(windowWidth) || windowWidth <= 0
+  const frameWidth = previewFrameWidth(windowInfo);
+  if (!frameWidth
     || !Number.isFinite(widthMm) || widthMm <= 0
     || !Number.isFinite(heightMm) || heightMm <= 0) {
     return 1;
   }
-  const frameWidth = windowWidth * PREVIEW_WIDTH_RPX / 750;
   // Keep the unrounded ratio for CSS. Rounding to an integer pixel is visible
   // on narrow/tall labels and makes the two overlaid canvases drift at edges.
   return Number((frameWidth * heightMm / widthMm).toFixed(4));
+}
+
+/**
+ * How tall the label may be before the stage cuts it off, in px. A 40 x 60 mm
+ * label used to show only ~59% of itself on a 375 x 667 phone with no way to
+ * reach the rest: the canvas swallows every drag.
+ */
+function stageAvailableHeight(windowInfo, options) {
+  const windowHeight = Number(windowInfo && windowInfo.windowHeight);
+  const frameWidth = previewFrameWidth(windowInfo);
+  if (!windowHeight || !frameWidth) return 0;
+  const rpx = Number(windowInfo && windowInfo.windowWidth) / 750;
+  const config = options || {};
+  const safeTop = Math.max(0, Number(config.safeTop) || 0);
+  const keyboard = Math.max(0, Number(config.keyboardHeight) || 0);
+  const panel = Math.max(
+    PREVIEW_CHROME.panelMinRpx * rpx,
+    Math.min(PREVIEW_CHROME.panelMaxRpx * rpx, windowHeight * PREVIEW_CHROME.panelViewportRatio)
+  );
+  const chromeRpx = PREVIEW_CHROME.headerRpx + PREVIEW_CHROME.stagePaddingRpx;
+  const available = windowHeight - safeTop - keyboard - chromeRpx * rpx - panel;
+  return available > 0 ? available * PREVIEW_CHROME.safety : 0;
+}
+
+/** 1 when the label fits the stage; smaller when the whole label must fit. */
+function previewFitScale(frameHeightPx, availableHeightPx) {
+  const frame = Number(frameHeightPx);
+  const available = Number(availableHeightPx);
+  if (!Number.isFinite(frame) || frame <= 0) return 1;
+  if (!Number.isFinite(available) || available <= 0) return 1;
+  return frame <= available ? 1 : available / frame;
 }
 
 function previewCanvasMetrics(documentValue, cssSize, pixelRatio) {
@@ -513,6 +560,8 @@ Page({
     saveState: '',
     keyboardHeight: 0,
     previewHeightPx: 104,
+    previewWidthPx: 336,
+    previewFitPercent: 100,
     canvasInstanceId: '',
     canvasReady: false,
     canvasError: '',
@@ -895,7 +944,16 @@ Page({
   syncPageData(callback) {
     const selected = this.normalizeSelection();
     const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
-    const previewHeightPx = previewFrameHeight(this.document, windowInfo);
+    const frameHeight = previewFrameHeight(this.document, windowInfo);
+    const frameWidth = previewFrameWidth(windowInfo) || 336;
+    const fitScale = previewFitScale(frameHeight, stageAvailableHeight(windowInfo, {
+      safeTop: this.data.safeTop,
+      keyboardHeight: this.data.keyboardHeight
+    }));
+    // A label taller than the stage shrinks until the whole thing is visible:
+    // the bottom of a 40 x 60 mm label used to be unreachable.
+    const previewHeightPx = Number((frameHeight * fitScale).toFixed(4));
+    const previewWidthPx = Number((frameWidth * fitScale).toFixed(4));
     const sizes = sizeChoices(this.document);
     const sizeIndex = sizes.findIndex((item) => {
       return item.width === this.document.widthMm && item.height === this.document.heightMm;
@@ -911,6 +969,8 @@ Page({
       layers: this.layerItems(),
       canvasInstanceId: this.canvasInstanceId || '',
       previewHeightPx,
+      previewWidthPx,
+      previewFitPercent: Math.max(1, Math.round(fitScale * 100)),
       sizeOptions: sizes.map((item) => item.label),
       sizeIndex: sizeIndex >= 0 ? sizeIndex : 0,
       currentSizeLabel: sizeLabel(this.document),

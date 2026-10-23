@@ -37,7 +37,7 @@
 
   <view class="canvas-stage">
     <button wx:if="{{saveState}}" class="draft-save-status {{saveState == '草稿保存失败，请勿退出，点此重试' ? 'error' : ''}}" bindtap="persistDocument" aria-live="polite"><text class="icon {{saveState == '草稿保存失败，请勿退出，点此重试' ? 'icon-circle-alert' : 'icon-circle-check'}}" aria-hidden="true"></text>{{saveState}}</button>
-    <view class="paper-shell {{showDevices || showPrintSheet || showSettingsSheet || showLayersSheet || showMaterialSheet || showBorderSheet ? 'under-sheet' : ''}}" style="height: {{previewHeightPx}}px;">
+    <view class="paper-shell {{showDevices || showPrintSheet || showSettingsSheet || showLayersSheet || showMaterialSheet || showBorderSheet ? 'under-sheet' : ''}}" style="width: {{previewWidthPx}}px; height: {{previewHeightPx}}px;">
       <canvas wx:if="{{canvasInstanceId}}" id="labelCanvas" canvas-id="label-{{canvasInstanceId}}" type="2d" class="label-canvas" style="height: {{previewHeightPx}}px;"></canvas>
       <canvas
         wx:if="{{canvasInstanceId}}"
@@ -53,6 +53,7 @@
         bindtouchcancel="onCanvasTouchEnd"
       ></canvas>
     </view>
+    <view wx:if="{{canvasReady && previewFitPercent < 100}}" class="preview-fit-note"><text class="icon icon-info" aria-hidden="true"></text><text>整张显示 {{previewFitPercent}}%</text></view>
     <view wx:if="{{!canvasReady}}" class="canvas-loading">
       <block wx:if="{{canvasError}}"><text>{{canvasError}}</text><button class="text-button" bindtap="initCanvas">重新加载</button></block>
       <text wx:else>正在准备标签画布…</text>

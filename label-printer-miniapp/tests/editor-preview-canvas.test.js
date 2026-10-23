@@ -264,3 +264,56 @@ test('opening a template selects its first editable element, not a locked backdr
   assert.equal(editor.selectedId, 'title');
   assert.deepEqual(editor.selectedIds, ['title']);
 });
+
+test('a label taller than the stage is shown whole with its proportions kept', () => {
+  const documentValue = createDocument(40, 60);
+  const editor = editorFor(documentValue);
+  global.wx = {
+    getWindowInfo() { return { windowWidth: 375, windowHeight: 667, pixelRatio: 3 }; }
+  };
+  editor.data.safeTop = 20;
+  editor.syncPageData();
+
+  const cssWidth = 375 * 672 / 750;
+  const fullHeight = cssWidth * 60 / 40;
+  assert.ok(editor.data.previewHeightPx < fullHeight, 'the tall label is scaled down');
+  assert.ok(editor.data.previewHeightPx <= 175, 'and fits what the stage has left');
+  // Both axes shrink together, so taps still land where the drawing is.
+  assert.equal(
+    Number((editor.data.previewWidthPx / editor.data.previewHeightPx).toFixed(6)),
+    Number((40 / 60).toFixed(6))
+  );
+  assert.ok(editor.data.previewFitPercent < 100 && editor.data.previewFitPercent > 20);
+  delete global.wx;
+});
+
+test('a label that fits keeps its full size and does not claim to be shrunk', () => {
+  const documentValue = createDocument(40, 30);
+  const editor = editorFor(documentValue);
+  global.wx = {
+    getWindowInfo() { return { windowWidth: 390, windowHeight: 900, pixelRatio: 3 }; }
+  };
+  editor.data.safeTop = 20;
+  editor.syncPageData();
+
+  assert.equal(editor.data.previewFitPercent, 100);
+  assert.equal(editor.data.previewHeightPx, Number((390 * 672 / 750 * 30 / 40).toFixed(4)));
+  delete global.wx;
+});
+
+test('a keyboard shrinks the room the label has, so the preview follows', () => {
+  const documentValue = createDocument(40, 30);
+  const editor = editorFor(documentValue);
+  global.wx = {
+    getWindowInfo() { return { windowWidth: 390, windowHeight: 900, pixelRatio: 3 }; }
+  };
+  editor.data.safeTop = 20;
+  editor.syncPageData();
+  const withoutKeyboard = editor.data.previewHeightPx;
+
+  editor.data.keyboardHeight = 260;
+  editor.syncPageData();
+  assert.ok(editor.data.previewHeightPx < withoutKeyboard, 'less room, smaller preview');
+  assert.ok(editor.data.previewFitPercent < 100);
+  delete global.wx;
+});
