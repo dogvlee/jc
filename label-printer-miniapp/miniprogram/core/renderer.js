@@ -5,7 +5,7 @@ const { drawMaterialSymbol } = require('./materials');
 const { drawBorderStyle, borderById } = require('./borders');
 const { resolveLinkedCodes, serialText } = require('./linked-codes');
 const { clampTextArcAngle, normalizeTextMode } = require('./text-direction');
-const { CHROME } = require('./editor-gesture');
+const { CHROME, ROTATE_HANDLE_GAP, rotateHandleLocal } = require('./editor-gesture');
 const { QR_QUIET_ZONE_MODULES, validateCodeElement } = require('./code-quality');
 const { resolveFontFamily } = require('./font-family');
 
@@ -560,6 +560,53 @@ function formatDateValue(element, now) {
   return element.label ? `${element.label}：${body}` : body;
 }
 
+// A token format such as 'YYYY-MM-DD' or 'MM-DD HH:mm' decides the printed
+// text itself; the Chinese format follows the showTime / showSeconds flags.
+function usesTokenFormat(element) {
+  const fmt = String(element && element.format || '');
+  return Boolean(fmt && /YYYY|MM|DD|HH|mm|ss/.test(fmt) && !fmt.includes('年'));
+}
+
+/** Whether the date element prints a time, whatever kind of format it has. */
+function dateShowsTime(element) {
+  if (usesTokenFormat(element)) return /HH/.test(String(element.format));
+  return element.showTime !== false;
+}
+
+/** 'dash' (2026-08-11), 'slash' (2026/08/11), 'cn' (2026年08月11日) or '' for another format. */
+function dateStyleOf(element) {
+  const fmt = String(element && element.format || '');
+  if (!fmt || fmt.includes('年')) return 'cn';
+  if (fmt.startsWith('YYYY-MM-DD')) return 'dash';
+  if (fmt.startsWith('YYYY/MM/DD')) return 'slash';
+  return '';
+}
+
+function tokenDatePart(format) {
+  const fmt = String(format || '');
+  const time = fmt.indexOf('HH');
+  return (time >= 0 ? fmt.slice(0, time) : fmt).replace(/[\s:T]+$/, '');
+}
+
+/**
+ * The fields that make a date element print, or stop printing, its time. A
+ * token format gains or loses its ' HH:mm', so what prints always matches
+ * the switch; nothing else about the element changes.
+ */
+function dateTimePatch(element, show) {
+  if (!usesTokenFormat(element)) return { showTime: Boolean(show) };
+  const datePart = tokenDatePart(element.format);
+  return { showTime: Boolean(show), format: show ? `${datePart} HH:mm` : datePart };
+}
+
+/** The fields for date style `style` ('dash' | 'slash' | 'cn'), keeping whether the time prints. */
+function dateStylePatch(element, style) {
+  const showsTime = dateShowsTime(element);
+  if (style === 'cn') return { format: 'YYYY年MM月DD日', showTime: showsTime };
+  const datePart = style === 'slash' ? 'YYYY/MM/DD' : 'YYYY-MM-DD';
+  return { format: showsTime ? `${datePart} HH:mm` : datePart, showTime: showsTime };
+}
+
 function formatDateChip(element, now) {
   const date = resolveDateTime(element, now);
   return `${date.getFullYear()}年${pad(date.getMonth() + 1, 2)}月${pad(date.getDate(), 2)}日`;
@@ -597,13 +644,16 @@ function drawCodeNotice(context, element, dpi, message) {
 function drawBarcode(context, element, dpi) {
   if (element.unsupportedCodeType === true || element.requiresFormatConfirmation === true
     || !['code128', 'ean13'].includes(String(element.format || '').toLowerCase())) {
-    drawCodeNotice(context, element, dpi, '码制待确认');
+    drawCodeNotice(context, element, dpi, '请选条码类型');
     return;
   }
   let encoded;
   try {
     encoded = element.format === 'ean13' ? encodeEan13(element.value) : encodeCode128(element.value);
   } catch (error) {
+    // Say so where the code would be instead of leaving a blank box; the print
+    // check stops such a label before it reaches the printer.
+    drawCodeNotice(context, element, dpi, String(element.value == null ? '' : element.value).trim() ? '条码内容不对' : '请填条码内容');
     return;
   }
   withElementTransform(context, element, dpi, (x, y, width, height) => {
@@ -656,6 +706,7 @@ function drawQrCode(context, element, dpi) {
     code.addData(String(element.value || ''), 'Byte');
     code.make();
   } catch (error) {
+    drawCodeNotice(context, element, dpi, '二维码内容太长');
     return;
   }
   withElementTransform(context, element, dpi, (x, y, width, height) => {
@@ -785,7 +836,14 @@ function createRasterCanvas(context, width, height) {
   return canvas;
 }
 
-function thresholdedImage(context, image, width, height, thresholdValue) {
+/**
+ * The picture in black and white at `width` x `height` pixels, cached per
+ * picture, size and threshold. While a finger moves the picture
+ * (`interactive`), a size not cached yet is drawn from the last black and
+ * white copy instead: converting every pixel on every frame of a resize is
+ * what made pictures lag. The exact copy is made once the gesture ends.
+ */
+function thresholdedImage(context, image, width, height, thresholdValue, interactive) {
   const pixelWidth = Math.max(1, Math.round(Math.abs(width)));
   const pixelHeight = Math.max(1, Math.round(Math.abs(height)));
   const threshold = normalizedThreshold(thresholdValue);
@@ -794,6 +852,13 @@ function thresholdedImage(context, image, width, height, thresholdValue) {
   if (cacheable) {
     const cached = thresholdImageCache.get(image);
     if (cached && cached.has(cacheKey)) return cached.get(cacheKey);
+    if (interactive && cached) {
+      let latest = null;
+      cached.forEach((canvas, key) => {
+        if (key.endsWith(`:${threshold}`)) latest = canvas;
+      });
+      if (latest) return latest;
+    }
   }
 
   const canvas = createRasterCanvas(context, pixelWidth, pixelHeight);
@@ -822,13 +887,13 @@ function thresholdedImage(context, image, width, height, thresholdValue) {
   return canvas;
 }
 
-function drawImage(context, element, dpi, images) {
+function drawImage(context, element, dpi, images, interactive) {
   const image = images && images[element.id];
   if (!image) {
     return;
   }
   withElementTransform(context, element, dpi, (x, y, width, height) => {
-    const renderedImage = thresholdedImage(context, image, width, height, element.threshold);
+    const renderedImage = thresholdedImage(context, image, width, height, element.threshold, interactive);
     context.drawImage(renderedImage, x, y, width, height);
   });
 }
@@ -927,7 +992,7 @@ function drawTable(context, element, dpi) {
   });
 }
 
-function drawMaterial(context, element, dpi, images) {
+function drawMaterial(context, element, dpi, images, interactive) {
   withElementTransform(context, element, dpi, (x, y, width, height) => {
     const pad = Math.min(width, height) * 0.08;
     const image = images && images[element.id];
@@ -939,7 +1004,7 @@ function drawMaterial(context, element, dpi, images) {
       const scale = Math.min(availableWidth / sourceWidth, availableHeight / sourceHeight);
       const drawWidth = Math.max(1, sourceWidth * scale);
       const drawHeight = Math.max(1, sourceHeight * scale);
-      const renderedImage = thresholdedImage(context, image, drawWidth, drawHeight, element.threshold);
+      const renderedImage = thresholdedImage(context, image, drawWidth, drawHeight, element.threshold, interactive);
       context.drawImage(
         renderedImage,
         x + (width - drawWidth) / 2,
@@ -962,7 +1027,13 @@ function drawMaterial(context, element, dpi, images) {
   });
 }
 
+/**
+ * Paint the whole label. options.editorCanvas paints the editor backdrop;
+ * options.interactive (a finger is moving something) reuses black and white
+ * pictures of another size rather than converting them again.
+ */
 function renderDocument(context, document, canvasSize, dpi, images, options) {
+  const interactive = Boolean(options && options.interactive);
   context.setTransform(1, 0, 0, 1, 0, 0);
   context.clearRect(0, 0, canvasSize.width, canvasSize.height);
   // Editor-only workbench backdrop; defaults OFF so preview/thumbnail/print
@@ -988,11 +1059,11 @@ function renderDocument(context, document, canvasSize, dpi, images, options) {
     } else if (element.type === 'rect' || element.type === 'line') {
       drawShape(context, element, dpi);
     } else if (element.type === 'image') {
-      drawImage(context, element, dpi, images);
+      drawImage(context, element, dpi, images, interactive);
     } else if (element.type === 'table') {
       drawTable(context, element, dpi);
     } else if (element.type === 'material') {
-      drawMaterial(context, element, dpi, images);
+      drawMaterial(context, element, dpi, images, interactive);
     }
   });
 }
@@ -1174,37 +1245,81 @@ function renderSelection(context, selected, canvasSize, dpi, guides, displayScal
       context.strokeRect(sx, sy, sw, sh);
     }
     if (element.locked) return;
-    // Handles on content-fitted box (贴蓝框): white dots with blue ring
-    const r = CHROME.handleRadius * scale;
-    const mids = [
-      [sx + sw, sy + sh / 2],
-      [sx + sw / 2, sy + sh]
-    ];
-    mids.forEach((point) => {
-      context.beginPath();
-      context.arc(point[0], point[1], r, 0, Math.PI * 2);
-      context.fillStyle = CHROME.handleFill;
-      context.fill();
-      context.lineWidth = CHROME.handleRingWidth * scale;
-      context.strokeStyle = CHROME.handleRing;
-      context.stroke();
-    });
-    // Rotate at SE of content box
-    const rx = sx + sw;
-    const ry = sy + sh;
-    context.beginPath();
-    context.arc(rx, ry, r + scale, 0, Math.PI * 2);
-    context.fillStyle = CHROME.handleFill;
-    context.fill();
-    context.strokeStyle = CHROME.handleRing;
-    context.lineWidth = CHROME.handleRingWidth * scale;
-    context.stroke();
-    context.beginPath();
-    context.arc(rx, ry, r * 0.55, -0.2, Math.PI * 1.2);
-    context.strokeStyle = CHROME.handleArrow;
-    context.lineWidth = CHROME.handleArrowWidth * scale;
-    context.stroke();
+    drawSelectionHandles(context, element, { x: sx, y: sy, width: sw, height: sh }, canvasSize, dpi, scale);
   }));
+}
+
+function ringHandle(context, scale) {
+  context.fillStyle = CHROME.handleFill;
+  context.fill();
+  context.lineWidth = CHROME.handleRingWidth * scale;
+  context.strokeStyle = CHROME.handleRing;
+  context.stroke();
+}
+
+/**
+ * The four handles on the selection box `box` (canvas pixels in the element's
+ * rotated frame): white dots in the middle of the right and bottom edges
+ * stretch the element; a square with a diagonal arrow on the bottom-right
+ * corner scales it as a whole; a round arrow floating above the box (see
+ * rotateHandleLocal) turns it.
+ */
+function drawSelectionHandles(context, element, box, canvasSize, dpi, scale) {
+  const r = CHROME.handleRadius * scale;
+  [[box.x + box.width, box.y + box.height / 2], [box.x + box.width / 2, box.y + box.height]].forEach((point) => {
+    context.beginPath();
+    context.arc(point[0], point[1], r, 0, Math.PI * 2);
+    ringHandle(context, scale);
+  });
+
+  const cornerX = box.x + box.width;
+  const cornerY = box.y + box.height;
+  const half = r + scale;
+  context.beginPath();
+  context.rect(cornerX - half, cornerY - half, half * 2, half * 2);
+  ringHandle(context, scale);
+  const reach = half * 0.55;
+  const tip = half * 0.35;
+  context.beginPath();
+  context.moveTo(cornerX - reach, cornerY - reach);
+  context.lineTo(cornerX + reach, cornerY + reach);
+  context.moveTo(cornerX - reach, cornerY - reach + tip);
+  context.lineTo(cornerX - reach, cornerY - reach);
+  context.lineTo(cornerX - reach + tip, cornerY - reach);
+  context.moveTo(cornerX + reach - tip, cornerY + reach);
+  context.lineTo(cornerX + reach, cornerY + reach);
+  context.lineTo(cornerX + reach, cornerY + reach - tip);
+  context.strokeStyle = CHROME.handleArrow;
+  context.lineWidth = CHROME.handleArrowWidth * scale;
+  context.stroke();
+
+  const dotsPerMm = mmToDots(1, dpi);
+  const local = rotateHandleLocal(element, {
+    left: box.x / dotsPerMm,
+    top: box.y / dotsPerMm,
+    width: box.width / dotsPerMm,
+    height: box.height / dotsPerMm
+  }, ROTATE_HANDLE_GAP * scale / dotsPerMm, canvasSize.width / dotsPerMm, canvasSize.height / dotsPerMm);
+  const rotateX = local.x * dotsPerMm;
+  const rotateY = local.y * dotsPerMm;
+  const radius = r + scale;
+  if (rotateY < box.y || rotateY > box.y + box.height) {
+    const edge = rotateY < box.y ? box.y : box.y + box.height;
+    context.beginPath();
+    context.moveTo(rotateX, edge);
+    context.lineTo(rotateX, rotateY < box.y ? rotateY + radius : rotateY - radius);
+    context.strokeStyle = CHROME.handleRing;
+    context.lineWidth = scale;
+    context.stroke();
+  }
+  context.beginPath();
+  context.arc(rotateX, rotateY, radius, 0, Math.PI * 2);
+  ringHandle(context, scale);
+  context.beginPath();
+  context.arc(rotateX, rotateY, r * 0.55, -0.2, Math.PI * 1.2);
+  context.strokeStyle = CHROME.handleArrow;
+  context.lineWidth = CHROME.handleArrowWidth * scale;
+  context.stroke();
 }
 
 function contentHandleLocalMm(element) {
@@ -1229,6 +1344,10 @@ function contentHandleLocalMm(element) {
 module.exports = {
   binarizeImageData,
   fitText,
+  dateShowsTime,
+  dateStyleOf,
+  dateStylePatch,
+  dateTimePatch,
   formatDateChip,
   formatDateValue,
   formatTimeChip,

@@ -43,15 +43,14 @@ function codePrintMetrics(element, dpi, minimumDotsPerModule) {
   if (element && element.type === 'barcode'
     && (element.unsupportedCodeType === true || element.requiresFormatConfirmation === true
       || !['code128', 'ean13'].includes(String(element.format || '').toLowerCase()))) {
-    const declared = String(element.declaredFormat || element.sourceCodeType || '未知码制');
-    const error = new Error(`源条码声明为 ${declared}，当前不能安全确认码制；请明确选择 Code128 或 EAN-13`);
+    const error = new Error('这个条码的类型没法确认，请在「条码类型」里选商品条码 EAN-13 或通用 Code 128');
     error.code = 'UNSUPPORTED_CODE_TYPE';
     error.elementId = element.id || '';
     error.elementType = element.type;
     throw error;
   }
   if (element && element.type === 'barcode' && element.invalidCode === true) {
-    const error = new Error(element.codeValidationMessage || '条码内容不符合当前码制，请修改内容或明确选择 Code128');
+    const error = new Error(element.codeValidationMessage || '条码内容和条码类型对不上，请改内容，或在「条码类型」里选通用 Code 128');
     error.code = 'INVALID_CODE_CONTENT';
     error.elementId = element.id || '';
     error.elementType = element.type;
@@ -104,17 +103,11 @@ function codePrintMetrics(element, dpi, minimumDotsPerModule) {
 function validateCodeElement(element, dpi, minimumDotsPerModule) {
   const metrics = codePrintMetrics(element, dpi, minimumDotsPerModule);
   if (!metrics || metrics.ok) return metrics;
-  const label = metrics.kind === 'qrcode' ? '二维码' : '条码';
-  const dimension = metrics.kind === 'qrcode'
-    ? `宽高至少 ${metrics.minimumMmRounded.toFixed(1)} mm`
-    : `宽度至少 ${metrics.minimumMmRounded.toFixed(1)} mm`;
-  const hint = metrics.kind === 'qrcode'
-    ? '请放大二维码，或缩短内容后重试'
-    : '请加宽条码，或缩短内容后重试';
-  const error = new Error(
-    `${label}清晰度不足：当前约 ${metrics.dotsPerModule.toFixed(2)} 打印点/模块，` +
-    `${dimension}（${metrics.minimumDotsPerModule} 打印点/模块）；${hint}`
-  );
+  // Plain words: the shop owner needs the size to drag the code to, not dots per module.
+  const size = metrics.minimumMmRounded.toFixed(1);
+  const error = new Error(metrics.kind === 'qrcode'
+    ? `二维码太小，打出来可能扫不出。请把二维码放大到至少 ${size} mm 见方，或者缩短内容`
+    : `条码太密，打出来可能扫不出。请把条码拉宽到至少 ${size} mm，或者缩短内容`);
   error.code = 'CODE_MODULE_DENSITY_LOW';
   error.elementId = element && element.id || '';
   error.elementType = element && element.type || '';
@@ -146,7 +139,7 @@ function resizeCodeElementToMinimum(element, document, dpi) {
       ok: false,
       changed: false,
       metrics,
-      message: `${label}达到 2 打印点/模块需要更大空间，当前标签放不下；请缩短编码内容或改用更大的标签纸。`
+      message: `${label}要放大才能扫，但这张标签放不下。请缩短内容，或者换大一点的标签纸`
     };
   }
   const centerX = (Number(element.x) || 0) + (Number(element.width) || 0) / 2;

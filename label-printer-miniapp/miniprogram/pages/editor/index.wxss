@@ -4,7 +4,7 @@
 page {
   height: 100%;
   overflow: hidden;
-  background: #EEF0F3;
+  background: var(--color-stage);
 }
 
 .editor-page {
@@ -22,13 +22,15 @@ page {
   border-bottom: 1rpx solid var(--color-divider);
 }
 
+/* Six 80 x 88rpx buttons fit beside the WeChat capsule on a 375px phone.
+   On narrower phones they shrink together (down to 64rpx) instead of
+   running under the capsule; 关闭 always stays 24rpx clear of 撤销. */
 .header-main {
   height: 88rpx;
-  padding-left: 12rpx;
+  padding-left: 4rpx;
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: 4rpx;
 }
 
 .header-spacer {
@@ -36,15 +38,19 @@ page {
 }
 
 .history-actions {
-  margin-left: 8rpx;
+  margin-left: 24rpx;
   display: flex;
-  gap: 4rpx;
+  gap: 8rpx;
+}
+
+.header-main > .icon-button + .icon-button {
+  margin-left: 8rpx;
 }
 
 button.icon-button {
-  width: 72rpx;
-  height: 72rpx;
-  flex: none;
+  min-width: 64rpx;
+  height: 88rpx;
+  flex: 0 1 80rpx;
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
@@ -63,7 +69,7 @@ button.icon-button.button-hover {
 
 .document-row {
   height: 64rpx;
-  padding: 0 24rpx 12rpx 28rpx;
+  padding: 0 24rpx 12rpx var(--gutter);
   display: flex;
   align-items: center;
   gap: 16rpx;
@@ -94,7 +100,7 @@ button.icon-button.button-hover {
   border-radius: var(--radius-full);
   color: var(--color-text-3);
   background: var(--color-fill);
-  font-size: 22rpx;
+  font-size: var(--font-small);
 }
 
 .connection-status {
@@ -103,15 +109,15 @@ button.icon-button.button-hover {
   align-items: center;
   gap: 8rpx;
   color: var(--color-text-3);
-  font-size: 22rpx;
+  font-size: var(--font-caption);
 }
 
 .connection-status.connected {
-  color: var(--color-success);
+  color: var(--color-success-text);
 }
 
 .connection-status.connecting {
-  color: var(--color-warning);
+  color: var(--color-warning-text);
 }
 
 .connection-dot {
@@ -132,10 +138,10 @@ button.icon-button.button-hover {
 
 .template-attention {
   flex: none;
-  padding: 16rpx 28rpx;
+  padding: 16rpx var(--gutter);
   display: flex;
   gap: 12rpx;
-  color: var(--color-warning);
+  color: var(--color-warning-text);
   background: var(--color-warning-soft);
   font-size: var(--font-caption);
   line-height: 1.5;
@@ -146,18 +152,55 @@ button.icon-button.button-hover {
   font-size: 28rpx;
 }
 
+/* Batch mode: every data row prints one label from this design. */
+.batch-banner {
+  flex: none;
+  padding: 12rpx 20rpx 12rpx var(--gutter);
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  color: var(--color-text-2);
+  background: var(--color-primary-soft);
+  font-size: var(--font-caption);
+  line-height: 1.5;
+}
+
+.batch-banner .icon {
+  flex: none;
+  color: var(--color-primary);
+  font-size: 28rpx;
+}
+
+.batch-banner-text {
+  min-width: 0;
+  flex: 1;
+}
+
+button.batch-exit {
+  flex: none;
+  min-height: 64rpx;
+  padding: 0 20rpx;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  color: var(--color-primary);
+  background: var(--color-surface);
+  font-size: var(--font-caption);
+  font-weight: 500;
+}
+
 /* Canvas stage: a light dot grid gives the label a design-tool backdrop. */
 .canvas-stage {
   position: relative;
   flex: 1;
   min-height: 250rpx;
-  padding: 72rpx 28rpx 80rpx;
+  padding: 72rpx var(--gutter) 80rpx;
   overflow: auto;
   display: flex;
   align-items: flex-start;
   justify-content: center;
   box-sizing: border-box;
-  background-color: #EEF0F3;
+  background-color: var(--color-stage);
   background-image: radial-gradient(rgba(31, 35, 41, 0.1) 1.5rpx, transparent 1.8rpx);
   background-size: 28rpx 28rpx;
 }
@@ -202,23 +245,33 @@ button.icon-button.button-hover {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12rpx;
+  text-align: center;
   color: var(--color-text-3);
   font-size: var(--font-caption);
 }
 
+/* As wide as its words, up to the gutters; a long tip wraps onto a second
+   line instead of running past its pill. */
 .selection-tip {
   position: absolute;
   bottom: 20rpx;
   left: 50%;
-  max-width: 620rpx;
+  width: max-content;
+  max-width: calc(100% - 2 * var(--gutter));
+  box-sizing: border-box;
   transform: translateX(-50%);
   padding: 10rpx 24rpx;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-lg);
   color: var(--color-text-2);
   background: rgba(255, 255, 255, 0.94);
   box-shadow: 0 4rpx 16rpx rgba(31, 35, 41, 0.08);
-  font-size: 22rpx;
-  white-space: nowrap;
+  font-size: var(--font-caption);
+  line-height: 1.5;
+  text-align: center;
 }
 
 button.draft-save-status {
@@ -232,15 +285,15 @@ button.draft-save-status {
   display: flex;
   align-items: center;
   gap: 8rpx;
-  color: var(--color-success);
+  color: var(--color-success-text);
   background: var(--color-surface);
   box-shadow: 0 4rpx 16rpx rgba(31, 35, 41, 0.08);
-  font-size: 22rpx;
+  font-size: var(--font-caption);
   white-space: nowrap;
 }
 
 button.draft-save-status.error {
-  color: var(--color-danger);
+  color: var(--color-primary-pressed);
   background: var(--color-danger-soft);
 }
 
@@ -317,7 +370,7 @@ button.tool-button {
   justify-content: center;
   gap: 10rpx;
   color: var(--color-text-2);
-  font-size: 22rpx;
+  font-size: var(--font-caption);
 }
 
 button.tool-button.button-hover {
@@ -341,6 +394,58 @@ button.tool-button.button-hover .tool-icon {
   background: var(--color-primary-soft);
 }
 
+/* With an element selected the add tools shrink to one scrollable row, so the
+   inspector and its content field start near the top of the panel. */
+.tool-strip {
+  padding: 10rpx 0 6rpx;
+}
+
+.tool-strip-scroll {
+  width: 100%;
+  white-space: nowrap;
+}
+
+.tool-strip-row {
+  padding: 0 var(--gutter);
+  display: inline-flex;
+  align-items: center;
+  gap: 12rpx;
+  vertical-align: top;
+}
+
+.tool-strip-label {
+  flex: none;
+  color: var(--color-text-3);
+  font-size: var(--font-caption);
+}
+
+button.tool-chip {
+  flex: none;
+  height: 56rpx;
+  padding: 0 20rpx 0 16rpx;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+  color: var(--color-text-2);
+  background: var(--color-fill);
+  font-size: var(--font-caption);
+}
+
+button.tool-chip .icon {
+  color: var(--color-text-1);
+  font-size: 28rpx;
+}
+
+button.tool-chip.button-hover {
+  color: var(--color-primary-pressed);
+  background: var(--color-primary-soft);
+}
+
+button.tool-chip.button-hover .icon {
+  color: var(--color-primary-pressed);
+}
+
 .panel-hint {
   padding: 8rpx 32rpx 32rpx;
   display: flex;
@@ -348,7 +453,7 @@ button.tool-button.button-hover .tool-icon {
   align-items: center;
   gap: 4rpx;
   color: var(--color-text-3);
-  font-size: 22rpx;
+  font-size: var(--font-caption);
   line-height: 1.7;
   text-align: center;
 }
@@ -358,57 +463,77 @@ button.tool-button.button-hover .tool-icon {
   padding: 0 var(--gutter) 40rpx;
 }
 
+/* One row: name on the left, actions on the right. On short phones only about
+   330rpx lie between the panel tabs and the action bar, so the heading stays
+   a single line. */
 .inspector-heading {
-  padding: 24rpx 0 20rpx;
+  padding: 12rpx 0 8rpx;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16rpx;
+  gap: 12rpx;
   border-top: 1rpx solid var(--color-divider);
 }
 
+.inspector-name {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10rpx;
+  white-space: nowrap;
+}
+
 .eyebrow {
-  display: block;
+  min-width: 0;
+  overflow: hidden;
   color: var(--color-text-3);
-  font-size: 22rpx;
+  font-size: var(--font-small);
+  text-overflow: ellipsis;
 }
 
 .inspector-title {
-  display: block;
-  margin-top: 2rpx;
+  flex: none;
   color: var(--color-text-1);
   font-size: var(--font-subtitle);
   font-weight: 600;
 }
 
+/* 72rpx tall and 12rpx apart; 删除 sits a further 12rpx from 锁定. */
 .compact-actions {
+  flex: none;
   display: flex;
-  gap: 4rpx;
+  gap: 12rpx;
 }
 
 .compact-actions button {
-  min-width: 80rpx;
-  padding: 8rpx 10rpx;
+  height: 72rpx;
+  padding: 0 12rpx;
   border-radius: var(--radius-sm);
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 6rpx;
+  gap: 4rpx;
   color: var(--color-text-2);
-  font-size: 20rpx;
+  font-size: var(--font-caption);
 }
 
 .compact-actions button .icon {
-  font-size: 36rpx;
+  font-size: 30rpx;
 }
 
 .compact-actions .danger-text {
+  margin-left: 12rpx;
   color: var(--color-danger);
 }
 
 .property-section {
   padding: 24rpx 0;
   border-top: 1rpx solid var(--color-divider);
+}
+
+/* Directly under the heading; the tighter top keeps a content field such as
+   文字内容 on the panel's first screen. */
+.inspector-heading + .property-section {
+  padding-top: 8rpx;
 }
 
 .section-label {
@@ -439,7 +564,7 @@ button.tool-button.button-hover .tool-icon {
   display: block;
   margin-top: 16rpx;
   color: var(--color-text-3);
-  font-size: 22rpx;
+  font-size: var(--font-caption);
   line-height: 1.6;
 }
 
@@ -492,6 +617,15 @@ button.tool-button.button-hover .tool-icon {
   gap: 12rpx;
 }
 
+/* A font chip pulses gently while its font downloads. */
+.font-chip.loading {
+  animation: font-chip-loading 1.2s ease-in-out infinite;
+}
+
+@keyframes font-chip-loading {
+  50% { opacity: 0.45; }
+}
+
 .switch-row,
 .stepper-row,
 .copies-row {
@@ -516,8 +650,8 @@ button.tool-button.button-hover .tool-icon {
 
 .stepper-row button,
 .stepper button {
-  width: 64rpx;
-  height: 56rpx;
+  width: 72rpx;
+  height: 72rpx;
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
@@ -563,7 +697,7 @@ button.tool-button.button-hover .tool-icon {
 .field-grid label text {
   display: block;
   color: var(--color-text-3);
-  font-size: 20rpx;
+  font-size: var(--font-small);
 }
 
 .field-grid input {
@@ -601,7 +735,7 @@ button.tool-button.button-hover .tool-icon {
 
 .style-actions button.active {
   border-color: var(--color-primary-line);
-  color: var(--color-primary);
+  color: var(--color-primary-pressed);
   background: var(--color-primary-soft);
 }
 
@@ -610,7 +744,7 @@ button.tool-button.button-hover .tool-icon {
   height: 68rpx;
   padding: 0 12rpx;
   flex: 1;
-  font-size: 22rpx;
+  font-size: var(--font-caption);
 }
 
 .style-actions.wide button .icon {
@@ -697,8 +831,8 @@ button.outline-wide .icon {
 }
 
 /* Sheets with a scrolling body: the list takes whatever height the header,
-   optional cards and actions leave, so the actions are never clipped. */
-.device-sheet,
+   optional cards and actions leave, so the actions are never clipped. The
+   printer sheet is the printer-picker component with its own styles. */
 .settings-sheet,
 .layers-sheet,
 .material-sheet,
@@ -707,121 +841,12 @@ button.outline-wide .icon {
   flex-direction: column;
 }
 
-.device-list,
 .settings-scroll,
 .layer-list,
 .asset-grid,
 .border-grid {
   height: 0;
   flex: 1;
-}
-
-/* Printer sheet */
-.device-sheet {
-  height: 74vh;
-}
-
-button.device-item {
-  width: 100%;
-  min-height: 112rpx;
-  padding: 16rpx 4rpx;
-  display: flex;
-  align-items: center;
-  gap: 20rpx;
-  text-align: left;
-  border-bottom: 1rpx solid var(--color-divider);
-}
-
-.device-icon {
-  width: 72rpx;
-  height: 72rpx;
-  flex: none;
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-text-1);
-  background: var(--color-fill);
-  font-size: 36rpx;
-}
-
-.device-copy {
-  min-width: 0;
-  flex: 1;
-}
-
-.device-name {
-  display: block;
-  overflow: hidden;
-  color: var(--color-text-1);
-  font-size: var(--font-body);
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.device-id {
-  display: block;
-  margin-top: 4rpx;
-  overflow: hidden;
-  color: var(--color-text-4);
-  font-size: 20rpx;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.signal {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 6rpx;
-  color: var(--color-text-3);
-  font-size: 22rpx;
-}
-
-.device-chevron {
-  color: var(--color-text-4);
-  font-size: 28rpx;
-}
-
-.connected-card {
-  margin-bottom: 8rpx;
-  padding: 20rpx 24rpx;
-  border-radius: var(--radius-lg);
-  display: flex;
-  align-items: center;
-  gap: 20rpx;
-  color: var(--color-success);
-  background: var(--color-success-soft);
-  font-size: 22rpx;
-}
-
-.connected-icon {
-  width: 72rpx;
-  height: 72rpx;
-  flex: none;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-surface);
-  font-size: 36rpx;
-}
-
-.connected-copy {
-  min-width: 0;
-  flex: 1;
-}
-
-.connected-name {
-  display: block;
-  margin-bottom: 4rpx;
-  overflow: hidden;
-  color: var(--color-text-1);
-  font-size: var(--font-body);
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .sheet-empty {
@@ -836,9 +861,17 @@ button.device-item {
   text-align: center;
 }
 
-/* Print sheet */
+/* Print sheet. A column: on a short phone the scrolling middle part
+   (.print-scroll) gives way and the print button stays on screen. */
 .print-sheet {
   max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.print-scroll {
+  flex: 0 1 auto;
+  min-height: 0;
 }
 
 .warning-card,
@@ -849,14 +882,14 @@ button.device-item {
   display: flex;
   flex-direction: column;
   gap: 8rpx;
-  color: var(--color-warning);
+  color: var(--color-warning-text);
   background: var(--color-warning-soft);
   font-size: var(--font-caption);
   line-height: 1.5;
 }
 
 .error-card {
-  color: var(--color-danger);
+  color: var(--color-primary-pressed);
   background: var(--color-danger-soft);
 }
 
@@ -883,14 +916,14 @@ button.device-item {
 }
 
 .warning-actions button {
-  min-height: 56rpx;
-  padding: 0 20rpx;
+  min-height: 64rpx;
+  padding: 0 24rpx;
   border-radius: var(--radius-full);
   display: flex;
   align-items: center;
-  color: var(--color-warning);
+  color: var(--color-warning-text);
   background: var(--color-surface);
-  font-size: 22rpx;
+  font-size: var(--font-caption);
   font-weight: 500;
 }
 
@@ -914,6 +947,28 @@ button.device-item {
   text-align: right;
 }
 
+/* The model is picked automatically; tapping the row changes it. */
+.print-summary .summary-action .summary-chevron {
+  margin-left: 4rpx;
+  color: var(--color-text-3);
+}
+
+.print-note {
+  padding: 16rpx 0 4rpx;
+  display: flex;
+  align-items: flex-start;
+  gap: 8rpx;
+  color: var(--color-text-3);
+  font-size: var(--font-caption);
+  line-height: 1.5;
+}
+
+.print-note .icon {
+  flex: none;
+  margin-top: 4rpx;
+  font-size: 26rpx;
+}
+
 .copies-row {
   border-bottom: 0;
 }
@@ -925,8 +980,8 @@ button.device-item {
 }
 
 .copies-input {
-  width: 96rpx;
-  height: 56rpx;
+  width: 120rpx;
+  height: 72rpx;
   border-radius: var(--radius-sm);
   color: var(--color-text-1);
   background: var(--color-fill);
@@ -937,8 +992,8 @@ button.device-item {
 
 .progress-card {
   margin-top: 16rpx;
-  color: var(--color-text-3);
-  font-size: 22rpx;
+  color: var(--color-text-2);
+  font-size: 26rpx;
   text-align: center;
 }
 
@@ -1011,7 +1066,7 @@ button.layer-item {
 }
 
 button.layer-item.active {
-  color: var(--color-primary);
+  color: var(--color-primary-pressed);
   background: var(--color-primary-soft);
 }
 
@@ -1023,12 +1078,12 @@ button.layer-item.active {
   border-radius: var(--radius-xs);
   color: var(--color-text-3);
   background: var(--color-fill);
-  font-size: 20rpx;
+  font-size: var(--font-small);
   text-align: center;
 }
 
 .layer-item.active .layer-type {
-  color: var(--color-primary);
+  color: var(--color-primary-pressed);
   background: var(--color-surface);
 }
 
@@ -1046,12 +1101,12 @@ button.layer-item.active {
   display: flex;
   align-items: center;
   gap: 4rpx;
-  color: var(--color-text-4);
-  font-size: 22rpx;
+  color: var(--color-text-3);
+  font-size: var(--font-small);
 }
 
 .layer-item.active .layer-state {
-  color: var(--color-primary);
+  color: var(--color-primary-pressed);
 }
 
 .layer-actions {
@@ -1076,7 +1131,7 @@ button.layer-item.active {
 }
 
 .layer-actions .danger-text {
-  color: var(--color-danger);
+  color: var(--color-primary-pressed);
   background: var(--color-danger-soft);
 }
 
@@ -1100,7 +1155,7 @@ button.layer-item.active {
   gap: 8rpx;
   vertical-align: top;
   color: var(--color-text-2);
-  font-size: 22rpx;
+  font-size: var(--font-caption);
 }
 
 .asset-grid image,
@@ -1129,7 +1184,7 @@ button.layer-item.active {
   border-radius: 6rpx;
   color: #fff;
   background: #D48806;
-  font-size: 18rpx;
+  font-size: var(--font-tiny);
 }
 
 .border-sample {
@@ -1165,11 +1220,11 @@ button.layer-item.active {
   gap: 16rpx;
   color: var(--color-text-3);
   background: var(--color-fill);
-  font-size: 22rpx;
+  font-size: var(--font-caption);
 }
 
 .online-asset-status.error {
-  color: var(--color-danger);
+  color: var(--color-primary-pressed);
   background: var(--color-danger-soft);
 }
 
@@ -1182,7 +1237,7 @@ button.layer-item.active {
   display: flex;
   color: var(--color-text-1);
   background: var(--color-surface);
-  font-size: 22rpx;
+  font-size: var(--font-caption);
 }
 
 .recovery-title {

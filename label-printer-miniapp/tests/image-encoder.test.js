@@ -1,140 +1,51 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const {
-  encodeImageData,
-  indexBlackPixels,
-  pixelCounts,
-  rowToCommand
-} = require('../miniprogram/core/image-encoder');
-const { COMMAND, RESPONSE } = require('../miniprogram/core/protocol');
+const { isBlackPixel } = require('../miniprogram/core/image-encoder');
 
-function makeImage(width, height, blackPixels) {
-  const data = new Uint8ClampedArray(width * height * 4);
-  data.fill(255);
-  for (const [x, y] of blackPixels || []) {
-    const offset = (y * width + x) * 4;
-    data[offset] = 0;
-    data[offset + 1] = 0;
-    data[offset + 2] = 0;
-    data[offset + 3] = 255;
+// Whether a 1×1 image of one RGBA colour prints black at `threshold`.
+function prints(rgba, threshold) {
+  return isBlackPixel({ width: 1, height: 1, data: Uint8ClampedArray.from(rgba) }, 0, 0, threshold);
+}
+
+test('an opaque pixel prints black only when its luminance is below the threshold', () => {
+  assert.equal(prints([0, 0, 0, 255], 180), true);
+  assert.equal(prints([255, 255, 255, 255], 180), false);
+  assert.equal(prints([150, 150, 150, 255], 180), true);
+  assert.equal(prints([150, 150, 150, 255], 120), false, 'a lower threshold leaves mid grey white');
+  assert.equal(prints([100, 100, 100, 255], 100), false, 'a luminance equal to the threshold stays white');
+  assert.equal(prints([100, 100, 100, 255], 101), true);
+});
+
+test('colours are weighed by how dark they look, not by the sum of their channels', () => {
+  // Rec. 709 luminance: pure green is light (182), pure red (54) and blue (18) are dark.
+  assert.equal(prints([0, 255, 0, 255], 180), false);
+  assert.equal(prints([0, 255, 0, 255], 190), true);
+  assert.equal(prints([255, 0, 0, 255], 180), true);
+  assert.equal(prints([0, 0, 255, 255], 180), true);
+});
+
+test('transparency is blended over white paper before the threshold', () => {
+  assert.equal(prints([0, 0, 0, 0], 180), false, 'transparent black is blank paper');
+  assert.equal(prints([0, 0, 0, 0], 240), false, 'even at the highest threshold the app offers');
+  assert.equal(prints([255, 0, 0, 0], 240), false, 'whatever colour the transparent pixel carries');
+  assert.equal(prints([0, 0, 0, 128], 180), true, 'half-transparent black (127) is dark enough to print');
+  assert.equal(prints([0, 0, 0, 64], 180), false, 'faint black (191) stays white');
+  assert.equal(prints([0, 0, 0, 64], 200), true);
+});
+
+test('pixels are addressed row by row across the image width', () => {
+  const width = 3;
+  const height = 2;
+  const data = new Uint8ClampedArray(width * height * 4).fill(255);
+  data.set([0, 0, 0, 255], (1 * width + 2) * 4);
+  const image = { width, height, data };
+
+  const black = [];
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (isBlackPixel(image, x, y, 180)) black.push([x, y]);
+    }
   }
-  return { width, height, data };
-}
-
-function summarizeRows(rowsData) {
-  return rowsData.map((row) => ({
-    dataType: row.dataType,
-    rowNumber: row.rowNumber,
-    repeat: row.repeat,
-    rowData: row.rowData ? Array.from(row.rowData) : null,
-    blackPixels: row.blackPixels
-  }));
-}
-
-test('top direction packs rows from left to right and RLE-compresses equal rows', () => {
-  const image = makeImage(8, 4, [
-    [0, 0], [7, 0],
-    [0, 1], [7, 1]
-  ]);
-  const encoded = encodeImageData(image, { direction: 'top' });
-
-  assert.equal(encoded.columns, 8);
-  assert.equal(encoded.rows, 4);
-  assert.deepEqual(summarizeRows(encoded.rowsData), [
-    { dataType: 'pixels', rowNumber: 0, repeat: 2, rowData: [0x81], blackPixels: 2 },
-    { dataType: 'empty', rowNumber: 2, repeat: 2, rowData: null, blackPixels: 0 }
-  ]);
-});
-
-test('left direction rotates the source clockwise into print rows', () => {
-  const image = makeImage(2, 8, [
-    [0, 7], [0, 0],
-    [1, 6]
-  ]);
-  const encoded = encodeImageData(image, { direction: 'left' });
-
-  assert.equal(encoded.columns, 8);
-  assert.equal(encoded.rows, 2);
-  assert.deepEqual(summarizeRows(encoded.rowsData), [
-    { dataType: 'pixels', rowNumber: 0, repeat: 1, rowData: [0x81], blackPixels: 2 },
-    { dataType: 'pixels', rowNumber: 1, repeat: 1, rowData: [0x40], blackPixels: 1 }
-  ]);
-});
-
-test('RLE stops at 200 rows and check rows split runs at configured intervals', () => {
-  const longRun = encodeImageData(makeImage(8, 257), { direction: 'top' });
-  assert.deepEqual(summarizeRows(longRun.rowsData), [
-    { dataType: 'empty', rowNumber: 0, repeat: 200, rowData: null, blackPixels: 0 },
-    { dataType: 'empty', rowNumber: 200, repeat: 57, rowData: null, blackPixels: 0 }
-  ]);
-
-  const checked = encodeImageData(makeImage(8, 4), {
-    direction: 'top',
-    checkEvery: 2
-  });
-  assert.deepEqual(summarizeRows(checked.rowsData), [
-    { dataType: 'empty', rowNumber: 0, repeat: 2, rowData: null, blackPixels: 0 },
-    { dataType: 'check', rowNumber: 1, repeat: 0, rowData: null, blackPixels: 0 },
-    { dataType: 'empty', rowNumber: 2, repeat: 2, rowData: null, blackPixels: 0 },
-    { dataType: 'check', rowNumber: 3, repeat: 0, rowData: null, blackPixels: 0 }
-  ]);
-});
-
-test('encodeImageData rejects a non-byte-aligned printhead axis', () => {
-  assert.throws(() => encodeImageData(makeImage(7, 1), { direction: 'top' }));
-  assert.throws(() => encodeImageData(makeImage(1, 7), { direction: 'left' }));
-});
-
-test('row helpers emit indexed, bitmap, empty, and check command payloads', () => {
-  assert.deepEqual(indexBlackPixels(Uint8Array.from([0x81, 0x40])), [
-    0x00, 0x00,
-    0x00, 0x07,
-    0x00, 0x09
-  ]);
-  assert.deepEqual(pixelCounts(Uint8Array.from([0xff, 0x0f, 0x80]), 24, 'auto'), [8, 4, 1]);
-  assert.deepEqual(pixelCounts(Uint8Array.from([0xff, 0x0f, 0x80]), 24, 'total'), [0, 13, 0]);
-
-  assert.deepEqual(rowToCommand({
-    dataType: 'pixels',
-    rowNumber: 0x0123,
-    repeat: 2,
-    rowData: Uint8Array.from([0x81, 0x40]),
-    blackPixels: 3
-  }, { printheadPixels: 16, countsMode: 'auto' }), {
-    command: COMMAND.PRINT_ROW_INDEXED,
-    data: [0x01, 0x23, 0, 3, 0, 2, 0, 0, 0, 7, 0, 9],
-    oneWay: true
-  });
-
-  assert.deepEqual(rowToCommand({
-    dataType: 'pixels',
-    rowNumber: 2,
-    repeat: 1,
-    rowData: Uint8Array.from([0xff, 0x0f, 0x80]),
-    blackPixels: 13
-  }, { printheadPixels: 24, countsMode: 'auto' }), {
-    command: COMMAND.PRINT_BITMAP_ROW,
-    data: [0, 2, 8, 4, 1, 1, 0xff, 0x0f, 0x80],
-    oneWay: true
-  });
-
-  assert.deepEqual(rowToCommand({
-    dataType: 'empty',
-    rowNumber: 9,
-    repeat: 4
-  }, {}), {
-    command: COMMAND.PRINT_EMPTY_ROW,
-    data: [0, 9, 4],
-    oneWay: true
-  });
-
-  assert.deepEqual(rowToCommand({
-    dataType: 'check',
-    rowNumber: 0x0201
-  }, { checkResponse: RESPONSE.CHECK_LINE }), {
-    command: COMMAND.CHECK_LINE,
-    data: [0x02, 0x01, 1],
-    expect: RESPONSE.CHECK_LINE
-  });
+  assert.deepEqual(black, [[2, 1]]);
 });

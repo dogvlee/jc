@@ -25,8 +25,8 @@ const CARTONS = [
 ];
 
 const PARCELS = [
-  { name: '张三', phone: '138-0000-1234', address: '浙江省杭州市西湖区\n示例路 88 号 3 幢 502', order: 'SY20260928001' },
-  { name: '李四', phone: '139-0000-5678', address: '广东省深圳市南山区\n科技园示例大厦 12 楼', order: 'SY20260928002' }
+  { name: '张三', phone: '138-0000-1234', address: '浙江省杭州市西湖区\n示例路 88 号 3 幢 502', order: 'DD20260928001' },
+  { name: '李四', phone: '139-0000-5678', address: '广东省深圳市南山区\n科技园示例大厦 12 楼', order: 'DD20260928002' }
 ];
 
 const PICKUPS = [
@@ -198,7 +198,7 @@ function parcelLabelQr(doc, W, H, p) {
   text(doc, phone, p.phone, { max: Math.min(4.4, 3.4 * k), align: 'right' });
   text(doc, address, p.address, { max: Math.min(4.2, 3.2 * k) });
   divider(doc, address, from, { dashed: true });
-  text(doc, from, '寄件：商跃小店 · 400-000-0000', { max: Math.min(3.2, 2.6 * k) });
+  text(doc, from, '寄件：南巷小店 · 400-000-0000', { max: Math.min(3.2, 2.6 * k) });
 }
 
 /** 取件码：大号取件码 + 货架位置 + 到店日期。 */

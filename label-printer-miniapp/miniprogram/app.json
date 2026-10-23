@@ -1,7 +1,9 @@
 {
   "pages": [
     "pages/home/index",
-    "pages/editor/index"
+    "pages/editor/index",
+    "pages/login/index",
+    "pages/legal/index"
   ],
   "window": {
     "navigationBarBackgroundColor": "#ffffff",

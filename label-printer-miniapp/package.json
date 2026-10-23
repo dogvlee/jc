@@ -2,11 +2,12 @@
   "name": "label-printer-miniapp",
   "version": "1.0.0-rc.1",
   "private": true,
-  "description": "NIIM label design and NIIMBOT BLE printing workflow rebuilt as a native WeChat Mini Program",
+  "description": "Shangyue label design with ESC/POS printing to Bluetooth thermal printers, as a native WeChat Mini Program",
   "scripts": {
     "build:vendor": "esbuild qrcode-generator --bundle --platform=browser --format=cjs --minify --legal-comments=inline --outfile=miniprogram/vendor/qrcode.js",
     "build:icons": "node scripts/build-icons.mjs",
     "curated:sheets": "node scripts/render-curated-sheets.mjs",
+    "curated:printable": "node scripts/build-curated-printable-index.mjs",
     "test": "node --test tests/*.test.js",
     "test:coverage": "node --test --experimental-test-coverage tests/*.test.js",
     "check": "node scripts/check-project.mjs",
@@ -16,6 +17,7 @@
     "release:shangyue": "node scripts/build-shangyue-release.mjs",
     "release:wechat": "node scripts/prepare-wechat-release.mjs",
     "test:wechat": "node scripts/wechat-smoke.cjs",
+    "test:wechat:auth": "node scripts/wechat-auth-smoke.cjs",
     "verify": "npm run check && npm test && npm run release:shangyue",
     "assets:sync": "python scripts/optimize_assets.py"
   },

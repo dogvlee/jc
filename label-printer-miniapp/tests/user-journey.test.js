@@ -51,6 +51,8 @@ test('home exposes a recoverable draft and requires a choice before opening new 
   home.openEditor(label('另一张'), '');
   assert.equal(navigations, 0);
   assert.equal(repository.getEditorAutosave().document.name, '未完成价签');
+  // New options go last so the first two keep their meaning.
+  assert.deepEqual(sheet.itemList, ['继续编辑草稿', '保存草稿并打开新标签', '放弃草稿，打开新标签']);
   sheet.success({ tapIndex: 0 });
   assert.equal(navigations, 1);
   assert.equal(repository.getEditorDraft().document.name, '未完成价签');
@@ -113,7 +115,8 @@ test('template storage failure during editor initialization is recoverable', () 
 
 test('failed autosave blocks retaining-and-exiting and exposes a retry message', () => {
   let backs = 0;
-  global.wx = { navigateBack() { backs += 1; } };
+  let modal = null;
+  global.wx = { navigateBack() { backs += 1; }, showModal(options) { modal = options; } };
   const editor = page(editorDefinition, {
     document: label('不能丢'), dirtySinceSave: true,
     editorSession: { checkpoint() { throw new Error('quota'); } }
@@ -121,6 +124,11 @@ test('failed autosave blocks retaining-and-exiting and exposes a retry message',
   editor.exitEditor();
   assert.equal(backs, 0);
   assert.match(editor.data.saveState, /保存失败/);
+  // The exit says why it stopped and lets the user choose.
+  assert.equal(modal.title, '草稿没有保存成功');
+  assert.equal(modal.confirmText, '再试一次');
+  modal.success({ confirm: false, cancel: true });
+  assert.equal(backs, 1, '仍要退出 leaves');
   delete global.wx;
 });
 
@@ -147,7 +155,6 @@ test('first print selects a device even if the remembered profile cannot fit the
   await editor.startPrint();
   assert.equal(opened, 1);
   assert.equal(editor.returnToPrintAfterConnect, true);
-  editor.session = { stopScan() {} };
   editor.closeDevices();
   assert.equal(editor.returnToPrintAfterConnect, false);
 });
@@ -161,7 +168,7 @@ test('printing and its history use the submitted snapshot while connection is pe
   global.wx = { showToast() {} };
   const editor = page(editorDefinition, {
     pageActive: true, context: {}, canvasSize: {},
-    document: label('本次提交'), profile: getProfile('b1'), profileConfirmed: true,
+    document: label('本次提交'), profile: getProfile('b1'),
     connectionManager: {
       getSavedDevice() { return { deviceId: 'b1' }; }, ensureReady() { return gate; }, touch() {}
     },

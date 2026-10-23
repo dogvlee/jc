@@ -148,12 +148,12 @@ function layoutJewelry() {
   doc.elements = [
     text(doc, {
       x: 2, y: 1.5, width: 36, height: 4.5,
-      text: 'SHANGYUE JEWELRY', fontSize: 3.2, bold: true, align: 'center',
+      text: 'FINE JEWELRY', fontSize: 3.2, bold: true, align: 'center',
       fontFamily: 'serif'
     }),
     line(doc, { x: 6, y: 6.5, width: 28, height: 0.8, lineWidth: 0.25 }),
     text(doc, { x: 2.5, y: 8, width: 35, height: 2.8, text: '类型：红宝石手链', fontSize: 2.3 }),
-    text(doc, { x: 2.5, y: 11, width: 35, height: 2.8, text: '编号：SY-8842', fontSize: 2.3 }),
+    text(doc, { x: 2.5, y: 11, width: 35, height: 2.8, text: '编号：JW-8842', fontSize: 2.3 }),
     text(doc, { x: 2.5, y: 14, width: 35, height: 2.8, text: '重量：5.2g', fontSize: 2.3 }),
     text(doc, {
       x: 2.5, y: 17.5, width: 35, height: 4,
@@ -269,7 +269,7 @@ function layoutShangyueWishCard() {
   doc.elements = [
     text(doc, {
       x: 2.0, y: 2.0, width: 12.5, height: 3.4,
-      text: '商跃原创', fontSize: 2.2, bold: true,
+      text: '送给你', fontSize: 2.2, bold: true,
       reverse: true, align: 'center'
     }),
     text(doc, {
@@ -329,7 +329,7 @@ function layoutShangyuePriceTag() {
     }),
     text(doc, {
       x: 2.8, y: 2.1, width: 13.2, height: 3.6,
-      text: '商跃价签', fontSize: 2.4, bold: true,
+      text: '明码标价', fontSize: 2.4, bold: true,
       reverse: true, align: 'left'
     }),
     text(doc, {
@@ -367,7 +367,7 @@ function layoutShangyueBinLabel() {
   doc.elements = [
     text(doc, {
       x: 2.0, y: 2.0, width: 12.8, height: 3.2,
-      text: '商跃仓储', fontSize: 2.2, bold: true,
+      text: '库位', fontSize: 2.2, bold: true,
       reverse: true, align: 'center'
     }),
     text(doc, {
@@ -376,7 +376,7 @@ function layoutShangyueBinLabel() {
     }),
     text(doc, {
       x: 2.0, y: 11.4, width: 23.2, height: 2.8,
-      text: 'SKU SY-WH-0817', fontSize: 2.2
+      text: 'SKU LM-WH-0817', fontSize: 2.2
     }),
     text(doc, {
       x: 2.0, y: 14.4, width: 23.2, height: 2.8,
@@ -393,7 +393,7 @@ function layoutShangyueBinLabel() {
     }),
     qrcode(doc, {
       x: 26.4, y: 6.0, width: 11.2, height: 11.2,
-      value: 'BIN://A-12-08/SY-WH-0817', errorCorrection: 'M'
+      value: 'BIN://A-12-08/LM-WH-0817', errorCorrection: 'M'
     }),
     text(doc, {
       x: 26.0, y: 18.0, width: 12.0, height: 2.8,
@@ -409,7 +409,7 @@ function layoutShangyueNameSticker() {
   doc.elements = [
     text(doc, {
       x: 1.8, y: 1.8, width: 7.2, height: 3.0,
-      text: '商跃', fontSize: 2.2, bold: true,
+      text: '姓名', fontSize: 2.2, bold: true,
       reverse: true, align: 'center'
     }),
     text(doc, {
@@ -438,7 +438,7 @@ function layoutShangyueFreshDate() {
     }),
     text(doc, {
       x: 2.8, y: 2.1, width: 13.0, height: 3.6,
-      text: '商跃效期', fontSize: 2.4, bold: true,
+      text: '效期提醒', fontSize: 2.4, bold: true,
       reverse: true, align: 'left'
     }),
     text(doc, {
@@ -492,7 +492,7 @@ function layoutShangyueWifiCard() {
     }),
     qrcode(doc, {
       x: 2.0, y: 5.6, width: 13.0, height: 13.0,
-      value: 'WIFI:T:WPA;S:SY-Guest;P:sy202609;;', errorCorrection: 'M'
+      value: 'WIFI:T:WPA;S:HQ-Guest;P:hq202609;;', errorCorrection: 'M'
     }),
     text(doc, {
       x: 2.0, y: 19.4, width: 13.0, height: 2.8,
@@ -510,7 +510,7 @@ function layoutShangyueWifiCard() {
     }),
     text(doc, {
       x: 18.2, y: 11.0, width: 19.4, height: 2.8,
-      text: 'SSID  SY-Guest', fontSize: 2.2
+      text: 'SSID  HQ-Guest', fontSize: 2.2
     }),
     rect(doc, {
       x: 18.2, y: 14.4, width: 19.4, height: 5.4,
@@ -518,7 +518,7 @@ function layoutShangyueWifiCard() {
     }),
     text(doc, {
       x: 19.0, y: 15.2, width: 17.8, height: 3.8,
-      text: '密码 sy202609', fontSize: 2.2, bold: true, align: 'center'
+      text: '密码 hq202609', fontSize: 2.2, bold: true, align: 'center'
     }),
     text(doc, {
       x: 18.2, y: 21.0, width: 19.4, height: 3.0,
@@ -527,7 +527,7 @@ function layoutShangyueWifiCard() {
     }),
     text(doc, {
       x: 18.2, y: 24.4, width: 19.4, height: 2.6,
-      text: '商跃 · 临时凭据', fontSize: 2.2
+      text: '临时凭据 · 勿外传', fontSize: 2.2
     })
   ];
   return finish(doc, '商跃连网码', shangyueOriginalMeta('办公', '40×30', {
@@ -545,7 +545,7 @@ function layoutShangyuePromoTag() {
     text(doc, { x: 2.0, y: 13.6, width: 20.2, height: 5.0, text: '炭烤鸡腿堡', fontSize: 3.6, bold: true }),
     text(doc, { x: 2.0, y: 19.0, width: 20.2, height: 2.8, text: '两件起 · 门店自提', fontSize: 2.2 }),
     text(doc, { x: 2.0, y: 22.2, width: 20.2, height: 2.8, text: '日常 ¥12.00', fontSize: 2.2, strike: true }),
-    text(doc, { x: 2.0, y: 25.4, width: 20.2, height: 2.4, text: '商跃门店优惠', fontSize: 2.2 }),
+    text(doc, { x: 2.0, y: 25.4, width: 20.2, height: 2.4, text: '本店专享优惠', fontSize: 2.2 }),
     rect(doc, { x: 23.6, y: 10.4, width: 14.4, height: 17.4, filled: true, shapeKind: 'rounded', lineWidth: 0.25, locked: true }),
     text(doc, { x: 24.4, y: 11.2, width: 12.8, height: 2.8, text: '到手价', fontSize: 2.2, bold: true, reverse: true, align: 'center' }),
     text(doc, { x: 24.2, y: 14.4, width: 13.2, height: 6.2, text: '¥6.90', fontSize: 4.6, bold: true, reverse: true, align: 'center' }),
@@ -561,12 +561,12 @@ function layoutShangyuePromoTag() {
 function layoutShangyueJewelryTag() {
   const doc = createDocument(40, 30);
   doc.elements = [
-    text(doc, { x: 2.0, y: 2.0, width: 13.2, height: 3.2, text: '商跃金饰', fontSize: 2.2, bold: true, reverse: true, align: 'center' }),
+    text(doc, { x: 2.0, y: 2.0, width: 13.2, height: 3.2, text: '精品珠宝', fontSize: 2.2, bold: true, reverse: true, align: 'center' }),
     text(doc, { x: 2.0, y: 6.0, width: 36.0, height: 4.6, text: '18K 红宝石手链', fontSize: 3.4, bold: true }),
-    text(doc, { x: 2.0, y: 11.0, width: 36.0, height: 2.8, text: '编号 SY-J8842', fontSize: 2.3 }),
+    text(doc, { x: 2.0, y: 11.0, width: 36.0, height: 2.8, text: '编号 JW-8842', fontSize: 2.3 }),
     text(doc, { x: 2.0, y: 14.2, width: 36.0, height: 2.8, text: '重量 5.2g · 手围 16cm', fontSize: 2.3 }),
     text(doc, { x: 2.0, y: 17.4, width: 36.0, height: 4.0, text: '¥2,580', fontSize: 3.8, bold: true }),
-    barcode(doc, { x: 2.0, y: 21.8, width: 36.0, height: 6.0, value: 'SYJ8842', format: 'code128', showText: false })
+    barcode(doc, { x: 2.0, y: 21.8, width: 36.0, height: 6.0, value: 'JW8842', format: 'code128', showText: false })
   ];
   return finish(doc, '商跃珠宝吊牌', shangyueOriginalMeta('零售', '40×30'));
 }
@@ -576,10 +576,10 @@ function layoutShangyueGarmentTag() {
   const doc = createDocument(40, 30);
   doc.elements = [
     rect(doc, { x: 2.0, y: 1.8, width: 36.0, height: 4.2, filled: true, shapeKind: 'rounded', lineWidth: 0.2, locked: true }),
-    text(doc, { x: 2.8, y: 2.1, width: 14.4, height: 3.6, text: '商跃成衣', fontSize: 2.4, bold: true, reverse: true }),
+    text(doc, { x: 2.8, y: 2.1, width: 14.4, height: 3.6, text: '牛仔系列', fontSize: 2.4, bold: true, reverse: true }),
     text(doc, { x: 25.2, y: 2.1, width: 12.0, height: 3.6, text: '春夏', fontSize: 2.2, bold: true, reverse: true, align: 'right' }),
     text(doc, { x: 2.0, y: 6.6, width: 36.0, height: 4.4, text: '直筒牛仔裤', fontSize: 3.6, bold: true }),
-    text(doc, { x: 2.0, y: 11.2, width: 36.0, height: 2.8, text: '款号 SY-2601 · 靛蓝', fontSize: 2.3 }),
+    text(doc, { x: 2.0, y: 11.2, width: 36.0, height: 2.8, text: '款号 NZ-2601 · 靛蓝', fontSize: 2.3 }),
     text(doc, { x: 2.0, y: 14.2, width: 36.0, height: 2.8, text: '尺码 M / 170 · 98% 棉', fontSize: 2.3 }),
     text(doc, { x: 2.0, y: 17.4, width: 36.0, height: 4.0, text: '¥299', fontSize: 3.8, bold: true }),
     barcode(doc, { x: 5.0, y: 21.8, width: 30.0, height: 6.2, value: '6901234567892', format: 'ean13', showText: false })
@@ -591,13 +591,13 @@ function layoutShangyueGarmentTag() {
 function layoutShangyueShipLabel() {
   const doc = createDocument(40, 30);
   doc.elements = [
-    text(doc, { x: 2.0, y: 2.0, width: 13.2, height: 3.2, text: '商跃物流', fontSize: 2.2, bold: true, reverse: true, align: 'center' }),
+    text(doc, { x: 2.0, y: 2.0, width: 13.2, height: 3.2, text: '发往', fontSize: 2.2, bold: true, reverse: true, align: 'center' }),
     text(doc, { x: 2.0, y: 6.0, width: 23.2, height: 4.4, text: '华东仓', fontSize: 3.8, bold: true }),
     text(doc, { x: 2.0, y: 10.6, width: 23.2, height: 2.8, text: '杭州滨江 · 3 号库', fontSize: 2.2 }),
     text(doc, { x: 2.0, y: 13.8, width: 23.2, height: 2.8, text: '1/4 · 易碎轻放', fontSize: 2.2 }),
-    qrcode(doc, { x: 26.4, y: 6.2, width: 11.2, height: 11.2, value: 'SHIP://SYF1024', errorCorrection: 'M' }),
+    qrcode(doc, { x: 26.4, y: 6.2, width: 11.2, height: 11.2, value: 'SHIP://HD1024', errorCorrection: 'M' }),
     text(doc, { x: 26.0, y: 18.0, width: 12.0, height: 2.6, text: '扫码签收', fontSize: 2.2, align: 'center' }),
-    barcode(doc, { x: 2.0, y: 21.4, width: 36.0, height: 6.4, value: 'SYF1024', format: 'code128', showText: false })
+    barcode(doc, { x: 2.0, y: 21.4, width: 36.0, height: 6.4, value: 'HD1024', format: 'code128', showText: false })
   ];
   return finish(doc, '商跃物流简签', shangyueOriginalMeta('仓储', '40×30'));
 }
@@ -618,7 +618,7 @@ function layoutShangyueCableTag() {
 function layoutShangyueAssetTag() {
   const doc = createDocument(40, 30);
   doc.elements = [
-    text(doc, { x: 2.0, y: 2.0, width: 13.2, height: 3.2, text: '商跃资产', fontSize: 2.2, bold: true, reverse: true, align: 'center' }),
+    text(doc, { x: 2.0, y: 2.0, width: 13.2, height: 3.2, text: '固定资产', fontSize: 2.2, bold: true, reverse: true, align: 'center' }),
     text(doc, { x: 2.0, y: 6.0, width: 23.2, height: 4.4, text: 'ThinkPad', fontSize: 3.6, bold: true }),
     text(doc, { x: 2.0, y: 10.8, width: 23.2, height: 2.8, text: '研发中心 · 张工', fontSize: 2.2 }),
     serial(doc, { x: 2.0, y: 14.0, width: 23.2, height: 3.2, prefix: 'FA-', start: 1024, digits: 4, fontSize: 2.4, bold: true }),
@@ -635,14 +635,14 @@ function layoutShangyueAssetTag() {
 function layoutShangyueBizCard() {
   const doc = createDocument(40, 30);
   doc.elements = [
-    text(doc, { x: 2.0, y: 2.0, width: 8.4, height: 3.2, text: '商跃', fontSize: 2.2, bold: true, reverse: true, align: 'center' }),
+    text(doc, { x: 2.0, y: 2.0, width: 8.4, height: 3.2, text: '星河', fontSize: 2.2, bold: true, reverse: true, align: 'center' }),
     text(doc, { x: 2.0, y: 6.0, width: 23.2, height: 5.0, text: '周衡', fontSize: 4.4, bold: true }),
     text(doc, { x: 2.0, y: 11.4, width: 23.2, height: 2.8, text: '产品设计', fontSize: 2.4 }),
     text(doc, { x: 2.0, y: 14.8, width: 23.2, height: 2.8, text: '000-0000-0000', fontSize: 2.2 }),
     text(doc, { x: 2.0, y: 18.0, width: 23.2, height: 2.8, text: 'demo@example.com', fontSize: 2.2 }),
     qrcode(doc, { x: 26.4, y: 7.0, width: 11.2, height: 11.2, value: 'MECARD:N:周衡;TEL:000-0000-0000;', errorCorrection: 'M' }),
     line(doc, { x: 2.0, y: 23.4, width: 36.0, height: 0.3, lineWidth: 0.3, locked: true }),
-    text(doc, { x: 2.0, y: 24.4, width: 36.0, height: 3.0, text: '商跃科技有限公司', fontSize: 2.2, bold: true })
+    text(doc, { x: 2.0, y: 24.4, width: 36.0, height: 3.0, text: '星河科技有限公司', fontSize: 2.2, bold: true })
   ];
   return finish(doc, '商跃商务名片', shangyueOriginalMeta('办公', '40×30'));
 }
@@ -657,12 +657,12 @@ function layoutShangyueKitchenDate() {
     rect(doc, { x: 2.0, y: 8.0, width: 17.0, height: 10.2, shapeKind: 'rect', lineWidth: 0.3, locked: true }),
     rect(doc, { x: 21.0, y: 8.0, width: 17.0, height: 10.2, shapeKind: 'rect', lineWidth: 0.3, locked: true }),
     text(doc, { x: 2.8, y: 8.8, width: 15.4, height: 2.6, text: '起算', fontSize: 2.2, bold: true, align: 'center' }),
-    dateEl(doc, { x: 2.8, y: 12.0, width: 15.4, height: 4.8, label: '', showTime: false, format: 'MM-DD HH:mm', fontSize: 2.4, bold: true, align: 'center' }),
+    dateEl(doc, { x: 2.8, y: 12.0, width: 15.4, height: 4.8, label: '', showTime: true, format: 'MM-DD HH:mm', fontSize: 2.4, bold: true, align: 'center' }),
     text(doc, { x: 21.8, y: 8.8, width: 15.4, height: 2.6, text: '截止', fontSize: 2.2, bold: true, align: 'center' }),
-    dateEl(doc, { x: 21.8, y: 12.0, width: 15.4, height: 4.8, label: '', showTime: false, dateRole: 'expire', expireMode: 'preset', expirePresetHours: 4, format: 'MM-DD HH:mm', fontSize: 2.4, bold: true, align: 'center' }),
+    dateEl(doc, { x: 21.8, y: 12.0, width: 15.4, height: 4.8, label: '', showTime: true, dateRole: 'expire', expireMode: 'preset', expirePresetHours: 4, format: 'MM-DD HH:mm', fontSize: 2.4, bold: true, align: 'center' }),
     text(doc, { x: 2.0, y: 19.4, width: 36.0, height: 3.0, text: '批次 K-0818  ·  值班 A', fontSize: 2.2, bold: true }),
     text(doc, { x: 2.0, y: 22.8, width: 36.0, height: 2.8, text: '□ 已密封   □ 已复核   □ 已贴签', fontSize: 2.2 }),
-    text(doc, { x: 2.0, y: 25.6, width: 36.0, height: 2.4, text: '商跃后厨 · 超时即弃', fontSize: 2.2, align: 'right' })
+    text(doc, { x: 2.0, y: 25.6, width: 36.0, height: 2.4, text: '后厨专用 · 超时即弃', fontSize: 2.2, align: 'right' })
   ];
   return finish(doc, '商跃餐饮效期', shangyueOriginalMeta('生活', '40×30', {
     designVersion: '2.1.0', createdAt: '2026-08-18'
@@ -674,7 +674,7 @@ function layoutShangyueMedLabel() {
   const doc = createDocument(40, 20);
   doc.elements = [
     rect(doc, { x: 1.6, y: 1.5, width: 36.8, height: 3.6, filled: true, shapeKind: 'rounded', lineWidth: 0.2, locked: true }),
-    text(doc, { x: 2.3, y: 1.7, width: 14.0, height: 3.2, text: '商跃用药', fontSize: 2.2, bold: true, reverse: true }),
+    text(doc, { x: 2.3, y: 1.7, width: 14.0, height: 3.2, text: '用药提醒', fontSize: 2.2, bold: true, reverse: true }),
     text(doc, { x: 1.6, y: 5.5, width: 36.8, height: 3.8, text: '布洛芬缓释胶囊', fontSize: 3.0, bold: true }),
     text(doc, { x: 1.6, y: 9.4, width: 36.8, height: 2.8, text: '0.3g × 20 粒 · 1 粒 / 12h', fontSize: 2.2 }),
     dateEl(doc, { x: 1.6, y: 12.4, width: 36.8, height: 2.8, label: '有效至', showTime: false, dateRole: 'expire', expireMode: 'preset', expirePresetHours: 24 * 365, format: 'YYYY-MM-DD', fontSize: 2.2 }),
@@ -687,7 +687,7 @@ function layoutShangyueMedLabel() {
 function layoutShangyueSeatCard() {
   const doc = createDocument(40, 30);
   doc.elements = [
-    text(doc, { x: 13.4, y: 2.4, width: 13.2, height: 3.2, text: '商跃喜宴', fontSize: 2.2, bold: true, reverse: true, align: 'center' }),
+    text(doc, { x: 13.4, y: 2.4, width: 13.2, height: 3.2, text: '喜结良缘', fontSize: 2.2, bold: true, reverse: true, align: 'center' }),
     text(doc, { x: 2.4, y: 7.2, width: 35.2, height: 5.4, text: '张伟  &  李娜', fontSize: 3.8, bold: true, align: 'center' }),
     line(doc, { x: 10.0, y: 13.4, width: 20.0, height: 0.6, lineWidth: 0.3, locked: true }),
     text(doc, { x: 2.4, y: 15.2, width: 35.2, height: 5.2, text: '桌号  08', fontSize: 4.2, bold: true, align: 'center' }),
@@ -701,7 +701,7 @@ function layoutShangyueBakeryTag() {
   const doc = createDocument(40, 30);
   doc.elements = [
     rect(doc, { x: 2.0, y: 1.8, width: 36.0, height: 4.2, filled: true, shapeKind: 'rounded', lineWidth: 0.2, locked: true }),
-    text(doc, { x: 2.8, y: 2.1, width: 14.4, height: 3.6, text: '商跃烘焙', fontSize: 2.4, bold: true, reverse: true }),
+    text(doc, { x: 2.8, y: 2.1, width: 14.4, height: 3.6, text: '新鲜烘焙', fontSize: 2.4, bold: true, reverse: true }),
     text(doc, { x: 25.2, y: 2.1, width: 12.0, height: 3.6, text: '当日', fontSize: 2.2, bold: true, reverse: true, align: 'right' }),
     text(doc, { x: 2.0, y: 6.6, width: 36.0, height: 4.4, text: '芒果奶油蛋糕', fontSize: 3.4, bold: true }),
     text(doc, { x: 2.0, y: 11.2, width: 36.0, height: 2.8, text: '芒果 · 动物奶油', fontSize: 2.3 }),
@@ -729,7 +729,7 @@ function layoutShangyuePlantTag() {
     text(doc, { x: 26.8, y: 16.4, width: 11.2, height: 5.0, text: '16–24℃', fontSize: 2.2, align: 'center' }),
     rect(doc, { x: 2.0, y: 23.4, width: 36.0, height: 4.2, filled: true, shapeKind: 'rounded', lineWidth: 0.2, locked: true }),
     text(doc, { x: 2.8, y: 24.0, width: 22.0, height: 3.0, text: '新芽期 · 7 天一检', fontSize: 2.2, bold: true, reverse: true }),
-    text(doc, { x: 25.0, y: 24.0, width: 12.2, height: 3.0, text: '商跃园艺', fontSize: 2.2, reverse: true, align: 'right' })
+    text(doc, { x: 25.0, y: 24.0, width: 12.2, height: 3.0, text: '香草植物', fontSize: 2.2, reverse: true, align: 'right' })
   ];
   return finish(doc, '商跃植物签', shangyueOriginalMeta('生活', '40×30', {
     designVersion: '2.1.0', createdAt: '2026-08-18'
@@ -740,7 +740,7 @@ function layoutShangyuePlantTag() {
 function layoutShangyueDeskPlate() {
   const doc = createDocument(40, 30);
   doc.elements = [
-    text(doc, { x: 2.0, y: 2.0, width: 13.2, height: 3.2, text: '商跃工位', fontSize: 2.2, bold: true, reverse: true, align: 'center' }),
+    text(doc, { x: 2.0, y: 2.0, width: 13.2, height: 3.2, text: '员工', fontSize: 2.2, bold: true, reverse: true, align: 'center' }),
     text(doc, { x: 2.0, y: 6.0, width: 23.2, height: 5.0, text: '赵敏', fontSize: 4.4, bold: true }),
     text(doc, { x: 2.0, y: 11.4, width: 23.2, height: 2.8, text: '产品设计', fontSize: 2.4 }),
     text(doc, { x: 2.0, y: 14.6, width: 23.2, height: 2.8, text: '分机 8806', fontSize: 2.2 }),
@@ -773,7 +773,7 @@ function layoutShangyueCareTag() {
     rect(doc, { x: 2.0, y: 2.0, width: 10.0, height: 26.0, filled: true, shapeKind: 'rounded', lineWidth: 0.2, locked: true }),
     text(doc, { x: 2.6, y: 3.0, width: 8.8, height: 5.0, text: '100%', fontSize: 3.2, bold: true, reverse: true, align: 'center' }),
     text(doc, { x: 2.6, y: 8.2, width: 8.8, height: 3.0, text: '纯棉', fontSize: 2.2, bold: true, reverse: true, align: 'center' }),
-    text(doc, { x: 2.6, y: 12.8, width: 8.8, height: 4.8, text: '商跃\n面料卡', fontSize: 2.2, bold: true, reverse: true, align: 'center' }),
+    text(doc, { x: 2.6, y: 12.8, width: 8.8, height: 4.8, text: '亲肤\n透气', fontSize: 2.2, bold: true, reverse: true, align: 'center' }),
     text(doc, { x: 2.6, y: 23.4, width: 8.8, height: 3.0, text: '款 2601', fontSize: 2.2, reverse: true, align: 'center' }),
     text(doc, { x: 13.4, y: 2.0, width: 24.6, height: 4.0, text: '洗护参数', fontSize: 3.2, bold: true }),
     line(doc, { x: 13.4, y: 6.4, width: 24.6, height: 0.4, lineWidth: 0.3, locked: true }),
@@ -915,7 +915,7 @@ function layoutBusinessCard() {
     }),
     text(doc, {
       x: 2.5, y: 8, width: 30, height: 3,
-      text: '产品经理 · 商跃团队', fontSize: 2.5
+      text: '产品经理 · 云帆团队', fontSize: 2.5
     }),
     line(doc, { x: 2.5, y: 12, width: 28, height: 0.6, lineWidth: 0.3 }),
     text(doc, {
@@ -948,7 +948,7 @@ function layoutClothing() {
     }),
     text(doc, {
       x: 2, y: 6.5, width: 36, height: 3,
-      text: '款号：SY-2601', fontSize: 2.4, align: 'center'
+      text: '款号：NZ-2601', fontSize: 2.4, align: 'center'
     }),
     text(doc, { x: 2, y: 10.2, width: 17.5, height: 3, text: '颜色：靛蓝', fontSize: 2.3 }),
     text(doc, {
@@ -1055,7 +1055,7 @@ function layoutPromo() {
     }),
     text(doc, {
       x: 17, y: 1.8, width: 31, height: 5,
-      text: '商跃 · 牛肉三明治', fontSize: 3.2, bold: true
+      text: '招牌 · 牛肉三明治', fontSize: 3.2, bold: true
     }),
     text(doc, {
       x: 2, y: 9, width: 28, height: 7,
@@ -1410,14 +1410,14 @@ function layoutJewelryMini() {
       x: 1.5, y: 1, width: 27, height: 3.5,
       text: '18K 金项链', fontSize: 2.8, bold: true, align: 'center'
     }),
-    text(doc, { x: 1.5, y: 5, width: 27, height: 2.5, text: '编号 SY-2201  2.1g', fontSize: 2.1, align: 'center' }),
+    text(doc, { x: 1.5, y: 5, width: 27, height: 2.5, text: '编号 ZB-2201  2.1g', fontSize: 2.1, align: 'center' }),
     text(doc, {
       x: 1.5, y: 8.5, width: 27, height: 3.5,
       text: '¥3,280', fontSize: 3.4, bold: true, align: 'center'
     }),
     barcode(doc, {
       x: 3, y: 13, width: 24, height: 5.5,
-      value: 'JC2201', format: 'code128', showText: false
+      value: 'ZB2201', format: 'code128', showText: false
     })
   ];
   return finish(doc, '珠宝小吊牌', { industry: '零售', stock: '30×20' });
@@ -1437,7 +1437,7 @@ function layoutGarmentCare() {
     text(doc, { x: 2.5, y: 19, width: 35, height: 3, text: '低温熨烫 · 悬挂晾干', fontSize: 2.3 }),
     text(doc, {
       x: 2.5, y: 24, width: 35, height: 3.5,
-      text: '款号 SY-2601', fontSize: 2.4, bold: true
+      text: '款号 NZ-2601', fontSize: 2.4, bold: true
     })
   ];
   return finish(doc, '服装洗涤说明', { industry: '零售', stock: '40×30' });

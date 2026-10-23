@@ -46,11 +46,36 @@ test('selection handles keep a 44px-class touch target outside the element', () 
   );
   assert.equal(
     selectionHandleModeAtPoint(element, { x: 22, y: 14 }, document, canvasRect, 'touch'),
+    'scale'
+  );
+  // The rotate handle floats 26 px (2.6 mm here) above the top centre.
+  assert.equal(
+    selectionHandleModeAtPoint(element, { x: 15, y: 5.4 }, document, canvasRect, 'touch'),
+    'rotate'
+  );
+  assert.equal(
+    selectionHandleModeAtPoint(element, { x: 16.5, y: 4.5 }, document, canvasRect, 'touch'),
     'rotate'
   );
   assert.equal(
     selectionHandleModeAtPoint(element, { x: 19.1, y: 10 }, document, canvasRect, 'touch'),
     'move'
+  );
+});
+
+test('the rotate handle drops below an element that touches the top of the label', () => {
+  const element = { x: 10, y: 0.5, width: 10, height: 4, rotation: 0, locked: false };
+  const document = { widthMm: 40, heightMm: 30 };
+  const canvasRect = { width: 400, height: 300 };
+  // Above would be off the label, so the handle sits 2.6 mm under the box,
+  // and it wins over the bottom stretch handle it overlaps.
+  assert.equal(
+    selectionHandleModeAtPoint(element, { x: 15, y: 7.1 }, document, canvasRect, 'touch'),
+    'rotate'
+  );
+  assert.equal(
+    selectionHandleModeAtPoint(element, { x: 15, y: 4.6 }, document, canvasRect, 'touch'),
+    'resize-s'
   );
 });
 

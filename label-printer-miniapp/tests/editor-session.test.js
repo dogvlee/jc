@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { EditorSession } = require('../miniprogram/services/editor-session');
 const { Repository, KEYS } = require('../miniprogram/services/repository');
 const { createDocument, createElement } = require('../miniprogram/core/document');
+const { getProfile } = require('../miniprogram/core/profiles');
 
 function fixture() {
   const values = new Map();
@@ -94,9 +95,102 @@ test('failed discard retains the durable draft for retry', () => {
 
 test('fresh direct editor access starts with empty paper matching the default device', () => {
   const { session, repository } = fixture();
-  const state = session.open(repository.getSettings());
-  assert.equal(state.document.widthMm, 40);
-  assert.equal(state.document.heightMm, 12);
+  const settings = repository.getSettings();
+  const state = session.open(settings);
+  assert.equal(settings.defaultProfileId, 'escpos-58');
+  assert.deepEqual([state.document.widthMm, state.document.heightMm], [50, 30]);
+  assert.deepEqual([state.document.widthMm, state.document.heightMm], getProfile(settings.defaultProfileId).defaultSize);
   assert.equal(state.document.elements.length, 0);
   assert.equal(state.dirtySinceSave, false);
+});
+
+function batchRows() {
+  return [
+    { id: 'r1', name: '苹果', code: '6901234567892', price: '9.9', date: '' },
+    { id: 'r2', name: '香蕉', code: '6901234567885', price: '4.5', date: '' }
+  ];
+}
+
+test('a staged batch survives the handoff, autosaves and a cold restart', () => {
+  const { api, session, repository } = fixture();
+  const staged = session.stage(label('批量价签'), '', { batch: { rows: batchRows(), source: 'data' } });
+  assert.equal(staged.batch.rows.length, 2);
+  assert.equal(repository.getEditorDraft().batch.source, 'data');
+  const editor = new EditorSession(new Repository(api));
+  const state = editor.open({});
+  assert.deepEqual(state.batch.rows.map((row) => row.name), ['苹果', '香蕉']);
+  assert.equal(repository.getEditorDraft(), null);
+  assert.equal(repository.getEditorAutosave().batch.rows.length, 2);
+  editor.checkpoint(label('改过的价签'), '', true);
+  const restarted = new EditorSession(new Repository(api));
+  assert.equal(restarted.recoverable().batch.rows.length, 2);
+  const reopened = restarted.open({});
+  assert.equal(reopened.document.name, '改过的价签');
+  assert.equal(reopened.batch.rows[1].name, '香蕉');
+});
+
+test('checkpoints keep batch mode until the editor replaces or leaves it', () => {
+  const { api, session } = fixture();
+  session.stage(label('批量'), '', { batch: { rows: batchRows() } });
+  session.open({});
+  assert.equal(session.checkpoint(label('一'), '', true).batch.rows.length, 2);
+  const replaced = session.checkpoint(label('二'), '', true, { rows: batchRows().slice(0, 1), source: 'data' });
+  assert.equal(replaced.batch.rows.length, 1);
+  assert.equal(session.checkpoint(label('三'), '', true).batch.rows.length, 1);
+  const unopened = new EditorSession(new Repository(api));
+  assert.equal(unopened.checkpoint(label('四'), '', true).batch.rows.length, 1, 'a session that never opened keeps the stored batch');
+  assert.equal(session.checkpoint(label('五'), '', true, null).batch, null);
+  assert.equal(session.checkpoint(label('六'), '', true).batch, null);
+});
+
+test('clearBatch leaves batch mode without touching the label', () => {
+  const { session, repository } = fixture();
+  session.stage(label('批量'), '', { batch: { rows: batchRows() } });
+  session.open({});
+  session.checkpoint(label('保留的修改'), 'p1', true);
+  session.clearBatch();
+  const autosave = repository.getEditorAutosave();
+  assert.equal(autosave.batch, null);
+  assert.equal(autosave.document.name, '保留的修改');
+  assert.equal(autosave.projectId, 'p1');
+  assert.equal(autosave.dirtySinceSave, true);
+  assert.equal(session.checkpoint(label('之后'), 'p1', true).batch, null);
+  assert.doesNotThrow(() => fixture().session.clearBatch());
+});
+
+test('resuming and saving a batch draft keep its rows until discarded', () => {
+  const { session, repository } = fixture();
+  session.checkpoint(label('批量草稿'), '', true, { rows: batchRows(), source: 'data' });
+  assert.equal(session.resume().batch.rows.length, 2);
+  assert.equal(repository.getEditorDraft().batch.rows.length, 2);
+  session.saveRecovery();
+  assert.equal(repository.getProjects()[0].document.name, '批量草稿');
+  assert.equal(repository.getEditorAutosave().batch.rows.length, 2);
+  session.discard();
+  assert.equal(session.checkpoint(label('新的'), '', true).batch, null);
+});
+
+test('labels opened without a batch behave as before', () => {
+  const { session, repository } = fixture();
+  assert.equal(session.stage(label('单张'), '').batch, null);
+  assert.equal(session.open({}).batch, null);
+  assert.equal(session.checkpoint(label('单张'), '', true).batch, null);
+  assert.equal(session.resume().batch, null);
+  const fresh = fixture();
+  assert.equal(fresh.session.open(fresh.repository.getSettings()).batch, null);
+  assert.equal(repository.getEditorDraft().batch, null);
+});
+
+test('leaving batch mode sticks even when that autosave write fails', () => {
+  const { api, session } = fixture();
+  session.stage(label('批量'), '', { batch: { rows: batchRows() } });
+  session.open({});
+  const set = api.setStorageSync;
+  api.setStorageSync = (key, value) => {
+    if (key === KEYS.editorAutosave) throw new Error('quota');
+    set(key, value);
+  };
+  assert.throws(() => session.checkpoint(label('一'), '', true, null), { code: 'STORAGE_WRITE_FAILED' });
+  api.setStorageSync = set;
+  assert.equal(session.checkpoint(label('二'), '', true).batch, null);
 });

@@ -41,8 +41,8 @@ app.js
   └─ PrinterConnectionManager
        ├─ BleSession ────────── wx BLE adapter / GATT / MTU
        └─ PrinterClient
-            ├─ image-encoder
-            ├─ print-plan
+            ├─ escpos（ESC/POS 指令与光栅）
+            ├─ image-encoder（黑白判断）
             └─ protocol
 
 pages/home
@@ -201,7 +201,7 @@ pages/editor
 | 模板或文档尺寸损坏 | `normalizeDocument` 返回 `null` 或保存抛错 | 损坏条目在读取集合时被过滤 |
 | 用户图片加载失败 | 打印前 `ensureImagesReady` 阻止发送 | 原稿不被删除；用户需重新选择图片 |
 | 扫码取消/无权限/内容不支持 | 分别返回 `SCAN_CANCELLED`、`SCAN_FAILED` 或领域校验错误 | 不创建文档、不修改原条码元素 |
-| 型号未知或 B21 Pro | profile 不确认，打印预检阻止 | 仍可编辑，不向未知任务族发送打印数据 |
+| 型号未知或 B21 Pro | 按设备记住的选择、名称规则、名称族或能放下标签的 profile 自动选用，不阻断（ADR-013） | 可能输出错位或空白；用户在“打印机型号”改选后重打，改选按设备记住 |
 | 标签超过打印头 | `evaluatePrintability` 返回阻断与可能的替代 profile | 原稿尺寸不变 |
 | 蓝牙关闭 | 清缓存、使协议 ready 失效、发布 `adapter-off` | 蓝牙恢复后可尝试重建连接 |
 | `already connect` 后发现失败 | 标记 `retryFresh`，硬关闭后只重建一次 | 不把未发现特征的 OS 链路当 ready |
@@ -229,7 +229,7 @@ pages/editor
 
 ### 9.4 协议与 profile 分离
 
-`protocol.js` 只处理帧；`image-encoder.js` 处理点阵行；`print-plan.js` 处理任务族时序；`profiles.js` 决定 DPI、打印头、方向和任务族。新增硬件不能只加名称正则，必须明确型号 ID、任务族、打印头和完成条件。
+`escpos.js` 生成 ESC/POS 指令和分条光栅；`image-encoder.js` 只判断每个点打黑还是打白；`profiles.js` 决定 DPI、打印头宽度和最大纸宽（58mm / 80mm，ADR-015）。精臣（NIIMBOT）协议代码已删除。
 
 ### 9.5 恢复连接不恢复业务命令
 

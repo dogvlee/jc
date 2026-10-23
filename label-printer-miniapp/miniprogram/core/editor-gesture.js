@@ -47,7 +47,8 @@ function longPressSelection(baseIds, pressId) {
 /**
  * Keep the mobile resize target large without letting its inward half cover the
  * selected element's content. The target is a full 44 px square for touch,
- * shifted outside the relevant edge; mouse gets a precise 28 px target.
+ * shifted outside the relevant edge; mouse gets a precise 28 px target. The
+ * rotate handle floats clear of the box, so its target is a plain circle.
  */
 function handleHitRegion(name, deltaX, deltaY, pointerType) {
   const coarse = pointerType === 'touch' || pointerType === 'pen';
@@ -60,10 +61,45 @@ function handleHitRegion(name, deltaX, deltaY, pointerType) {
   if (name === 's') {
     return Math.abs(deltaX) <= radius && deltaY >= -inward && deltaY <= outward;
   }
-  if (name === 'rotate') {
+  if (name === 'se') {
     return deltaX >= -inward && deltaX <= outward && deltaY >= -inward && deltaY <= outward;
   }
+  if (name === 'rotate') {
+    return deltaX * deltaX + deltaY * deltaY <= radius * radius;
+  }
   return false;
+}
+
+// The rotate handle floats this far (CSS px) from the selection box.
+const ROTATE_HANDLE_GAP = 26;
+
+/**
+ * Where the rotate handle sits, in millimetres from the element centre in the
+ * element's own (rotated) frame: above the top-centre of the selection box
+ * `box` ({ left, top, width, height }, same frame), below its bottom when
+ * above would leave the label, or on its top-right corner when neither fits
+ * (a box as tall as the label). `gapMm` is ROTATE_HANDLE_GAP in millimetres.
+ * The renderer draws it and the hit test finds it with this same rule.
+ */
+function rotateHandleLocal(element, box, gapMm, labelWidthMm, labelHeightMm) {
+  const width = Math.max(0.1, Number(element && element.width) || 0.1);
+  const height = Math.max(0.1, Number(element && element.height) || 0.1);
+  const angle = (Number(element && element.rotation) || 0) * Math.PI / 180;
+  const cosine = Math.cos(angle);
+  const sine = Math.sin(angle);
+  const centerX = (Number(element && element.x) || 0) + width / 2;
+  const centerY = (Number(element && element.y) || 0) + height / 2;
+  const onLabel = (point) => {
+    const x = centerX + point.x * cosine - point.y * sine;
+    const y = centerY + point.x * sine + point.y * cosine;
+    return x >= 0 && x <= labelWidthMm && y >= 0 && y <= labelHeightMm;
+  };
+  const middle = box.left + box.width / 2;
+  const above = { x: middle, y: box.top - gapMm };
+  if (onLabel(above)) return above;
+  const below = { x: middle, y: box.top + box.height + gapMm };
+  if (onLabel(below)) return below;
+  return { x: box.left + box.width, y: box.top };
 }
 
 /**
@@ -109,9 +145,11 @@ function nextSelectionId(candidateIds, selectedId) {
 
 module.exports = {
   CHROME,
+  ROTATE_HANDLE_GAP,
   handleHitRegion,
   longPressSelection,
   nextSelectionId,
+  rotateHandleLocal,
   selectionHitDecision,
   selectionTargetSizeMm
 };

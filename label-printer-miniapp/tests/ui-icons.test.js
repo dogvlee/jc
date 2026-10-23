@@ -15,8 +15,19 @@ function definedIcons() {
   return new Set([...read(iconsPath).matchAll(/\.icon-([a-z0-9-]+)\s*\{/g)].map((match) => match[1]));
 }
 
+function componentSources(dir = path.join(mini, 'components')) {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const absolute = path.join(dir, entry.name);
+    if (entry.isDirectory()) return componentSources(absolute);
+    return /\.(?:wxml|js)$/.test(entry.name) ? [path.relative(mini, absolute)] : [];
+  });
+}
+
 function usedIcons() {
-  const sources = ['pages/home/index.wxml', 'pages/editor/index.wxml', 'pages/editor/index.js', 'pages/home/index.js']
+  const declaredPages = JSON.parse(fs.readFileSync(path.join(mini, 'app.json'), 'utf8')).pages;
+  const pages = declaredPages.flatMap((page) => [`${page}.wxml`, `${page}.js`]);
+  const sources = [...pages, ...componentSources()]
     .map((file) => fs.readFileSync(path.join(mini, file), 'utf8'));
   const used = new Set();
   for (const source of sources) {
@@ -50,7 +61,7 @@ test('the freshness check ignores CRLF from a Windows checkout', async () => {
   }
 });
 
-test('every icon class used by pages is defined, and every defined icon is used', () => {
+test('every icon class used by pages and components is defined, and every defined icon is used', () => {
   const defined = definedIcons();
   const used = usedIcons();
   const missing = [...used].filter((name) => !defined.has(name));
@@ -68,7 +79,7 @@ test('icons are inline masks only, never remote images', () => {
 
 test('legacy unicode glyph icons are gone from pages', () => {
   const glyphs = /[⌁▦▧♙⌂⌗⚙↻⇧⇩▣▰▱↶↷☺◷▥▤―⌕＋›✓]/u;
-  for (const file of ['pages/home/index.wxml', 'pages/editor/index.wxml']) {
+  for (const file of ['pages/home/index.wxml', 'pages/editor/index.wxml', ...componentSources().filter((name) => name.endsWith('.wxml'))]) {
     const markup = fs.readFileSync(path.join(mini, file), 'utf8');
     const hit = markup.match(glyphs);
     assert.ok(!hit, `${file} 仍含符号图标 ${hit && hit[0]}`);

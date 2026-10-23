@@ -1,7 +1,7 @@
 ﻿const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { clampElement, createDocument, createElement, hitTest, hitTestAll, placeNewElement } = require('../miniprogram/core/document');
+const { clampElement, createDocument, createElement, fitImageToPicture, hitTest, hitTestAll, placeNewElement } = require('../miniprogram/core/document');
 
 test('hitTest follows element rotation instead of using an unrotated box', () => {
   const document = {
@@ -83,4 +83,56 @@ test('placeNewElement keeps new items visible and avoids an existing default tex
   assert.ok(date.x >= 0 && date.y >= 0);
   assert.ok(date.x + date.width <= document.widthMm);
   assert.ok(date.y + date.height <= document.heightMm);
+});
+
+test('a new picture frame takes the photo proportions and up to 60% of the label', () => {
+  const label = createDocument(40, 30);
+  const wide = fitImageToPicture(createElement('image', label), 1600, 1200, label, false);
+  assert.deepEqual([wide.width, wide.height], [24, 18]);
+  const tall = fitImageToPicture(createElement('image', label), 900, 1600, label, false);
+  assert.equal(tall.height, 18);
+  assert.ok(Math.abs(tall.width / tall.height - 900 / 1600) < 0.01);
+  // A tiny label never gets a frame larger than the label minus a margin.
+  const small = createDocument(20, 10);
+  const squeezed = fitImageToPicture(createElement('image', small), 1000, 1000, small, false);
+  assert.ok(squeezed.width <= 18 && squeezed.height <= 8);
+  // Unknown proportions keep the default frame.
+  const unknown = fitImageToPicture(createElement('image', label), 0, 0, label, false);
+  assert.deepEqual([unknown.width, unknown.height], [15, 15]);
+});
+
+test('a replaced picture fits inside its old frame around the same centre', () => {
+  const label = createDocument(40, 30);
+  const frame = Object.assign(createElement('image', label), { x: 5, y: 5, width: 20, height: 10 });
+  fitImageToPicture(frame, 500, 500, label, true);
+  assert.deepEqual([frame.x, frame.y, frame.width, frame.height], [10, 5, 10, 10]);
+});
+
+test('clamping an element that already fits leaves every value exactly as it was', () => {
+  const label = createDocument(50, 30);
+  // Values whose centre lands off the binary grid are where a round trip drifts.
+  const boxes = [
+    [3.3, 2.7, 17.7, 9.9],
+    [0.1, 0.2, 12.34, 7.89],
+    [11.11, 6.66, 20.02, 12.5],
+    [7.77, 3.33, 9.99, 4.44]
+  ];
+  boxes.forEach(([x, y, width, height], index) => {
+    const element = Object.assign(createElement('rect', label), { id: `box-${index}`, x, y, width, height });
+    const before = JSON.stringify(element);
+    clampElement(element, label);
+    // An element that fits must not move by a floating-point hair: commit()
+    // compares before/after, and a hair becomes a phantom undo step.
+    assert.equal(JSON.stringify(element), before, `in-bounds box ${index} stayed put`);
+    clampElement(element, label);
+    assert.equal(JSON.stringify(element), before, `second clamp of box ${index} is identical`);
+  });
+});
+
+test('clamping still pulls an element that hangs off the label back inside', () => {
+  const label = createDocument(50, 30);
+  const element = Object.assign(createElement('rect', label), { x: 44, y: 0, width: 20, height: 6 });
+  clampElement(element, label);
+  assert.ok(element.x + element.width <= 50 + 1e-6);
+  assert.ok(Math.abs(element.x - 30) < 1e-6, 'moved flush against the right edge');
 });

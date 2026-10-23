@@ -5,7 +5,7 @@ const path = require('node:path');
 
 const mini = path.join(__dirname, '..', 'miniprogram');
 const read = (file) => fs.readFileSync(path.join(mini, file), 'utf8');
-const STYLE_FILES = ['app.wxss', 'pages/home/index.wxss', 'pages/editor/index.wxss'];
+const STYLE_FILES = ['app.wxss', 'pages/home/index.wxss', 'pages/editor/index.wxss', 'pages/login/index.wxss', 'pages/legal/index.wxss'];
 // Reds used before the design-token refresh; the brand primary is now #E02D26.
 const LEGACY_REDS = /#(?:f44336|f4433b|ef433c|e53935|f13932|ff5b53|ff4b43|ee3e37|f24840|e23c31|e43f34|e54438)\b/i;
 

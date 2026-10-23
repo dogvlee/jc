@@ -6,7 +6,7 @@ const path = require('node:path');
 const { createDocument, createElement } = require('../miniprogram/core/document');
 const { listFontCatalog } = require('../miniprogram/core/font-family');
 const { createImageCacheRegistry } = require('../miniprogram/core/image-cache');
-const { getProfile } = require('../miniprogram/core/profiles');
+const { PROFILES, getProfile } = require('../miniprogram/core/profiles');
 
 let pageDefinition = null;
 global.Page = (definition) => { pageDefinition = definition; };
@@ -56,15 +56,45 @@ test('editor template panel keeps base layouts available with accurate source la
     },
     setData(patch) { Object.assign(this.data, patch); }
   });
-  editor.loadTemplates();
+  editor.loadTemplates({ widthMm: 50, heightMm: 30, elements: [] });
   assert.equal(editor.data.templates.filter((item) => item.source === 'builtin-base').length, 0);
   assert.equal(editor.data.templates.filter((item) => item.source === 'shangyue-original').length, 22);
   assert.equal(editor.data.templates.filter((item) => item.source === 'shangyue-authorized-redesign').length, 0);
   assert.ok(editor.data.templates.some((item) => item.id === 'mine' && item.source === 'user'));
-  assert.ok(editor.data.templates.every((item) => item.source === 'shangyue-original' || item.source === 'user'));
+  assert.ok(editor.data.templates.every((item) => ['shangyue-original', 'shangyue-curated', 'user'].includes(item.source)));
   assert.equal(editor.data.templateNames.some((name) => name.includes('· 内置基础')), false);
   assert.ok(editor.data.templateNames.some((name) => name.includes('· 商跃原创')));
   assert.equal(editor.data.templateNames.some((name) => name.includes('授权改编')), false);
+  // A 50×30 label lists the 50×30 scene templates first, so applying one keeps the paper.
+  const scenes = editor.data.templates.filter((item) => item.source === 'shangyue-curated');
+  assert.ok(scenes.length >= 50);
+  assert.equal(editor.data.templates[0].source, 'shangyue-curated');
+  assert.ok(editor.data.templateNames[0].endsWith('（50×30）'));
+  assert.ok(editor.data.templates.every((item) => !item.document || item.source === 'user'), 'built-in layouts are built when chosen');
+});
+
+test('a scene template chosen in the editor keeps the label size', (t) => {
+  global.wx = { showModal(options) { options.success({ confirm: true }); }, showToast() {} };
+  t.after(() => { delete global.wx; });
+  const document = createDocument(50, 30);
+  const editor = Object.assign({}, pageDefinition, {
+    data: {},
+    document,
+    selectedId: '',
+    selectedIds: [],
+    undoStack: [],
+    redoStack: [],
+    repository: { getUserTemplates: () => [] },
+    setData(patch, callback) { Object.assign(this.data, patch); if (callback) callback(); },
+    syncPageData(callback) { if (callback) callback(); },
+    persistDocument() { return true; },
+    refreshCanvas() {}
+  });
+  editor.loadTemplates();
+  editor.loadTemplate({ detail: { value: 0 } });
+  assert.deepEqual([editor.document.widthMm, editor.document.heightMm], [50, 30]);
+  assert.ok(editor.document.elements.length >= 2);
+  assert.equal(editor.document.name, editor.data.templates[0].name);
 });
 
 test('print preflight identifies the exact low-density code and exposes repair controls', () => {
@@ -76,17 +106,16 @@ test('print preflight identifies the exact low-density code and exposes repair c
   document.elements = [element];
   const editor = Object.assign({}, pageDefinition, {
     document,
-    profile: getProfile('b1'),
-    profileConfirmed: true
+    profile: getProfile('escpos-58')
   });
   const block = editor.evaluatePrintBlock();
   assert.equal(block.kind, 'element');
   assert.equal(block.errorCode, 'CODE_MODULE_DENSITY_LOW');
   assert.equal(block.elementId, 'low-density');
-  assert.match(block.message, /2 打印点\/模块/);
+  assert.match(block.message, /条码太密.*拉宽到至少 [\d.]+ mm/);
 
   const wxml = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'editor', 'index.wxml'), 'utf8');
-  assert.match(wxml, /bindtap="fixCodeSize">按最小清晰度放大/);
+  assert.match(wxml, /bindtap="fixCodeSize">自动放大到能扫/);
   assert.match(wxml, /bindtap="focusPrintElement">定位并修改该元素/);
 });
 
@@ -98,7 +127,7 @@ test('editor font picker exposes the open-source CJK catalog', () => {
   assert.match(wxml, /wx:for="\{\{fontCatalog\}\}"/);
   assert.match(wxml, /bindtap="setFontFamily"/);
   assert.match(wxml, /\{\{fontCatalogNote\}\}/);
-  assert.match(pageDefinition.data.fontCatalogNote, /23 款字体 · 20 款 OFL/);
+  assert.equal(pageDefinition.data.fontCatalogNote, '共 23 款字体，其中 20 款第一次用时要联网下载');
   assert.ok(catalog.some((font) => font.id === 'sy-heiti' && font.license === 'OFL-1.1'));
   assert.ok(catalog.every((font) => font.license === 'system' || font.license === 'OFL-1.1'));
 
@@ -208,8 +237,7 @@ test('explicit editor text placeholders and required sample codes cannot print',
   document.elements = [text];
   const editor = Object.assign({}, pageDefinition, {
     document,
-    profile: getProfile('b1'),
-    profileConfirmed: true
+    profile: getProfile('escpos-58')
   });
   assert.equal(editor.evaluatePrintBlock().kind, 'placeholder');
 
@@ -282,21 +310,29 @@ test('editor places repeated new elements instead of stacking them at one defaul
   );
 });
 
-test('candidate model mappings require a manual profile confirmation before print', () => {
+test('a printer named for its paper width prints right away with that model', () => {
+  const saved = [];
   const editor = Object.assign({}, pageDefinition, {
     data: { profileIndex: 0 },
-    repository: { saveSettings() {} },
+    profile: getProfile('escpos-58'),
+    repository: { saveSettings(patch) { saved.push(patch); } },
     manualProfileConfirmed: false,
     setData(patch) { Object.assign(this.data, patch); }
   });
-  const guessed = editor.applyConnectionResult({ modelId: 2320, name: 'D110_M', protocolVersion: 1 });
-  assert.equal(guessed.id, 'd110');
-  assert.equal(editor.candidateProfileVerificationRequired, true);
-  assert.equal(editor.profileConfirmed, false);
-
-  editor.manualProfileConfirmed = true;
-  editor.applyConnectionResult({ modelId: 2320, name: 'D110_M', protocolVersion: 1 });
-  assert.equal(editor.profileConfirmed, true);
+  const applied = editor.applyConnectionResult({ deviceId: 'syd-2', name: 'SYD-80' });
+  assert.equal(applied.id, 'escpos-80');
+  assert.equal(editor.profile.id, 'escpos-80');
+  assert.equal(editor.profileSource, 'auto');
+  assert.equal(editor.data.profileIndex, PROFILES.indexOf(getProfile('escpos-80')));
+  assert.equal(editor.data.densityAdjustable, false, 'the printer keeps its own density');
+  assert.deepEqual(saved, [{ defaultProfileId: 'escpos-80' }]);
+  // 60 mm paper only an 80 mm printer takes.
+  const documentValue = createDocument(60, 40);
+  const text = createElement('text', documentValue);
+  Object.assign(text, { x: 4, y: 3, width: 40, height: 8, text: '苹果' });
+  documentValue.elements = [text];
+  assert.equal(editor.evaluatePrintBlock(documentValue, getProfile('escpos-58')).kind, 'size');
+  assert.equal(editor.evaluatePrintBlock(documentValue, editor.profile), null, 'no model question before printing');
 });
 
 test('a print-history storage failure never replaces the real print outcome', () => {
@@ -306,24 +342,32 @@ test('a print-history storage failure never replaces the real print outcome', ()
   assert.equal(editor.recordPrintSafely({ result: 'success' }), false);
 });
 
-test('closing the device picker ignores a late BLE scan callback', async () => {
-  let deliver;
+test('the printer button opens the shared picker unless a label is printing', () => {
   const editor = Object.assign({}, pageDefinition, {
     pageActive: true,
-    devicePickerGeneration: 0,
-    data: { connectionState: 'disconnected', printing: false, showDevices: false, devices: [] },
-    session: {
-      scan(callback) { deliver = callback; return Promise.resolve(); },
-      stopScan() { return Promise.resolve(); }
-    },
+    data: { connectionState: 'connecting', printing: false, showDevices: false },
     setData(patch) { Object.assign(this.data, patch); }
   });
   editor.openDevices();
+  assert.equal(editor.data.showDevices, true, 'a connection in progress never blocks the picker');
+
+  editor.returnToPrintAfterConnect = true;
   editor.closeDevices();
-  deliver([{ deviceId: 'late-device' }]);
-  await Promise.resolve();
-  assert.deepEqual(editor.data.devices, []);
   assert.equal(editor.data.showDevices, false);
+  assert.equal(editor.returnToPrintAfterConnect, false);
+
+  editor.data.printing = true;
+  editor.openDevices();
+  assert.equal(editor.data.showDevices, false);
+
+  const wxml = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'editor', 'index.wxml'), 'utf8');
+  assert.match(wxml, /<printer-picker show="\{\{showDevices\}\}" bind:close="closeDevices" bind:connected="onPrinterConnected" \/>/);
+  assert.doesNotMatch(wxml, /device-sheet|connectDevice|disconnectDevice|forgetDevice|diagnoseConnection/);
+  const json = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'editor', 'index.json'), 'utf8'));
+  assert.equal(json.usingComponents['printer-picker'], '/components/printer-picker/index');
+  for (const removed of ['connectDevice', 'disconnectDevice', 'forgetDevice', 'diagnoseConnection']) {
+    assert.equal(pageDefinition[removed], undefined, `${removed} 已由打印机选择组件接管`);
+  }
 });
 
 test('cancelling while connection validation is pending never starts a print', async () => {
@@ -342,14 +386,14 @@ test('cancelling while connection validation is pending never starts a print', a
       density: 3,
       threshold: 180,
       labelTypeIndex: 0,
-      connectedDevice: 'D110'
+      connectedDevice: 'SYD-58'
     },
     context: {},
     canvasSize: { width: 100, height: 60 },
     document: createDocument(40, 30),
-    profile: getProfile('d110'),
+    profile: getProfile('escpos-58'),
     connectionManager: {
-      getSavedDevice() { return { deviceId: 'printer-1', name: 'D110' }; },
+      getSavedDevice() { return { deviceId: 'printer-1', name: 'SYD-58' }; },
       ensureReady() { return connectionGate; },
       touch() {}
     },
@@ -370,7 +414,7 @@ test('cancelling while connection validation is pending never starts a print', a
   const printing = editor.startPrint();
   await new Promise((resolve) => setImmediate(resolve));
   await editor.cancelPrint();
-  releaseConnection({ deviceId: 'printer-1', name: 'D110' });
+  releaseConnection({ deviceId: 'printer-1', name: 'SYD-58' });
   await printing;
 
   assert.equal(printCalls, 0);
@@ -616,6 +660,7 @@ test('print copies accept direct input and clamp to the valid range', () => {
   editor.setCopiesInput({ detail: { value: '' } });
   assert.equal(editor.data.copies, 12);
   const wxml = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'editor', 'index.wxml'), 'utf8');
+  assert.match(wxml, /class="copies-input"[^>]*bindinput="setCopiesInput"/, 'typing updates the count right away');
   assert.match(wxml, /class="copies-input"[^>]*bindblur="setCopiesInput"/);
 });
 
@@ -645,14 +690,14 @@ test('a scanned value too dense for its barcode offers to enlarge it straight aw
   const editor = Object.assign({}, pageDefinition, {
     data: { codeScanning: false },
     document,
-    profile: getProfile('d110'),
+    profile: getProfile('escpos-58'),
     selectedId: barcode.id,
     selectedIds: [barcode.id],
     setData(patch) { Object.assign(this.data, patch); },
     setSelection() {},
     commit(mutator) { mutator(this.document); }
   });
-  assert.throws(() => validateCodeElement(Object.assign({}, barcode, { value: 'SN-000123' }), 203), /清晰度不足/);
+  assert.throws(() => validateCodeElement(Object.assign({}, barcode, { value: 'SN-000123' }), 203), /条码太密/);
   await editor.scanSelectedCode();
   assert.equal(barcode.value, 'SN-000123');
   assert.equal(modal.title, '条码已填入');
@@ -677,7 +722,7 @@ test('a scanned value that cannot fit the label says so instead of offering a re
   const editor = Object.assign({}, pageDefinition, {
     data: { codeScanning: false },
     document,
-    profile: getProfile('d110'),
+    profile: getProfile('escpos-58'),
     selectedId: barcode.id,
     selectedIds: [barcode.id],
     setData(patch) { Object.assign(this.data, patch); },

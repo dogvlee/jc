@@ -141,10 +141,10 @@ function createElement(type, document) {
       offsetDays: 0,
       offsetHours: 0,
       showTime: true,
-      showSeconds: true,
+      showSeconds: false,
       expireMode: 'preset', // preset | custom
       expirePresetHours: 24,
-      format: 'YYYY年MM月DD日 HH:mm',
+      format: 'YYYY年MM月DD日',
       fixedValue: '',
       fontSize: 3.2,
       bold: false,
@@ -340,6 +340,10 @@ function cloneDocument(document) {
   return JSON.parse(JSON.stringify(document));
 }
 
+// Far below a printed dot (0.1 mm at 203 dpi), far above the 1e-15 drift of a
+// centre round trip.
+const CLAMP_EPSILON = 1e-9;
+
 function clampElement(element, document) {
   const sourceWidth = Math.max(0.1, Number(element.width) || 1);
   const sourceHeight = Math.max(0.1, Number(element.height) || 1);
@@ -352,8 +356,14 @@ function clampElement(element, document) {
   const projectedWidth = cosine * sourceWidth + sine * sourceHeight;
   const projectedHeight = sine * sourceWidth + cosine * sourceHeight;
   const scale = Math.min(1, document.widthMm / projectedWidth, document.heightMm / projectedHeight);
-  element.width = sourceWidth * scale;
-  element.height = sourceHeight * scale;
+  const nextWidth = sourceWidth * scale;
+  const nextHeight = sourceHeight * scale;
+  // Centre to position and back is not exact in floating point, so an element
+  // that already fits keeps every value: otherwise a tap that changes nothing
+  // would still look like an edit and add an undo step.
+  const unchanged = (next, current) => Math.abs(next - current) <= CLAMP_EPSILON;
+  if (!unchanged(nextWidth, sourceWidth)) element.width = nextWidth;
+  if (!unchanged(nextHeight, sourceHeight)) element.height = nextHeight;
   const halfExtentX = (cosine * element.width + sine * element.height) / 2;
   const halfExtentY = (sine * element.width + cosine * element.height) / 2;
   const centerX = halfExtentX * 2 > document.widthMm
@@ -362,8 +372,43 @@ function clampElement(element, document) {
   const centerY = halfExtentY * 2 > document.heightMm
     ? document.heightMm / 2
     : Math.max(halfExtentY, Math.min(sourceCenterY, document.heightMm - halfExtentY));
-  element.x = centerX - element.width / 2;
-  element.y = centerY - element.height / 2;
+  const nextX = centerX - element.width / 2;
+  const nextY = centerY - element.height / 2;
+  if (!unchanged(nextX, Number(element.x) || 0)) element.x = nextX;
+  if (!unchanged(nextY, Number(element.y) || 0)) element.y = nextY;
+  return element;
+}
+
+/**
+ * Gives a picture element the picture's proportions (`pictureWidth` x
+ * `pictureHeight` pixels) so it is never stretched. A new picture gets up to
+ * 60% of the label, never less than its default size; with `insideFrame` the
+ * picture fits inside the element's current box around the same centre (a
+ * replaced picture keeps its place). Unknown proportions leave it as it is.
+ */
+function fitImageToPicture(element, pictureWidth, pictureHeight, document, insideFrame) {
+  const ratio = Number(pictureWidth) / Number(pictureHeight);
+  if (!element || !(ratio > 0) || !Number.isFinite(ratio)) return element;
+  const currentWidth = Math.max(0.1, Number(element.width) || 0.1);
+  const currentHeight = Math.max(0.1, Number(element.height) || 0.1);
+  let limitWidth = currentWidth;
+  let limitHeight = currentHeight;
+  if (!insideFrame) {
+    const labelWidth = Math.max(1, Number(document && document.widthMm) || 1);
+    const labelHeight = Math.max(1, Number(document && document.heightMm) || 1);
+    const side = Math.max(currentWidth, currentHeight);
+    limitWidth = Math.min(Math.max(side, labelWidth * 0.6), Math.max(1, labelWidth - 2));
+    limitHeight = Math.min(Math.max(side, labelHeight * 0.6), Math.max(1, labelHeight - 2));
+  }
+  const width = Math.min(limitWidth, limitHeight * ratio);
+  const height = width / ratio;
+  const round = (value) => Math.round(value * 100) / 100;
+  if (insideFrame) {
+    element.x = round((Number(element.x) || 0) + (currentWidth - width) / 2);
+    element.y = round((Number(element.y) || 0) + (currentHeight - height) / 2);
+  }
+  element.width = round(width);
+  element.height = round(height);
   return element;
 }
 
@@ -403,6 +448,7 @@ module.exports = {
   createDocument,
   createElement,
   elementTypeLabel,
+  fitImageToPicture,
   hitTest,
   hitTestAll,
   placeNewElement

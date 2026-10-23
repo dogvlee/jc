@@ -2,5 +2,8 @@
   "navigationStyle": "custom",
   "enablePullDownRefresh": false,
   "disableScroll": true,
-  "backgroundColor": "#EEF0F3"
+  "backgroundColor": "#EEF0F3",
+  "usingComponents": {
+    "printer-picker": "/components/printer-picker/index"
+  }
 }

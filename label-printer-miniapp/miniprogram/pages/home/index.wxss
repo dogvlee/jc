@@ -137,7 +137,7 @@ button.device-pill {
 
 .device-pill.connected,
 .device-pill.connected .icon {
-  color: var(--color-success);
+  color: var(--color-success-text, #137A4A);
 }
 
 .device-label {
@@ -172,6 +172,21 @@ button.device-pill {
   gap: 16rpx;
 }
 
+.heading-copy {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 12rpx;
+}
+
+.section-note {
+  overflow: hidden;
+  color: var(--color-text-3);
+  font-size: var(--font-caption);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .card-title {
   display: block;
   overflow: hidden;
@@ -192,12 +207,27 @@ button.device-pill {
   white-space: nowrap;
 }
 
+/* Which printers print the template; amber when the user's printer cannot. */
+.card-fit {
+  display: block;
+  margin-top: 6rpx;
+  overflow: hidden;
+  color: var(--color-success-text, #137A4A);
+  font-size: var(--font-caption);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-fit.mismatch {
+  color: var(--color-warning-text, #8A5200);
+}
+
 .card-blurb {
   display: -webkit-box;
   margin-top: 8rpx;
   overflow: hidden;
   color: var(--color-text-3);
-  font-size: 22rpx;
+  font-size: var(--font-caption);
   line-height: 1.45;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -206,7 +236,7 @@ button.device-pill {
 .eyebrow {
   display: block;
   color: var(--color-text-3);
-  font-size: 22rpx;
+  font-size: var(--font-caption);
 }
 
 .muted {
@@ -258,6 +288,39 @@ button.device-pill {
   display: flex;
   justify-content: flex-end;
   gap: 16rpx;
+}
+
+.damage-notice,
+.save-failed {
+  margin-top: 16rpx;
+  padding: 20rpx 24rpx;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  color: var(--color-warning-text, #8A5200);
+  background: var(--color-warning-soft);
+  font-size: var(--font-caption);
+  line-height: 1.5;
+}
+
+.save-failed {
+  margin: 0 0 20rpx;
+}
+
+.damage-notice .icon,
+.save-failed .icon {
+  flex: none;
+  font-size: 32rpx;
+}
+
+.damage-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.damage-notice button,
+.save-failed button {
+  flex: none;
 }
 
 /* Project and template cards */
@@ -464,11 +527,18 @@ button.template-card {
   white-space: nowrap;
 }
 
+.stock-hint {
+  display: block;
+  color: var(--color-warning-text, #8A5200);
+  font-size: var(--font-caption);
+  line-height: 1.5;
+}
+
 .stock-actions {
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 12rpx;
+  gap: 20rpx;
 }
 
 /* Scan-to-label strip */
@@ -548,6 +618,32 @@ button.scan-banner {
   min-width: 0;
 }
 
+.header-lead {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+/* Back to 我的: the data route is entered from there and is not a page of
+   its own, so the system back gesture would leave the mini program. */
+button.back-button {
+  width: 64rpx;
+  height: 64rpx;
+  flex: none;
+  margin-left: -16rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-1);
+  font-size: 40rpx;
+}
+
+.back-icon {
+  transform: rotate(180deg);
+}
+
 .plain-title {
   display: block;
   color: var(--color-text-1);
@@ -609,7 +705,7 @@ button.scan-banner {
 }
 
 .tab-row {
-  gap: 40rpx;
+  gap: 32rpx;
 }
 
 /* First-level filter: text tabs with a short brand underline. ::before is
@@ -640,6 +736,11 @@ button.filter-tab.active::before {
   background: var(--color-primary);
 }
 
+.family-chip .icon {
+  margin-right: 6rpx;
+  font-size: 28rpx;
+}
+
 .template-content {
   padding-top: 24rpx;
 }
@@ -648,27 +749,43 @@ button.load-more {
   margin-top: 24rpx;
 }
 
-/* Projects */
+/* Projects: the delete button is a 72 rpx touch target; its icon draws the
+   56 rpx circle in the same place as before. */
 button.delete-card {
   position: absolute;
-  top: 12rpx;
-  right: 12rpx;
+  top: 4rpx;
+  right: 4rpx;
+  width: 72rpx;
+  height: 72rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-2);
+  font-size: 28rpx;
+}
+
+button.delete-card .icon {
   width: 56rpx;
   height: 56rpx;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-text-2);
   background: rgba(255, 255, 255, 0.92);
   box-shadow: var(--shadow-card);
-  font-size: 28rpx;
 }
 
 /* Batch data */
 .data-toolbar {
-  margin-bottom: 20rpx;
   gap: 16rpx;
+}
+
+.data-hint {
+  display: block;
+  margin: 12rpx 0 20rpx;
+  color: var(--color-text-3);
+  font-size: var(--font-caption);
+  line-height: 1.5;
 }
 
 .data-table-scroll {
@@ -708,7 +825,7 @@ button.delete-card {
 .data-header {
   min-height: 64rpx;
   color: var(--color-text-3);
-  font-size: 22rpx;
+  font-size: var(--font-caption);
   font-weight: 500;
 }
 
@@ -717,8 +834,8 @@ button.delete-card {
 }
 
 button.row-remove {
-  width: 64rpx;
-  height: 64rpx;
+  width: 80rpx;
+  height: 80rpx;
   justify-self: center;
   border-radius: 50%;
   display: flex;
@@ -740,6 +857,14 @@ button.row-remove {
 .batch-card .picker-field,
 .batch-card .full-button {
   margin-top: 24rpx;
+}
+
+.batch-card .batch-secondary {
+  margin-top: 16rpx;
+}
+
+.batch-card .batch-room {
+  margin-top: 12rpx;
 }
 
 /* Profile */
@@ -767,6 +892,33 @@ button.row-remove {
 
 .profile-copy {
   min-width: 0;
+  flex: 1;
+}
+
+button.profile-account-button {
+  flex: none;
+  min-height: 88rpx;
+  padding: 0 24rpx;
+  font-size: var(--font-caption);
+}
+
+.account-device-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  min-height: 88rpx;
+  box-sizing: border-box;
+  border-radius: var(--radius-lg);
+  background: var(--color-fill);
+  color: var(--color-text-2);
+  font-size: var(--font-caption);
+  line-height: 1.45;
+}
+
+.account-device-note .icon {
+  flex: none;
+  font-size: 40rpx;
 }
 
 .profile-title-row {
@@ -781,7 +933,7 @@ button.row-remove {
   display: inline-flex;
   align-items: center;
   gap: 4rpx;
-  color: var(--color-success);
+  color: var(--color-success-text, #137A4A);
   background: var(--color-success-soft);
   font-size: var(--font-tiny);
   font-weight: 500;
@@ -877,8 +1029,8 @@ button.row-remove {
 .privacy-note {
   display: block;
   margin: 32rpx 16rpx;
-  color: var(--color-text-4);
-  font-size: 22rpx;
+  color: var(--color-text-3);
+  font-size: var(--font-caption);
   line-height: 1.7;
   text-align: center;
 }
@@ -908,7 +1060,7 @@ button.row-remove {
   justify-content: center;
   gap: 6rpx;
   color: var(--color-text-3);
-  font-size: var(--font-tiny);
+  font-size: var(--font-small, 22rpx);
 }
 
 .bottom-nav button.button-hover {
@@ -961,6 +1113,13 @@ button.row-remove {
   min-width: 0;
 }
 
+/* The printer picker draws its own fixed sheet; this lifts it above the
+   bottom navigation like .modal-layer, without covering the page when closed. */
+.picker-layer {
+  position: relative;
+  z-index: 100;
+}
+
 .large-template-preview {
   height: 380rpx;
   margin-top: 8rpx;
@@ -1000,12 +1159,30 @@ button.row-remove {
   border-radius: var(--radius-sm);
   color: var(--color-text-3);
   background: var(--color-fill);
-  font-size: 22rpx;
+  font-size: var(--font-caption);
 }
 
 .preview-meta .meta-badge {
   color: var(--color-primary);
   background: var(--color-primary-soft);
+}
+
+.fit-notice {
+  margin-top: 20rpx;
+  padding: 20rpx 24rpx;
+  border-radius: var(--radius-md);
+  display: flex;
+  gap: 12rpx;
+  color: var(--color-warning-text, #8A5200);
+  background: var(--color-warning-soft);
+  font-size: var(--font-caption);
+  line-height: 1.6;
+}
+
+.fit-notice .icon {
+  flex: none;
+  margin-top: 6rpx;
+  font-size: 30rpx;
 }
 
 /* Paper presets */
@@ -1048,7 +1225,7 @@ button.row-remove {
 
 .preset-name {
   color: var(--color-text-3);
-  font-size: 22rpx;
+  font-size: var(--font-caption);
 }
 
 .preset-check {
@@ -1072,7 +1249,7 @@ button.row-remove {
   border-radius: var(--radius-md);
   color: var(--color-text-3);
   background: var(--color-fill);
-  font-size: 22rpx;
+  font-size: var(--font-caption);
 }
 
 .custom-size input {
@@ -1137,8 +1314,8 @@ button.row-remove {
 }
 
 button.history-action {
-  min-height: 56rpx;
-  padding: 0 20rpx;
+  min-height: 64rpx;
+  padding: 0 24rpx;
   flex: none;
   border-radius: var(--radius-full);
   display: flex;
@@ -1146,6 +1323,21 @@ button.history-action {
   color: var(--color-text-2);
   background: var(--color-fill);
   font-size: var(--font-caption);
+}
+
+/* A record without a copy of the label: plain grey words, not a button. */
+.history-no-copy {
+  flex: none;
+  color: var(--color-text-3);
+  font-size: var(--font-caption);
+}
+
+.history-more {
+  display: block;
+  padding: 24rpx 0 8rpx;
+  color: var(--color-text-3);
+  font-size: var(--font-caption);
+  text-align: center;
 }
 
 .sheet-empty {
@@ -1181,11 +1373,22 @@ button.history-action {
   margin: 12rpx 8rpx;
 }
 
+.setting-help {
+  display: block;
+  margin-top: 4rpx;
+  color: var(--color-text-3);
+  font-size: var(--font-caption);
+}
+
 .setting-row .picker-field {
   margin-top: 12rpx;
 }
 
 /* Help */
+.help-scroll {
+  max-height: 68vh;
+}
+
 .help-copy {
   padding-bottom: 12rpx;
 }
@@ -1198,13 +1401,19 @@ button.history-action {
   line-height: 1.65;
 }
 
+.help-copy > .help-heading {
+  margin-top: 28rpx;
+  color: var(--color-text-1);
+  font-weight: 600;
+}
+
 .help-warning {
   margin-top: 24rpx;
   padding: 20rpx 24rpx;
   border-radius: var(--radius-md);
   display: flex;
   gap: 12rpx;
-  color: var(--color-warning);
+  color: var(--color-warning-text, #8A5200);
   background: var(--color-warning-soft);
   font-size: var(--font-caption);
   line-height: 1.6;
@@ -1290,6 +1499,11 @@ button.history-action {
   gap: 20rpx;
 }
 
+/* The last step has only 开始使用. */
+.onboarding-actions.single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 @media (min-width: 700px) {
   .home-content,
   .route-content,
@@ -1364,4 +1578,10 @@ button.history-action {
   background-repeat: no-repeat;
   background-position: center;
   background-size: 100% 100%;
+}
+
+/* A picture's place in a thumbnail (pictures are not loaded for previews). */
+.mini-node.picture {
+  border: 1px dashed #B8BCC4;
+  background: #E8EAED;
 }

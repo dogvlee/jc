@@ -1,0 +1,21 @@
+<view class="legal-page">
+  <view class="legal-top-cover" style="height: {{headerTop - 12}}px;"></view>
+  <view class="legal-header" style="padding-top: {{headerTop}}px;">
+    <button class="legal-back" bindtap="goBack" aria-label="返回上一页"><text class="icon icon-chevron-right legal-back-icon" aria-hidden="true"></text><text>返回</text></button>
+    <text class="legal-brand">商跃标签</text>
+  </view>
+  <view class="legal-content">
+    <view class="legal-intro">
+      <text class="legal-title">{{title}}</text>
+      <text class="legal-version">版本 {{version}}</text>
+      <text class="legal-summary">{{summary}}</text>
+    </view>
+    <view class="legal-sections card">
+      <view wx:for="{{sections}}" wx:key="title" class="legal-section">
+        <text class="legal-section-title">{{item.title}}</text>
+        <text wx:for="{{item.paragraphs}}" wx:for-item="paragraph" wx:key="*this" class="legal-paragraph" selectable="true">{{paragraph}}</text>
+      </view>
+    </view>
+    <text class="legal-footer">阅读本页不会自动同意协议或开启登录。</text>
+  </view>
+</view>

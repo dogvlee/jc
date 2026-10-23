@@ -8,6 +8,7 @@ const {
   normalizeAngleDelta,
   pointerAngle,
   resizeRotatedElement,
+  scaleRotatedElement,
   selectionHandleMode
 } = require('../miniprogram/core/geometry');
 
@@ -91,7 +92,9 @@ test('selection hit testing follows the visible content-fitted handles', () => {
   };
   assert.equal(selectionHandleMode(element, { x: 7, y: 6 }, 0.4), 'resize-e');
   assert.equal(selectionHandleMode(element, { x: 4.5, y: 9 }, 0.4), 'resize-s');
-  assert.equal(selectionHandleMode(element, { x: 7, y: 9 }, 0.4), 'rotate');
+  assert.equal(selectionHandleMode(element, { x: 7, y: 9 }, 0.4), 'scale');
+  // Without a canvas the rotate handle sits 3 mm above the visible box.
+  assert.equal(selectionHandleMode(element, { x: 4.5, y: 0 }, 0.4), 'rotate');
   assert.equal(selectionHandleMode(element, { x: 32, y: 6 }, 0.4), 'move');
 });
 
@@ -135,4 +138,73 @@ test('text modes keep legacy direction compatible and only vertical modes reshap
   changeTextMode(element, 'horizontal', document);
   assert.equal(element.direction, 'horizontal');
   assert.deepEqual([element.width, element.height], [30, 5]);
+});
+
+test('the corner handle scales an element as a whole, text size and spacing too', () => {
+  const label = { widthMm: 60, heightMm: 40 };
+  const text = { x: 5, y: 5, width: 10, height: 5, rotation: 0, fontSize: 4, letterSpacing: 0.5, lineSpacing: 1 };
+  const scaled = scaleRotatedElement(text, { x: 10, y: 5 }, label, 0.8);
+  assert.deepEqual(scaled, { x: 5, y: 5, width: 20, height: 10, fontSize: 8, letterSpacing: 1, lineSpacing: 2 });
+
+  // Dragging along the box edge still keeps the proportions: the drag is
+  // projected onto the diagonal.
+  const sideways = scaleRotatedElement(text, { x: 10, y: 0 }, label, 0.8);
+  assert.ok(Math.abs(sideways.width / sideways.height - 2) < 1e-9);
+  assert.equal(sideways.x, 5);
+  assert.equal(sideways.y, 5);
+});
+
+test('scaling stops at the label edge, the smallest size and the text size range', () => {
+  const label = { widthMm: 40, heightMm: 30 };
+  const box = { x: 5, y: 5, width: 10, height: 5, rotation: 0, fontSize: 4 };
+  const capped = scaleRotatedElement(box, { x: 100, y: 100 }, label, 0.8);
+  assert.ok(Math.abs(capped.x + capped.width - 40) < 0.01, 'stops at the right edge');
+  assert.ok(Math.abs(capped.width / capped.height - 2) < 0.01);
+  assert.ok(capped.fontSize > 4 && capped.fontSize <= 14.01);
+
+  const shrunk = scaleRotatedElement(box, { x: -100, y: -100 }, label, 0.8);
+  assert.ok(Math.abs(shrunk.height - 0.8) < 1e-9, 'the shorter side keeps the minimum size');
+  assert.ok(shrunk.fontSize >= 0.5);
+
+  const shape = { x: 5, y: 5, width: 10, height: 5, rotation: 0 };
+  const tiny = scaleRotatedElement(shape, { x: -100, y: -100 }, label, 0.8);
+  assert.ok(Math.abs(tiny.height - 0.8) < 1e-9, 'the shorter side keeps the minimum size');
+  assert.equal(tiny.fontSize, undefined, 'elements without text get no font size');
+
+  // Text never grows past the 25 mm a saved label keeps.
+  const large = { x: 1, y: 1, width: 10, height: 10, rotation: 0, fontSize: 20 };
+  assert.equal(scaleRotatedElement(large, { x: 30, y: 30 }, { widthMm: 100, heightMm: 100 }, 0.8).fontSize, 25);
+  const big = { x: 1, y: 1, width: 10, height: 10, rotation: 0, fontSize: 50 };
+  assert.equal(scaleRotatedElement(big, { x: 10, y: 10 }, { widthMm: 100, heightMm: 100 }, 0.8).fontSize, 50);
+});
+
+test('scaling keeps the same text limits as a saved label', () => {
+  const { SCALED_SIZE_RANGES } = require('../miniprogram/core/geometry');
+  const { DOCUMENT_LIMITS } = require('../miniprogram/services/repository');
+  assert.deepEqual(SCALED_SIZE_RANGES.fontSize, [DOCUMENT_LIMITS.minFontSizeMm, DOCUMENT_LIMITS.maxFontSizeMm]);
+  assert.deepEqual(SCALED_SIZE_RANGES.letterSpacing, [DOCUMENT_LIMITS.minLetterSpacingMm, DOCUMENT_LIMITS.maxLetterSpacingMm]);
+  assert.deepEqual(SCALED_SIZE_RANGES.lineSpacing, [DOCUMENT_LIMITS.minLineSpacing, DOCUMENT_LIMITS.maxLineSpacing]);
+});
+
+test('scaling a rotated element keeps its visual top-left corner in place', () => {
+  const label = { widthMm: 60, heightMm: 60 };
+  const element = { x: 20, y: 20, width: 10, height: 4, rotation: 90 };
+  const corner = rotateLocalPoint(element, -5, -2);
+  // At 90° the box's own right-down diagonal points left-down on the label.
+  const scaled = scaleRotatedElement(element, { x: -4, y: 10 }, label, 0.8);
+  const moved = rotateLocalPoint(Object.assign({ rotation: 90 }, scaled), -scaled.width / 2, -scaled.height / 2);
+  assert.ok(Math.abs(moved.x - corner.x) < 0.01);
+  assert.ok(Math.abs(moved.y - corner.y) < 0.01);
+  assert.ok(Math.abs(scaled.width / scaled.height - 2.5) < 0.01);
+  assert.ok(scaled.width > 10);
+});
+
+test('touching the corner of an element already past a limit does not make it jump', () => {
+  const label = { widthMm: 60, heightMm: 40 };
+  const thinLine = { x: 5, y: 5, width: 30, height: 0.3, rotation: 0 };
+  assert.deepEqual(scaleRotatedElement(thinLine, { x: 0, y: 0 }, label, 0.8), { x: 5, y: 5, width: 30, height: 0.3 });
+  const fine = { x: 5, y: 5, width: 10, height: 2, rotation: 0, fontSize: 0.8 };
+  assert.equal(scaleRotatedElement(fine, { x: 0, y: 0 }, label, 0.8).fontSize, 0.8);
+  // It can still grow.
+  assert.ok(scaleRotatedElement(fine, { x: 10, y: 2 }, label, 0.8).fontSize > 0.8);
 });

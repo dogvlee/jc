@@ -37,8 +37,8 @@ const STORAGE = [
 ];
 
 const BADGES = [
-  { name: '陈思远', dept: '产品部', title: '产品经理', number: 'SY-0816', company: '商跃科技' },
-  { name: '林晓', dept: '客户成功部', title: '客户经理', number: 'SY-1203', company: '商跃科技' }
+  { name: '陈思远', dept: '产品部', title: '产品经理', number: 'XH-0816', company: '星河科技' },
+  { name: '林晓', dept: '客户成功部', title: '客户经理', number: 'XH-1203', company: '星河科技' }
 ];
 
 const STUDENTS = [
@@ -73,7 +73,7 @@ function assetTag(doc, W, H, a) {
   }
   const headH = Math.min(6.4, Math.max(4.4, H * 0.15));
   const right = company(doc, frame(safe.x, safe.y, safe.w, headH), '固定资产', true);
-  text(doc, right, '商跃科技', { reverse: true, align: 'right', max: Math.max(2.2, headH * 0.5) });
+  text(doc, right, '云帆科技', { reverse: true, align: 'right', max: Math.max(2.2, headH * 0.5) });
   const body = frame(safe.x, safe.y + headH + 1, safe.w, safe.h - headH - 1);
   const [info, code] = cols(body, [2.1, 1], 1.4);
   const [name, number, lines] = rows(info, [1.2, 1.1, 2.2], 0.3);

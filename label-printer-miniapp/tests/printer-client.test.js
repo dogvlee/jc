@@ -2,21 +2,19 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const { PrinterClient } = require('../miniprogram/services/printer-client');
-const { COMMAND, RESPONSE } = require('../miniprogram/core/protocol');
+const { INIT, NEXT_LABEL, TEAR_FEED } = require('../miniprogram/core/escpos');
 const { getProfile } = require('../miniprogram/core/profiles');
 
+// A BleSession stand-in for a thermal printer on FF00: it records every raw
+// ESC/POS write.
 class FakeSession {
-  constructor(connectResult) {
-    this.connectResult = connectResult;
-    this.calls = [];
+  constructor() {
+    this.writes = [];
+    this.connected = true;
+    this.maxWriteSize = 20;
     this.disconnections = 0;
     this.existingConnections = 0;
-    this.connected = true;
     this.transportResetListeners = [];
-  }
-
-  onPacket() {
-    return () => {};
   }
 
   onConnectionStateChange() {
@@ -32,13 +30,14 @@ class FakeSession {
     this.transportResetListeners.forEach((listener) => listener({ reason: 'test' }));
   }
 
-  async connect() {
-    return { name: 'B1', mtu: 247, maxWriteSize: 244 };
+  async connect(device) {
+    this.connected = true;
+    return { deviceId: device.deviceId, name: device.name, serviceId: '0000ff00-0000-1000-8000-00805f9b34fb', maxWriteSize: 20 };
   }
 
-  async connectExisting() {
+  async connectExisting(device) {
     this.existingConnections += 1;
-    return { deviceId: 'device', name: 'B1', mtu: 247, maxWriteSize: 244 };
+    return this.connect(device);
   }
 
   async disconnect() {
@@ -46,205 +45,175 @@ class FakeSession {
     this.connected = false;
   }
 
-  async request(command, data, expected) {
-    this.calls.push({ command, data: Array.from(data || []), expected });
-    if (command === COMMAND.CONNECT) {
-      return { data: Uint8Array.from([this.connectResult]) };
-    }
-    if (command === COMMAND.PRINTER_STATUS_DATA) {
-      const status = new Uint8Array(13);
-      status[11] = 3;
-      status[12] = 2;
-      return { data: status };
-    }
-    if (command === COMMAND.PRINTER_INFO && data[0] === 8) {
-      return { data: Uint8Array.from([0x10, 0x00]) };
-    }
-    return { data: Uint8Array.from([1]) };
+  async writeRaw(bytes) {
+    this.writes.push(Array.from(bytes));
   }
 }
 
-test('protocol v3 connection performs status, ordered info, then advanced heartbeat', async () => {
-  const session = new FakeSession(3);
+async function connectedClient() {
+  const session = new FakeSession();
   const client = new PrinterClient(session);
-  const result = await client.connect({ deviceId: 'device', name: 'B1' });
+  client.wait = async () => {};
+  await client.connect({ deviceId: 'syd', name: 'SYD-58' });
+  return { session, client };
+}
 
-  assert.equal(result.modelId, 4096);
-  assert.equal(result.protocolVersion, 5);
+function blackImage(width, height) {
+  const data = new Uint8ClampedArray(width * height * 4);
+  for (let index = 3; index < data.length; index += 4) data[index] = 255;
+  return { width, height, data };
+}
+
+const isBand = (bytes) => bytes[0] === 0x1D && bytes[1] === 0x76 && bytes[2] === 0x30;
+const same = (left, right) => left.length === right.length && left.every((byte, index) => byte === right[index]);
+
+test('connecting opens the link, sends nothing and reports ESC/POS', async () => {
+  const session = new FakeSession();
+  const client = new PrinterClient(session);
+  const result = await client.connect({ deviceId: 'syd', name: 'SYD-58' });
+  assert.equal(result.protocol, 'escpos');
   assert.equal(client.ready, true);
-  assert.deepEqual(session.calls.map((item) => item.command), [
-    COMMAND.CONNECT,
-    COMMAND.PRINTER_STATUS_DATA,
-    ...new Array(8).fill(COMMAND.PRINTER_INFO),
-    COMMAND.HEARTBEAT
-  ]);
-  assert.deepEqual(
-    session.calls.filter((item) => item.command === COMMAND.PRINTER_INFO).map((item) => item.data[0]),
-    [8, 11, 13, 10, 7, 3, 12, 9]
-  );
-  assert.deepEqual(session.calls[session.calls.length - 1].data, [4]);
-  assert.deepEqual(session.calls[session.calls.length - 1].expected, RESPONSE.HEARTBEAT);
+  assert.equal(client.deviceId, 'syd');
+  assert.deepEqual(session.writes, [], 'nothing is written until a label prints');
+
+  await client.connectExisting({ deviceId: 'syd', name: 'SYD-58' });
+  assert.equal(session.existingConnections, 1, 'an OS-held link is reused');
+  assert.equal(client.ready, true);
 });
 
-test('invalid connect results tear down the transport and never become ready', async () => {
-  const session = new FakeSession(90);
+test('a link that fails to open is closed and the client stays not ready', async () => {
+  const session = new FakeSession();
+  session.connect = async () => { throw new Error('createBLEConnection:fail'); };
   const client = new PrinterClient(session);
-
-  await assert.rejects(client.connect({ deviceId: 'device' }), /状态 90/);
+  await assert.rejects(client.connect({ deviceId: 'syd' }), /createBLEConnection/);
   assert.equal(client.ready, false);
   assert.equal(session.disconnections, 1);
 });
 
-test('print is rejected until protocol negotiation is complete', async () => {
-  const session = new FakeSession(1);
-  const client = new PrinterClient(session);
-  await assert.rejects(client.print({}, {}, {}), /尚未完成协议协商/);
+test('printing needs a connected printer, and connecting waits for a running print', async () => {
+  const idle = new PrinterClient(new FakeSession());
+  await assert.rejects(idle.print(blackImage(8, 1), getProfile('escpos-58'), {}), /还没有连接好/);
+
+  const { client } = await connectedClient();
+  client.printing = true;
+  await assert.rejects(client.connect({ deviceId: 'syd' }), /打印任务进行中/);
 });
 
-test('a transport reset clears protocol readiness and the negotiated device', async () => {
-  const session = new FakeSession(1);
-  const client = new PrinterClient(session);
-  await client.connect({ deviceId: 'device', name: 'D110' });
-  assert.equal(client.ready, true);
-  assert.equal(client.deviceId, 'device');
-
-  session.resetTransport();
-
-  assert.equal(client.ready, false);
-  assert.equal(client.deviceId, '');
-  assert.equal(client.protocolVersion, 0);
-});
-
-test('connectExisting reuses GATT only after repeating the NIIMBOT protocol handshake', async () => {
-  const session = new FakeSession(1);
-  const client = new PrinterClient(session);
-
-  const result = await client.connectExisting({ deviceId: 'device', name: 'D110' });
-
-  assert.equal(session.existingConnections, 1);
-  assert.equal(session.calls[0].command, COMMAND.CONNECT);
-  assert.equal(result.deviceId, 'device');
-  assert.equal(client.ready, true);
-});
-
-test('print completion wait fails immediately after a transport disconnect', async () => {
-  const session = new FakeSession(1);
-  const client = new PrinterClient(session);
-  session.connected = false;
-  await assert.rejects(
-    client.waitUntilFinished({ task: 'b1' }, 1, () => {}),
-    /连接已断开/
-  );
-  assert.equal(session.calls.length, 0);
-});
-
-test('fatal printer status errors are not swallowed as retryable timeouts', async () => {
-  const session = new FakeSession(1);
-  session.request = async () => {
-    const error = new Error('打印机缺纸');
-    error.code = 2;
-    throw error;
-  };
-  const client = new PrinterClient(session);
-  client.wait = async () => {};
-  await assert.rejects(
-    client.waitUntilFinished({ task: 'b1' }, 1, () => {}),
-    /缺纸/
-  );
-});
-
-function printHarness(options) {
-  const config = options || {};
-  const session = new FakeSession(1);
-  session.maxWriteSize = config.maxWriteSize || 244;
-  session.request = async (command, data, expected) => {
-    session.calls.push({ command, data: Array.from(data || []), expected });
-    if (config.respond) {
-      const response = await config.respond(command);
-      if (response) return response;
-    }
-    return { data: Uint8Array.from(command === COMMAND.PRINT_STATUS ? [0, config.finishedCopies || 1] : [1]) };
-  };
-  const client = new PrinterClient(session);
-  client.ready = true;
-  client.wait = async () => {};
-  const image = { width: 8, height: 1, data: new Uint8ClampedArray(8 * 4).fill(255) };
-  return { client, session, image, profile: getProfile('b1') };
-}
-
-test('printing and completion use the same normalized copy count', async () => {
-  const { client, session, image, profile } = printHarness({ finishedCopies: 99 });
-  const result = await client.print(image, profile, { copies: 120 });
-  assert.equal(result.completedCopies, 99);
-  assert.deepEqual(session.calls.find((call) => call.command === COMMAND.PRINT_START).data.slice(0, 2), [0, 99]);
-});
-
-test('empty PRINT_END acknowledgement cannot report a completed print', async () => {
-  const { client, image, profile } = printHarness({
-    respond(command) { if (command === COMMAND.PRINT_END) return { data: new Uint8Array(0) }; }
-  });
-  await assert.rejects(client.print(image, profile, { copies: 1 }), /尚未完成/);
-});
-
-test('cancel during the final acknowledgement rejects completion and sends cancel only once', async () => {
-  let acknowledge;
-  let entered;
-  const finalRequest = new Promise((resolve) => { entered = resolve; });
-  const { client, session, image, profile } = printHarness({
-    respond(command) {
-      if (command === COMMAND.PRINT_END) {
-        entered();
-        return new Promise((resolve) => { acknowledge = resolve; });
-      }
-    }
-  });
+test('a label goes out as ESC @, GS v 0 bands and GS FF for every copy', async () => {
+  const { session, client } = await connectedClient();
   const progress = [];
-  const printing = client.print(image, profile, { copies: 1 }, (value) => progress.push(value));
-  await finalRequest;
-  await client.cancel();
-  acknowledge({ data: Uint8Array.from([1]) });
-  await assert.rejects(printing, { code: 'PRINT_CANCELLED' });
-  assert.equal(progress.includes(100), false);
-  assert.equal(session.calls.filter((call) => call.command === COMMAND.CANCEL_PRINT).length, 1);
+  const done = await client.print(blackImage(16, 10), getProfile('escpos-58'), { copies: 2 }, (value) => progress.push(value));
+
+  assert.ok(same(session.writes[0], INIT), 'ESC @ first');
+  assert.equal(session.writes.filter((bytes) => same(bytes, INIT)).length, 1, 'reset once per print');
+  const bands = session.writes.filter(isBand);
+  assert.equal(bands[0][4], 48, 'centred on the 58 mm head: 384 dots, 48 bytes a row');
+  assert.equal(bands.reduce((rows, band) => rows + band[6], 0), 20, 'ten rows, twice');
+  assert.ok(bands.every((band) => band.length <= 20 * 8), 'each band fits eight packets of the link');
+  assert.equal(session.writes.filter((bytes) => same(bytes, NEXT_LABEL)).length, 2, 'one next-label feed per copy');
+  assert.ok(same(session.writes[session.writes.length - 1], NEXT_LABEL));
+  assert.ok(session.writes.every((bytes) => same(bytes, INIT) || isBand(bytes) || same(bytes, NEXT_LABEL)),
+    'nothing but ESC/POS reaches the printer');
+  assert.deepEqual([done.completedCopies, done.columns, done.rows], [2, 384, 10]);
+  assert.equal(progress[progress.length - 1], 100);
 });
 
-test('a frame that cannot fit the negotiated MTU is rejected before any print command', async () => {
-  const { client, session, profile } = printHarness({ maxWriteSize: 20 });
-  const data = new Uint8ClampedArray(384 * 4);
-  for (let pixel = 0; pixel < 384; pixel += 1) data[pixel * 4 + 3] = 255;
-  await assert.rejects(client.print({ width: 384, height: 1, data }, profile, { copies: 1 }), (error) => {
-    assert.equal(error.possiblyPrinted, false);
-    return /完整打印帧需要/.test(error.message);
-  });
-  assert.equal(session.calls.length, 0);
+test('an 80 mm printer gets the label centred on its 576-dot head', async () => {
+  const { session, client } = await connectedClient();
+  await client.print(blackImage(320, 8), getProfile('escpos-80'), { copies: 1 });
+  const band = session.writes.find(isBand);
+  assert.equal(band[4], 72, '576 dots, 72 bytes a row');
+  // 320 black dots centred: 128 white dots (16 bytes) on each side.
+  assert.deepEqual(band.slice(8, 8 + 18), [...new Array(16).fill(0), 0xFF, 0xFF]);
 });
 
-test('transport replacement during a request cannot continue or cancel on the new device', async () => {
-  let client;
-  const harness = printHarness({
-    respond(command) {
-      if (command === COMMAND.PAGE_START) client.invalidateConnection();
+test('continuous paper gets a tear feed instead of GS FF', async () => {
+  const { session, client } = await connectedClient();
+  await client.print(blackImage(8, 1), getProfile('escpos-58'), { copies: 1, labelType: 3 });
+  assert.ok(same(session.writes[session.writes.length - 1], TEAR_FEED));
+  assert.equal(session.writes.filter((bytes) => same(bytes, NEXT_LABEL)).length, 0);
+});
+
+test('copies are a whole number from 1 to 99', async () => {
+  const { client } = await connectedClient();
+  assert.equal((await client.print(blackImage(8, 1), getProfile('escpos-58'), { copies: 0 })).completedCopies, 1);
+  assert.equal((await client.print(blackImage(8, 1), getProfile('escpos-58'), { copies: 120 })).completedCopies, 99);
+  assert.equal((await client.print(blackImage(8, 1), getProfile('escpos-58'), { copies: 2.7 })).completedCopies, 2);
+});
+
+test('cancelling stops between bands, never inside one', async () => {
+  const { session, client } = await connectedClient();
+  let bands = 0;
+  session.writeRaw = async (bytes) => {
+    session.writes.push(Array.from(bytes));
+    if (isBand(bytes) && ++bands === 2) client.cancel();
+  };
+  await assert.rejects(client.print(blackImage(16, 20), getProfile('escpos-58'), { copies: 1 }),
+    (error) => error.code === 'PRINT_CANCELLED' && error.possiblyPrinted === true);
+  assert.equal(bands, 2, 'no band after the cancel');
+  assert.equal(client.printing, false);
+});
+
+test('a label cut short by a cancel is still fed out, so the next print starts at a label top', async () => {
+  const { session, client } = await connectedClient();
+  let bands = 0;
+  session.writeRaw = async (bytes) => {
+    session.writes.push(Array.from(bytes));
+    if (isBand(bytes) && ++bands === 2) client.cancel();
+  };
+  await assert.rejects(client.print(blackImage(16, 20), getProfile('escpos-58'), { copies: 2, labelType: 1 }),
+    (error) => error.code === 'PRINT_CANCELLED');
+  assert.deepEqual(session.writes[session.writes.length - 1], Array.from(NEXT_LABEL));
+
+  // A cancel between copies, after the feed, sends nothing more.
+  const second = await connectedClient();
+  second.session.writeRaw = async (bytes) => {
+    second.session.writes.push(Array.from(bytes));
+    if (Array.from(bytes).join() === Array.from(NEXT_LABEL).join()) second.client.cancel();
+  };
+  await assert.rejects(second.client.print(blackImage(16, 1), getProfile('escpos-58'), { copies: 3, labelType: 1 }),
+    (error) => error.code === 'PRINT_CANCELLED');
+  const feeds = second.session.writes.filter((bytes) => bytes.join() === Array.from(NEXT_LABEL).join());
+  assert.equal(feeds.length, 1);
+});
+
+test('a link that drops mid-print stops before the next band and says paper may have moved', async () => {
+  const { session, client } = await connectedClient();
+  let bands = 0;
+  session.writeRaw = async (bytes) => {
+    session.writes.push(Array.from(bytes));
+    if (isBand(bytes) && ++bands === 1) {
+      session.connected = false;
+      session.resetTransport();
     }
-  });
-  client = harness.client;
-  await assert.rejects(client.print(harness.image, harness.profile, { copies: 1 }), { code: 'TRANSPORT_RESET' });
-  assert.equal(harness.session.calls.some((call) => call.command === COMMAND.SET_PAGE_SIZE), false);
-  assert.equal(harness.session.calls.some((call) => call.command === COMMAND.CANCEL_PRINT), false);
+  };
+  await assert.rejects(client.print(blackImage(16, 20), getProfile('escpos-58'), { copies: 1 }),
+    (error) => error.code === 'TRANSPORT_RESET' && error.possiblyPrinted === true);
+  assert.equal(bands, 1);
+  assert.equal(client.ready, false, 'the dropped link must be reconnected before the next print');
 });
 
-test('connecting and foreign print calls cannot interrupt a serial job between pages', async () => {
-  const { client, image, profile } = printHarness();
-  client.jobToken = {};
-  client.jobPhase = 'printing';
-  await assert.rejects(client.connect({ deviceId: 'other' }), /打印任务进行中/);
-  await assert.rejects(client.print(image, profile, { copies: 1 }), /已有打印任务/);
-  client.jobPhase = 'preparing';
-  await assert.rejects(client.print(image, profile, { copies: 1 }), /已有打印任务/);
+test('nothing is printed twice at once, and a job token keeps other callers out', async () => {
+  const { session, client } = await connectedClient();
+  let release;
+  session.writeRaw = (bytes) => {
+    session.writes.push(Array.from(bytes));
+    return isBand(bytes) && !release ? new Promise((resolve) => { release = resolve; }) : Promise.resolve();
+  };
+  const first = client.print(blackImage(8, 1), getProfile('escpos-58'), { copies: 1 });
+  await new Promise((resolve) => setImmediate(resolve));
+  await assert.rejects(client.print(blackImage(8, 1), getProfile('escpos-58'), { copies: 1 }), /已有打印任务正在进行/);
+  release();
+  await first;
+
+  client.jobToken = { owner: 'print-job-service' };
+  await assert.rejects(client.print(blackImage(8, 1), getProfile('escpos-58'), { copies: 1 }), /已有打印任务正在进行/);
+  const done = await client.print(blackImage(8, 1), getProfile('escpos-58'), { copies: 1, jobToken: client.jobToken });
+  assert.equal(done.completedCopies, 1);
 });
 
-test('a progress listener failure does not cancel a confirmed physical print', async () => {
-  const { client, session, image, profile } = printHarness();
-  const result = await client.print(image, profile, { copies: 1 }, () => { throw new Error('page destroyed'); });
-  assert.equal(result.completedCopies, 1);
-  assert.equal(session.calls.some((call) => call.command === COMMAND.CANCEL_PRINT), false);
+test('a progress listener that throws cannot fail a printed label', async () => {
+  const { client } = await connectedClient();
+  const done = await client.print(blackImage(8, 2), getProfile('escpos-58'), { copies: 1 }, () => { throw new Error('ui'); });
+  assert.equal(done.completedCopies, 1);
 });

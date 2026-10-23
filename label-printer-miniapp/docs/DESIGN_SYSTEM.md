@@ -2,7 +2,7 @@
 
 视觉方向：清爽白底 + 品牌红点缀。红色只用于主按钮、选中态和来源角标，其余界面由中性色承担。设计说明见 [UI 视觉改版设计说明](./superpowers/specs/2026-09-28-ui-refresh-design.md)。
 
-Figma：[商跃标签 · 设计系统与页面](https://www.figma.com/design/xvL5iJJ0SViCmOi2LE9RuL)（变量、图标、组件）；32 张页面稿按流程分 5 行放在 [Screens 页](https://www.figma.com/design/xvL5iJJ0SViCmOi2LE9RuL?node-id=3-11)。
+Figma：[商跃标签 · 设计系统与页面](https://www.figma.com/design/xvL5iJJ0SViCmOi2LE9RuL)（变量、图标、组件）；35 张页面稿按流程分 6 行放在 [Screens 页](https://www.figma.com/design/xvL5iJJ0SViCmOi2LE9RuL?node-id=3-11)。新增[登录](https://www.figma.com/design/xvL5iJJ0SViCmOi2LE9RuL?node-id=38-4806)、[我的 · 未登录](https://www.figma.com/design/xvL5iJJ0SViCmOi2LE9RuL?node-id=40-4831)、[我的 · 已登录](https://www.figma.com/design/xvL5iJJ0SViCmOi2LE9RuL?node-id=40-5006)，旧稿保留。
 
 ## 代码位置
 

@@ -2,9 +2,11 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const {
+  ROTATE_HANDLE_GAP,
   handleHitRegion,
   longPressSelection,
   nextSelectionId,
+  rotateHandleLocal,
   selectionHitDecision,
   selectionTargetSizeMm
 } = require('../miniprogram/core/editor-gesture');
@@ -27,6 +29,33 @@ test('large touch handles stay outside the content instead of stealing its cente
   assert.equal(handleHitRegion('e', 0, 0, 'touch'), true);
   assert.equal(handleHitRegion('rotate', -16.5, -16.5, 'touch'), false);
   assert.equal(handleHitRegion('rotate', 0, 0, 'touch'), true);
+  assert.equal(handleHitRegion('rotate', 0, 21, 'touch'), true);
+  assert.equal(handleHitRegion('rotate', 0, 23, 'touch'), false);
+});
+
+test('the corner scale handle reaches outward from the box corner', () => {
+  assert.equal(handleHitRegion('se', -16.5, -16.5, 'touch'), false, 'the content keeps its centre');
+  assert.equal(handleHitRegion('se', -8, -8, 'touch'), true);
+  assert.equal(handleHitRegion('se', 0, 0, 'touch'), true);
+  assert.equal(handleHitRegion('se', 36, 36, 'touch'), true);
+  assert.equal(handleHitRegion('se', 37, 0, 'touch'), false);
+  assert.equal(handleHitRegion('se', 20, 20, 'mouse'), true);
+  assert.equal(handleHitRegion('se', 23, 0, 'mouse'), false);
+});
+
+test('the rotate handle floats above the box, below it at the label top, else on the corner', () => {
+  const box = { left: -5, top: -2, width: 10, height: 4 };
+  const gap = ROTATE_HANDLE_GAP / 10;
+  const middle = { x: 10, y: 8, width: 10, height: 4, rotation: 0 };
+  assert.deepEqual(rotateHandleLocal(middle, box, gap, 40, 30), { x: 0, y: -2 - gap });
+  const top = { x: 10, y: 0.5, width: 10, height: 4, rotation: 0 };
+  assert.deepEqual(rotateHandleLocal(top, box, gap, 40, 30), { x: 0, y: 2 + gap });
+  const full = { x: 10, y: 0, width: 10, height: 30, rotation: 0 };
+  const fullBox = { left: -5, top: -15, width: 10, height: 30 };
+  assert.deepEqual(rotateHandleLocal(full, fullBox, gap, 40, 30), { x: 5, y: -15 });
+  // A half-turned element at the label top has its own "above" at the bottom.
+  const turned = { x: 10, y: 0.5, width: 10, height: 4, rotation: 180 };
+  assert.deepEqual(rotateHandleLocal(turned, box, gap, 40, 30), { x: 0, y: -2 - gap });
 });
 
 test('selection target converts the 44px touch area to label millimetres', () => {

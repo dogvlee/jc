@@ -47,12 +47,12 @@
 | FR-07 | 编辑器支持文本、条码、二维码、图片、矩形、线、日期、序列、表格、素材 10 类元素 | `core/document.js`、`core/renderer.js`、`pages/editor/index.*` | `dynamic-elements`、`renderer`、`borders-table-shape`、`materials`、`date-links`、`text-*` 测试 | 自动核心通过；UI 部分 | 每类创建→编辑→保存→重开→打印样张；QA/硬件 |
 | FR-08 | 移动、缩放、旋转、吸附、多选、对齐/分布、锁定和图层行为正确 | `core/geometry.js`、`editor-gesture.js`、`document.js`、editor 页 | `geometry.test.js`、`editor-snap`、`editor-gesture`、`document`、`editor-page` | 部分通过 | 真实触摸、小屏、边缘手柄、键盘/安全区；QA |
 | FR-09 | 图片可从相册/相机添加/替换，阈值/镜像和异步替换安全 | editor 页、`core/image-cache.js`、`renderer.js` | `image-cache.test.js`、renderer 二值化测试 | 部分通过 | 权限拒绝、超大/损坏图片、iOS/Android Canvas；QA/安全 |
-| FR-10 | 标签可在超出当前机型时继续编辑；打印预检阻断型号、尺寸、占位和非法元素，不改原稿 | `core/profiles.js`、`renderer.js`、editor `evaluatePrintBlock` | `profiles.test.js`、`renderer.test.js`、`repository.test.js` | 自动核心通过；UI 待验 | 预检弹层、建议 profile、不连接时恢复；QA |
-| FR-11 | 支持正确 profile、浓度、阈值、间隙/黑标/连续/定孔及份数 | `core/profiles.js`、`print-plan.js`、repository 设置、home/editor 页 | `profiles.test.js`、`print-plan.test.js` | 协议计划通过；物理待验 | HW-MATRIX 的 4 纸型、1/3 份和边界尺寸；硬件 |
+| FR-10 | 标签可在超出当前机型时继续编辑；打印预检阻断尺寸、占位和非法元素（不按型号阻断，ADR-013），不改原稿 | `core/profiles.js`、`renderer.js`、editor `evaluatePrintBlock` | `profiles.test.js`、`renderer.test.js`、`repository.test.js` | 自动核心通过；UI 待验 | 预检弹层、建议 profile、不连接时恢复；QA |
+| FR-11 | 支持正确 profile（58mm / 80mm）、阈值、间隙/黑标/连续/定孔及份数 | `core/profiles.js`、`core/escpos.js`、repository 设置、home/editor 页 | `profiles.test.js`、`escpos.test.js`、`printer-client.test.js` | 协议计划通过；物理待验 | HW-MATRIX 的 4 纸型、1/3 份和边界尺寸；硬件 |
 | FR-12 | BLE 扫描、选择、E781 特征、MTU 和 NIIMBOT 握手正确；通用设备被拒绝 | `services/ble-session.js`、`printer-client.js`、editor 页 | `ble-session.test.js`、`printer-client.test.js`、`protocol.test.js` | mock 通过；真机待验 | BLE-001/002、Android/iOS 权限和固件；硬件/QA |
 | FR-13 | 连接可单飞复用、恢复系统连接/僵尸、断线失效、蓝牙恢复和切换设备 | `services/printer-connection-manager.js`、`app.js` | `printer-connection-manager.test.js` | mock 通过；真机待验 | 前后台/杀进程/蓝牙开关/两台设备；硬件/QA |
 | FR-14 | 诊断不打印；可忘记设备；本地 kill switch 可止住自动重连 | connection manager、editor 诊断/忘记设备 | manager 的 diagnose/forget/kill switch 测试 | 自动核心通过；运营待验 | 受控设备演练；确认开关非远程且非全量停印；发布/QA |
-| FR-15 | 打印点阵、方向、字节对齐、任务顺序和机型协议正确 | `core/image-encoder.js`、`print-plan.js`、`protocol.js`、`printer-client.js` | `image-encoder`、`print-plan`、`protocol`、`printer-client` 测试 | 自动协议通过；物理待验 | HW-MATRIX 样张尺寸、方向、扫码和固件；硬件 |
+| FR-15 | 打印点阵、居中、字节对齐和 ESC/POS 指令顺序正确 | `core/image-encoder.js`、`core/escpos.js`、`printer-client.js` | `image-encoder`、`escpos`、`printer-client` 测试 | 自动协议通过；物理待验 | HW-MATRIX 样张尺寸、方向、扫码和固件；硬件 |
 | FR-16 | 取消停止后续发送；预打印连接/图片等待阶段也可取消；失败/取消/成功进入历史，不自动重放可能已打印页 | `printer-client.js`、editor `startPrint/cancelPrint`、repository 历史 | printer client 状态、预打印取消页面回归、repository 历史上限测试 | 自动核心通过；真机待验 | 三个断线时机、纸面核对、历史一致、不重复；硬件/QA |
 | FR-17 | 条码、二维码、日期、序列号在动态/批量场景值正确 | `code128.js`、`ean13.js`、renderer、date-links、data-bind | `code128`、`ean13`、`renderer`、`date-links`、`dynamic-elements`、`data-bind` | 自动核心通过 | 两类扫码器、跨日/时区、连续序列实物；QA/硬件 |
 | FR-18 | NIIM 模板 JSON/内部文档导入可归一化；无效/缺图安全拒绝 | `core/niim-template-import.js`、repository、home 页 | `niim-template-import.test.js`、`online-templates.test.js` | 自动核心通过；文件 UI 待验 | 恶意/超大/未知 schema、权限拒绝；QA/安全 |

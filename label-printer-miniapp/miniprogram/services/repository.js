@@ -1,4 +1,5 @@
 const { clampElement, cloneDocument, createDocument, createElement } = require('../core/document');
+const { BATCH_FIELDS } = require('../core/data-fields');
 const { normalizeElementFont } = require('../core/font-family');
 const { RecoverableStorage, storageError } = require('./recoverable-storage');
 
@@ -22,6 +23,14 @@ const DOCUMENT_LIMITS = Object.freeze({
   maxLineSpacing: 10,
   maxSerialDigits: 20
 });
+// Data rows handed to the editor for batch printing ride along with drafts.
+const BATCH_LIMITS = Object.freeze({
+  maxRows: 1000,
+  maxFieldLength: 256,
+  maxIdLength: 64,
+  maxSourceLength: 32
+});
+
 const TEMPLATE_META_LIMITS = Object.freeze({
   maxDepth: 6,
   maxKeys: 64,
@@ -56,22 +65,30 @@ const SUPPORTED_TYPES = new Set([
 
 function defaultSettings() {
   return {
-    defaultProfileId: 'd110',
+    defaultProfileId: 'escpos-58',
     density: 2,
     threshold: 180,
     labelType: 1,
-    stockWidthMm: 40,
-    stockHeightMm: 12,
+    // 50 x 30 mm is the common shop label (and the boss's own printer).
+    stockWidthMm: 50,
+    stockHeightMm: 30,
     onboardingDone: false,
     unit: 'mm'
   };
 }
 
-function defaultRows() {
+function localDateText(date) {
+  const pad = (value) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/** Sample rows for the data page; their dates are today's local date. */
+function defaultRows(now) {
+  const today = localDateText(now instanceof Date && Number.isFinite(now.getTime()) ? now : new Date());
   return [
-    { id: 'row-a', name: '样品 A', code: '6901234567892', price: '19.90', date: '2026-08-02' },
-    { id: 'row-b', name: '样品 B', code: '6901234567885', price: '29.90', date: '2026-08-02' },
-    { id: 'row-c', name: '样品 C', code: '6901234567878', price: '39.90', date: '2026-08-02' }
+    { id: 'row-a', name: '样品 A', code: '6901234567892', price: '19.90', date: today },
+    { id: 'row-b', name: '样品 B', code: '6901234567885', price: '29.90', date: today },
+    { id: 'row-c', name: '样品 C', code: '6901234567878', price: '39.90', date: today }
   ];
 }
 
@@ -115,6 +132,94 @@ function cloneTemplateMetaValue(value, depth, state) {
     if (cloned !== undefined) result[key] = cloned;
   });
   return result;
+}
+
+function isPlainObject(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+// A row whose fields are not short strings is dropped whole, never repaired
+// into a label the user did not write. Missing fields count as blank.
+function normalizeBatchRow(value) {
+  if (!isPlainObject(value)) return null;
+  const row = {};
+  if (typeof value.id === 'string' && value.id.length <= BATCH_LIMITS.maxIdLength) row.id = value.id;
+  for (const field of BATCH_FIELDS) {
+    const cell = value[field] === undefined || value[field] === null ? '' : value[field];
+    if (typeof cell !== 'string' || cell.length > BATCH_LIMITS.maxFieldLength) return null;
+    row[field] = cell;
+  }
+  return row;
+}
+
+// A table row from a backup. Text stays text and numbers written by other
+// tools become text; a row holding anything else is dropped on its own, so
+// one bad row never stops the whole restore.
+function normalizeDataRow(value, index, ids) {
+  if (!isPlainObject(value)) return null;
+  const row = {};
+  for (const field of BATCH_FIELDS) {
+    const cell = value[field];
+    if (cell === undefined || cell === null) row[field] = '';
+    else if (typeof cell === 'string') row[field] = cell.slice(0, BATCH_LIMITS.maxFieldLength);
+    else if (typeof cell === 'number' && Number.isFinite(cell)) row[field] = String(cell);
+    else return null;
+  }
+  const rawId = typeof value.id === 'number' && Number.isFinite(value.id) ? String(value.id)
+    : (typeof value.id === 'string' ? value.id.slice(0, BATCH_LIMITS.maxIdLength) : '');
+  row.id = rawId && !ids.has(rawId) ? rawId : `row-restored-${index + 1}`;
+  ids.add(row.id);
+  return row;
+}
+
+// A print record from a backup; anything that is not a record is dropped.
+// Like recordPrint, only the newest 10 keep a copy of the printed label.
+function normalizeHistoryEntry(value, index, ids) {
+  if (!isPlainObject(value)) return null;
+  const rawId = typeof value.id === 'number' && Number.isFinite(value.id) ? String(value.id)
+    : (typeof value.id === 'string' ? value.id.slice(0, 64) : '');
+  const entry = {
+    id: rawId && !ids.has(rawId) ? rawId : `print-restored-${index + 1}`,
+    at: Number(value.at) || 0,
+    result: typeof value.result === 'string' && value.result ? value.result.slice(0, 16) : 'unknown',
+    name: boundedString(value.name, 80, '未命名标签'),
+    message: boundedString(typeof value.message === 'object' ? '' : value.message, 256, '')
+  };
+  ids.add(entry.id);
+  ['projectId', 'profileId', 'deviceName'].forEach((field) => {
+    if (typeof value[field] === 'string') entry[field] = value[field].slice(0, 80);
+  });
+  if (index < 10 && value.document) {
+    const document = normalizeDocument(value.document);
+    if (document) entry.document = document;
+  }
+  return entry;
+}
+
+function normalizeRestoredList(value, normalize, limit) {
+  const ids = new Set();
+  const items = [];
+  (Array.isArray(value) ? value : []).forEach((item) => {
+    if (items.length >= limit) return;
+    const normalized = normalize(item, items.length, ids);
+    if (normalized) items.push(normalized);
+  });
+  return items;
+}
+
+/**
+ * Validated copy of a draft's batch: { rows: [{ id?, name, code, price, date }],
+ * source } with at most 1000 rows; null when nothing usable remains. Never
+ * throws, so a damaged batch can only end batch mode, not lose the draft.
+ */
+function normalizeBatch(value) {
+  if (!isPlainObject(value) || !Array.isArray(value.rows)) return null;
+  const rows = value.rows.slice(0, BATCH_LIMITS.maxRows).map(normalizeBatchRow).filter(Boolean);
+  if (!rows.length) return null;
+  const source = typeof value.source === 'string' && value.source ? value.source.slice(0, BATCH_LIMITS.maxSourceLength) : 'data';
+  return { rows, source };
 }
 
 function normalizeTemplateMeta(value) {
@@ -253,6 +358,30 @@ function normalizeStoredList(value, key) {
   });
 }
 
+/**
+ * Display copy of a stored list: records that cannot be read are counted in
+ * `damaged` and left out. Nothing is written back; saving still refuses the
+ * damaged list until the user removes those records (discardDamagedRecords).
+ */
+function readableStoredList(value) {
+  if (!Array.isArray(value)) return { items: [], damaged: 1 };
+  const ids = new Set();
+  const items = [];
+  let damaged = 0;
+  value.forEach((item) => {
+    const document = normalizeDocument(item && item.document);
+    const id = item && item.id !== undefined && item.id !== null ? String(item.id) : '';
+    if (!document || !id || ids.has(id)) {
+      damaged += 1;
+      return;
+    }
+    ids.add(id);
+    items.push(Object.assign({}, item, { id, document }));
+  });
+  items.sort((left, right) => Number(right.updatedAt) - Number(left.updatedAt));
+  return { items, damaged };
+}
+
 function uniqueId(prefix, existing) {
   const occupied = new Set(existing.map((item) => String(item.id)));
   const base = `${prefix}-${Date.now().toString(36)}`;
@@ -276,7 +405,8 @@ function normalizeDraft(value, defaultDirty) {
     document,
     projectId: String(value.projectId || ''),
     dirtySinceSave: typeof value.dirtySinceSave === 'boolean' ? value.dirtySinceSave : defaultDirty,
-    updatedAt: Number(value.updatedAt) || Date.now()
+    updatedAt: Number(value.updatedAt) || Date.now(),
+    batch: normalizeBatch(value.batch)
   };
 }
 
@@ -349,6 +479,34 @@ class Repository {
       .sort((left, right) => Number(right.updatedAt) - Number(left.updatedAt));
   }
 
+  /** Projects that can be shown, newest first, and how many records are damaged. */
+  getProjectsForDisplay() {
+    return readableStoredList(this.read(KEYS.projects, []));
+  }
+
+  /** User templates that can be shown, newest first, and how many are damaged. */
+  getUserTemplatesForDisplay() {
+    return readableStoredList(this.read(KEYS.templates, []));
+  }
+
+  /**
+   * Removes the project and template records that cannot be read, after the
+   * user agreed to. Returns how many were removed; saving works again after.
+   */
+  discardDamagedRecords() {
+    const changes = [];
+    let removed = 0;
+    [KEYS.projects, KEYS.templates].forEach((key) => {
+      const stored = this.read(key, []);
+      const readable = readableStoredList(stored);
+      if (!readable.damaged) return;
+      removed += Array.isArray(stored) ? readable.damaged : 1;
+      changes.push([key, readable.items]);
+    });
+    if (changes.length) this.storage.transact(changes);
+    return removed;
+  }
+
   prepareProjectSave(documentValue, projectId) {
     const document = normalizeDocument(documentValue);
     if (!document) throw new Error('标签数据损坏，无法保存');
@@ -377,7 +535,9 @@ class Repository {
       document: project.document,
       projectId: project.id,
       dirtySinceSave: false,
-      updatedAt: project.updatedAt
+      updatedAt: project.updatedAt,
+      // Saving the label continues the same editing session, batch mode included.
+      batch: this.getEditorAutosaveBatch()
     };
     // A saved project and its session identity must commit together. Otherwise
     // retrying an unnamed draft creates duplicates, or an old dirty autosave
@@ -498,7 +658,9 @@ class Repository {
   }
 
   getPrintHistory() {
-    return cloneList(this.read(KEYS.printHistory, []));
+    // A record that is not an object (a hand-edited backup) is skipped, so it
+    // can neither break the history list nor the next recordPrint.
+    return cloneList(this.read(KEYS.printHistory, [])).filter(isPlainObject);
   }
 
   recordPrint(entry) {
@@ -559,6 +721,12 @@ class Repository {
     this.remove(KEYS.editorAutosave);
   }
 
+  /** Batch of the stored autosave without normalizing its document. */
+  getEditorAutosaveBatch() {
+    const stored = this.storage.read(KEYS.editorAutosave, null);
+    return normalizeBatch(stored && stored.batch);
+  }
+
   backup() {
     return {
       schemaVersion: STORAGE_VERSION,
@@ -571,7 +739,12 @@ class Repository {
     };
   }
 
-  restore(payload) {
+  /**
+   * Checks a backup without writing anything and returns what restore() would
+   * store: { projects, templates, settings, dataRows, printHistory }. Throws in
+   * plain words when the file cannot be restored.
+   */
+  inspectBackup(payload) {
     const incomingVersion = Number(payload && payload.schemaVersion);
     if (!payload || !Number.isFinite(incomingVersion) || incomingVersion < 1) {
       throw new Error('备份文件缺少有效的版本信息');
@@ -585,9 +758,20 @@ class Repository {
     const templates = normalizeStoredList(payload.templates, KEYS.templates);
     requireCapacity(projects.length, MAX_PROJECTS, '标签');
     requireCapacity(templates.length, MAX_USER_TEMPLATES, '模板');
-    const settings = normalizeSettings(payload.settings || {});
-    const dataRows = cloneList(Array.isArray(payload.dataRows) ? payload.dataRows : defaultRows()).slice(0, 1000);
-    const printHistory = cloneList(Array.isArray(payload.printHistory) ? payload.printHistory : []).slice(0, 80);
+    return {
+      projects,
+      templates,
+      settings: normalizeSettings(payload.settings || {}),
+      // Table rows and print records are checked one by one: a bad one is
+      // dropped instead of breaking the home page after the restore.
+      dataRows: normalizeRestoredList(Array.isArray(payload.dataRows) ? payload.dataRows : defaultRows(),
+        normalizeDataRow, BATCH_LIMITS.maxRows),
+      printHistory: normalizeRestoredList(payload.printHistory, normalizeHistoryEntry, 80)
+    };
+  }
+
+  restore(payload) {
+    const { projects, templates, settings, dataRows, printHistory } = this.inspectBackup(payload);
     const changes = [
       [KEYS.projects, projects],
       [KEYS.templates, templates],
@@ -607,6 +791,7 @@ class Repository {
 }
 
 module.exports = {
+  BATCH_LIMITS,
   DOCUMENT_LIMITS,
   KEYS,
   LEGACY_KEYS,
@@ -616,6 +801,7 @@ module.exports = {
   STORAGE_VERSION,
   defaultRows,
   defaultSettings,
+  normalizeBatch,
   normalizeSettings,
   normalizeDocument
 };

@@ -170,6 +170,10 @@ function buildMiniPreview(documentValue, maxWidth, maxHeight, density) {
       }
     } else if (element.type === 'table') {
       nodes.push({ key, kind: 'stroke', text: '', style: `${geometry}border-width:1px;` });
+    } else if (element.type === 'image' || element.type === 'material') {
+      // Pictures are not loaded for a thumbnail; a light grey box shows that
+      // one sits there (and a missing picture still shows its place).
+      nodes.push({ key, kind: 'picture', text: '', style: geometry });
     }
   });
   return {

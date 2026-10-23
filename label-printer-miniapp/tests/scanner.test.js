@@ -32,6 +32,27 @@ test('scanner reports an unsupported runtime without calling a global API', asyn
   await assert.rejects(scanCode({}), (error) => error.code === 'SCAN_UNAVAILABLE');
 });
 
+test('desktop WeChat is told to scan on the phone instead of opening a camera it lacks', async () => {
+  for (const platform of ['windows', 'mac']) {
+    let opened = 0;
+    const api = {
+      getDeviceInfo: () => ({ platform }),
+      scanCode() { opened += 1; }
+    };
+    await assert.rejects(scanCode(api), (error) => (
+      error.code === 'SCAN_UNAVAILABLE' && error.message === '电脑版微信不能扫码，请在手机微信里使用扫码功能'
+    ));
+    assert.equal(opened, 0);
+  }
+  let phoneScans = 0;
+  const phone = {
+    getDeviceInfo: () => ({ platform: 'ios' }),
+    scanCode(options) { phoneScans += 1; options.success({ result: 'A1' }); }
+  };
+  assert.equal((await scanCode(phone)).result, 'A1');
+  assert.equal(phoneScans, 1);
+});
+
 test('a failed scan while WeChat lacks camera access is reported as a permission problem', async () => {
   const api = {
     scanCode(options) { options.fail({ errMsg: 'scanCode:fail' }); },

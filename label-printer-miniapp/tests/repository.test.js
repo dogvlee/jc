@@ -14,7 +14,9 @@ const {
   MAX_USER_TEMPLATES,
   Repository,
   STORAGE_VERSION,
+  defaultRows,
   defaultSettings,
+  normalizeBatch,
   normalizeSettings,
   normalizeDocument
 } = require('../miniprogram/services/repository');
@@ -193,7 +195,7 @@ test('settings normalization bounds imported and legacy values', () => {
     defaultProfileId: '', density: 99, threshold: -1, labelType: 8,
     stockWidthMm: 600, stockHeightMm: 0, onboardingDone: 1, unit: 'inch'
   }), {
-    defaultProfileId: 'd110',
+    defaultProfileId: 'escpos-58',
     density: 5,
     threshold: 80,
     labelType: 4,
@@ -202,6 +204,8 @@ test('settings normalization bounds imported and legacy values', () => {
     onboardingDone: true,
     unit: 'mm'
   });
+  // A NIIMBOT model saved before those printers were dropped prints as 58 mm.
+  assert.equal(getProfile(normalizeSettings({ defaultProfileId: 'd110' }).defaultProfileId).id, 'escpos-58');
 });
 
 test('legacy editor storage migrates once without seeding the full system catalog', () => {
@@ -219,6 +223,7 @@ test('legacy editor storage migrates once without seeding the full system catalo
   assert.equal(repository.getProjects().length, 1);
   assert.equal(repository.getUserTemplates().length, 1);
   assert.equal(repository.getSettings().defaultProfileId, 'b1');
+  assert.equal(getProfile(repository.getSettings().defaultProfileId).id, 'escpos-58', 'the old model id still finds a printer');
   assert.equal(api.values.has(LEGACY_KEYS.document), false);
 });
 
@@ -378,6 +383,8 @@ test('restore aborts before its first write when the rollback snapshot cannot be
 test('first launch creates stock dimensions supported by the default printer', () => {
   const settings = defaultSettings();
   const profile = getProfile(settings.defaultProfileId);
+  assert.equal(profile.id, 'escpos-58');
+  assert.deepEqual([settings.stockWidthMm, settings.stockHeightMm], [50, 30]);
   assert.deepEqual([settings.stockWidthMm, settings.stockHeightMm], profile.defaultSize);
   assert.equal(evaluatePrintability(createDocument(settings.stockWidthMm, settings.stockHeightMm), profile).ok, true);
   const repository = new Repository(storage({
@@ -713,4 +720,66 @@ test('editor project save at capacity leaves the unsaved draft intact', () => {
   assert.equal(saved.id, 'existing-0');
   assert.equal(repository.getProjects().length, MAX_PROJECTS);
   assert.equal(repository.getEditorAutosave().dirtySinceSave, false);
+});
+
+test('sample data rows carry the local date of today', (context) => {
+  assert.deepEqual(defaultRows(new Date(2027, 0, 5, 0, 30)).map((row) => row.date), ['2027-01-05', '2027-01-05', '2027-01-05']);
+  context.mock.timers.enable({ apis: ['Date'], now: new Date(2026, 11, 31, 23, 59) });
+  const repository = new Repository(storage());
+  assert.deepEqual(repository.getDataRows().map((row) => row.date), ['2026-12-31', '2026-12-31', '2026-12-31']);
+});
+
+test('drafts keep a validated batch and drop malformed parts without failing', () => {
+  const api = storage();
+  const repository = new Repository(api);
+  const document = createDocument(40, 12);
+  const rows = [
+    { id: 'r1', name: '苹果', code: '6901234567892', price: '9.9', date: '2026-10-01', note: 'dropped' },
+    { name: '只有品名' },
+    'not a row',
+    null,
+    ['array'],
+    { name: 'x'.repeat(257) },
+    { name: '价格不是文字', price: 19.9 },
+    { name: '长编号', id: 'i'.repeat(65) }
+  ];
+  const expected = {
+    rows: [
+      { id: 'r1', name: '苹果', code: '6901234567892', price: '9.9', date: '2026-10-01' },
+      { name: '只有品名', code: '', price: '', date: '' },
+      { name: '长编号', code: '', price: '', date: '' }
+    ],
+    source: 'data'
+  };
+  assert.deepEqual(repository.saveEditorDraft({ document, batch: { rows, source: 'data' } }).batch, expected);
+  assert.deepEqual(repository.getEditorDraft().batch, expected);
+  assert.deepEqual(normalizeBatch(expected), expected, 'normalizing twice changes nothing');
+  assert.equal(repository.saveEditorDraft({ document }).batch, null);
+
+  const many = Array.from({ length: 1005 }, (item, index) => ({ name: `行 ${index}` }));
+  const bounded = repository.saveEditorAutosave({ document, batch: { rows: many } }).batch;
+  assert.equal(bounded.rows.length, 1000);
+  assert.equal(bounded.source, 'data');
+  [undefined, null, 'rows', [], { rows: 'x' }, { rows: [] }, { rows: [null, 'x'] }].forEach((batch) => {
+    assert.equal(repository.saveEditorAutosave({ document, batch }).batch, null);
+  });
+  api.values.set(KEYS.editorAutosave, { document, dirtySinceSave: true, batch: { rows: [{ name: 5 }] } });
+  assert.equal(repository.getEditorAutosave().batch, null);
+  assert.equal(repository.getEditorAutosave().document.name, document.name);
+});
+
+test('saving the edited label keeps the session batch but not in the saved label', () => {
+  const repository = new Repository(storage());
+  const document = createDocument(40, 12);
+  const batch = { rows: [{ name: '甲', code: '', price: '', date: '' }], source: 'data' };
+  repository.saveEditorAutosave({ document, dirtySinceSave: true, batch });
+  const project = repository.saveEditorProject(document, '');
+  const autosave = repository.getEditorAutosave();
+  assert.equal(autosave.projectId, project.id);
+  assert.equal(autosave.dirtySinceSave, false);
+  assert.deepEqual(autosave.batch, batch);
+  assert.equal(Object.prototype.hasOwnProperty.call(repository.getProjects()[0], 'batch'), false);
+  repository.clearEditorAutosave();
+  repository.saveEditorProject(document, project.id);
+  assert.equal(repository.getEditorAutosave().batch, null);
 });

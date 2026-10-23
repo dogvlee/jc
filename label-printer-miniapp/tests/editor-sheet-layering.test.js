@@ -13,8 +13,13 @@ test('editor canvases slide off-screen while any sheet is open', () => {
   const wxml = read('index.wxml');
   const binding = wxml.match(/class="paper-shell \{\{([^}]*)\? 'under-sheet' : ''\}\}"/);
   assert.ok(binding, '.paper-shell 需要在弹层打开时加上 under-sheet');
-  const sheetFlags = [...wxml.matchAll(/<block wx:if="\{\{(show[A-Za-z]+)\}\}">/g)].map((match) => match[1]);
+  const sheetFlags = [
+    ...[...wxml.matchAll(/<block wx:if="\{\{(show[A-Za-z]+)\}\}">/g)].map((match) => match[1]),
+    // The printer picker is a component that draws its own sheet.
+    ...[...wxml.matchAll(/<printer-picker\b[^>]*\sshow="\{\{(show[A-Za-z]+)\}\}"/g)].map((match) => match[1])
+  ];
   assert.ok(sheetFlags.length >= 6);
+  assert.ok(sheetFlags.includes('showDevices'), '打印机选择弹层也要让画布让开');
   for (const flag of sheetFlags) {
     assert.match(binding[1], new RegExp(`\\b${flag}\\b`), `${flag} 打开时画布仍会盖住弹层`);
   }

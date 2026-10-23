@@ -54,6 +54,16 @@ function callFs(fs, method, options) {
   });
 }
 
+// Download failures carry code IMAGE_DOWNLOAD_FAILED and a plain message, so
+// a page can tell "no network" apart from a broken template file. The
+// platform's own text stays on `detail`.
+function downloadError(detail) {
+  const error = new Error('图片没有下载下来，请检查网络后重试');
+  error.code = 'IMAGE_DOWNLOAD_FAILED';
+  error.detail = detail;
+  return error;
+}
+
 function download(wxLike, url) {
   return new Promise((resolve, reject) => {
     wxLike.downloadFile({
@@ -62,13 +72,13 @@ function download(wxLike, url) {
       success(result) {
         const status = Number(result && result.statusCode);
         if ((status && status !== 200) || !result || !result.tempFilePath) {
-          reject(new Error(`图片下载失败${status ? `（HTTP ${status}）` : ''}`));
+          reject(downloadError(status ? `HTTP ${status}` : 'no file'));
           return;
         }
         resolve(result.tempFilePath);
       },
       fail(error) {
-        reject(new Error(String((error && error.errMsg) || '图片下载失败')));
+        reject(downloadError(String((error && error.errMsg) || '')));
       }
     });
   });

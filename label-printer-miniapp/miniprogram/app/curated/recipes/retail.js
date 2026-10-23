@@ -45,7 +45,7 @@ const TEAS = [
 
 const JEWELRY = [
   { name: '足金转运珠', material: 'Au999', weight: '2.35g', code: 'SJ26-0418', price: '1,688' },
-  { name: '925银项链', material: 'S925', weight: '4.10g', code: 'SY26-1207', price: '299' }
+  { name: '925银项链', material: 'S925', weight: '4.10g', code: 'YL26-1207', price: '299' }
 ];
 
 /** Rounded black header with a bold title left and an optional note right. */
@@ -66,7 +66,7 @@ function priceStandard(doc, W, H, p) {
   const k = scaleFor(W, H);
   const safe = safeBox(W, H);
   const headH = Math.min(5.6, Math.max(4, H * 0.14));
-  const body = header(doc, safe, '商品标价签', '商跃超市', headH);
+  const body = header(doc, safe, '商品标价签', '邻里超市', headH);
   const content = frame(body.x, body.y + 1, body.w, body.h - 1);
   const [grid, side] = cols(content, [58, 42], 1.6);
   const fields = [['品名', p.name, true], ['产地', p.origin], ['规格', p.spec], ['等级', p.grade]];
@@ -120,7 +120,7 @@ function priceStandardBlock(doc, W, H, p) {
   const [info, block] = cols(safe, [1.35, 1], 1.6);
   const line = -3 * Math.min(k, 1.2);
   const [store, name, fields, officer] = rows(info, [line, 1.3, 2.4, line], 0.5);
-  text(doc, store, '商跃超市 · 商品标价签', { max: Math.min(3.2, 2.6 * k) });
+  text(doc, store, '邻里超市 · 商品标价签', { max: Math.min(3.2, 2.6 * k) });
   text(doc, name, p.name, { bold: true, max: Math.min(7, 5.4 * k) });
   infoRows(doc, fields, [['产地', p.origin], ['规格', `${p.spec}/${p.unit}`], ['等级', p.grade]], { max: Math.min(3.6, 2.8 * k), gap: 0.2 });
   text(doc, officer, '物价员 07', { max: Math.min(3.2, 2.6 * k) });
@@ -207,7 +207,7 @@ function priceSimpleBand(doc, W, H, p) {
   priceUnit(doc, price, `¥${p.price}`, '', { max: Math.min(14, 10 * k) });
   const [origin, store] = cols(foot, [1.3, 1], 1);
   text(doc, origin, `产地 ${p.origin}`, { max: Math.min(3.4, 2.6 * k) });
-  text(doc, store, '商跃超市', { max: Math.min(3.4, 2.6 * k), align: 'right' });
+  text(doc, store, '街角超市', { max: Math.min(3.4, 2.6 * k), align: 'right' });
 }
 
 /** 促销价签：特价标签 + 划线原价 + 活动截止日期。 */

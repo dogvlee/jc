@@ -1,0 +1,47 @@
+name: shangyue-auth
+
+services:
+  auth:
+    build: .
+    image: shangyue-auth:local
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: production
+      WECHAT_APP_ID: ${WECHAT_APP_ID:?Configure WECHAT_APP_ID in server/.env}
+      WECHAT_APP_SECRET: ${WECHAT_APP_SECRET:?Configure WECHAT_APP_SECRET in server/.env}
+      # Container loopback cannot receive traffic from a published host port.
+      HOST: 0.0.0.0
+      PORT: '8787'
+      DATABASE_PATH: /app/data/auth.sqlite
+      SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
+      UPSTREAM_TIMEOUT_MS: ${UPSTREAM_TIMEOUT_MS:-18000}
+      # The host Nginx overwrites X-Real-IP, so the limiter can key on the real
+      # client instead of the proxy's 127.0.0.1.
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      AUTH_RATE_LIMIT_LOGIN: ${AUTH_RATE_LIMIT_LOGIN:-10}
+      AUTH_RATE_LIMIT_SESSION: ${AUTH_RATE_LIMIT_SESSION:-120}
+      AUTH_RATE_LIMIT_GLOBAL: ${AUTH_RATE_LIMIT_GLOBAL:-300}
+    ports:
+      - '127.0.0.1:8787:8787'
+    volumes:
+      - auth-data:/app/data
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8787/healthz', {signal: AbortSignal.timeout(3000)}).then(r => {if (!r.ok) process.exit(1)}).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: '3'
+
+volumes:
+  auth-data:

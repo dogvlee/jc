@@ -89,10 +89,12 @@ test('original wish card has independent vector content and provenance', () => {
   const modulesWithQuietZone = encodedQr.getModuleCount() + 8;
   assert.ok(availableDots >= modulesWithQuietZone * 2, 'QR keeps at least two dots per module');
   assert.doesNotThrow(() => validateDocument(document, 203));
-  assert.equal(evaluatePrintability(document, getProfile('b1')).ok, true);
-  const dSeriesFit = evaluatePrintability(document, getProfile('d110'));
-  assert.equal(dSeriesFit.ok, false);
-  assert.equal(dSeriesFit.suggestProfileId, 'b1');
+  // The 40 mm card fits under the print head of both supported printers.
+  for (const profileId of ['escpos-58', 'escpos-80']) {
+    const fit = evaluatePrintability(document, getProfile(profileId));
+    assert.equal(fit.ok, true, profileId);
+    assert.equal(fit.cropped, false, profileId);
+  }
 });
 
 test('original wish card does not reuse the referenced online blessing layout', () => {

@@ -18,6 +18,8 @@
 | [设计系统与视觉规范](./DESIGN_SYSTEM.md) | 设计变量、图标、通用样式与 Figma 组件对照 | 设计、前端、QA |
 | [竞品分析](./COMPETITIVE_ANALYSIS.md) | NIIMBOT、Phomemo、DYMO、Brother 对比与优先级决策 | 产品、业务 |
 | [扫码建标功能规格](./FEATURE_SPEC_SCAN_TO_LABEL.md) | 本期新增功能的规则、护栏、错误与验收 | 产品、研发、QA、隐私 |
+| [电脑标签设计器导入](./PC_LABEL_DESIGNER_IMPORT.md) | 电脑「标签设计器」发来的码 / 模板文件怎么导入、共用哪些模块、改了要重新打包 | 产品、研发、QA |
+| [自有服务登录接入](./LOGIN_SETUP.md) | 微信手机号登录、独立账号后端、协议和真实环境验收 | 研发、QA、发布 |
 
 ## 架构与开发
 

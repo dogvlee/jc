@@ -3,6 +3,8 @@
  * Roles: name, code, price, date → text / barcode / qrcode / date elements.
  */
 
+const { BATCH_FIELDS } = require('../core/data-fields');
+const { cloneDocument } = require('../core/document');
 const { isValidEan13 } = require('../core/ean13');
 
 // Only a complete EAN-13 prints as EAN-13; anything else prints as Code 128.
@@ -37,20 +39,27 @@ function confirmBoundValue(element) {
   return element;
 }
 
-function applyRowToDocument(documentValue, row, options) {
-  assertBatchCompatible(documentValue);
+// Trimmed name / code / price / date of one row, honoring custom column names.
+function rowValues(row, options) {
   const config = Object.assign({
     nameField: 'name',
     codeField: 'code',
     priceField: 'price',
     dateField: 'date'
   }, options || {});
-
   const rowData = row || {};
-  const name = String(rowData[config.nameField] != null ? rowData[config.nameField] : '').trim();
-  const code = String(rowData[config.codeField] != null ? rowData[config.codeField] : '').trim();
-  const price = String(rowData[config.priceField] != null ? rowData[config.priceField] : '').trim();
-  const date = String(rowData[config.dateField] != null ? rowData[config.dateField] : '').trim();
+  const read = (field) => String(rowData[field] != null ? rowData[field] : '').trim();
+  return {
+    name: read(config.nameField),
+    code: read(config.codeField),
+    price: read(config.priceField),
+    date: read(config.dateField)
+  };
+}
+
+function applyRowToDocument(documentValue, row, options) {
+  assertBatchCompatible(documentValue);
+  const { name, code, price, date } = rowValues(row, options);
 
   if (name) documentValue.name = name;
 
@@ -154,9 +163,79 @@ function buildDocumentsFromRows(templateFactory, rows, options) {
   });
 }
 
+function rowError(rowNumber, reason, cause) {
+  const error = new Error(`第 ${rowNumber} 行无法生成：${reason}`);
+  error.code = 'BATCH_ROW_INVALID';
+  error.rowNumber = rowNumber;
+  if (cause) error.cause = cause;
+  return error;
+}
+
+// An edited base usually still shows the first row's price and code; a row
+// that leaves such a field blank must not print another row's value.
+function clearUnfilledFields(documentValue, values, usedFields) {
+  documentValue.elements.forEach((element) => {
+    const field = element && element.bindField;
+    if (!usedFields.includes(field) || values[field]) return;
+    if (element.type === 'barcode' || element.type === 'qrcode') {
+      element.value = '';
+    } else if (element.type === 'date') {
+      element.autoUpdate = true;
+      element.fixedValue = '';
+    } else {
+      element.text = '';
+    }
+  });
+}
+
+/**
+ * One print-ready copy of `baseDocument` per data row, in row order. Rows
+ * whose name, code, price and date are all blank are skipped; each copy is
+ * named after the row's name, code or “第 N 行”. A bound field that some rows
+ * fill is emptied on rows that leave it blank. `options.validate(document,
+ * rowNumber)` may reject a finished label. A failing row throws
+ * “第 N 行无法生成：…” with error.rowNumber = N (1-based, blank rows counted).
+ */
+function buildBatchDocuments(baseDocument, rows, options) {
+  assertBatchCompatible(baseDocument);
+  const list = Array.isArray(rows) ? rows : [];
+  const values = list.map((row, index) => {
+    try {
+      return rowValues(row, options);
+    } catch (error) {
+      throw rowError(index + 1, '这一行的数据无法填入模板', error);
+    }
+  });
+  const usedFields = BATCH_FIELDS.filter((field) => values.some((value) => value[field]));
+  const validate = options && typeof options.validate === 'function' ? options.validate : null;
+  const documents = [];
+  values.forEach((value, index) => {
+    if (!BATCH_FIELDS.some((field) => value[field])) return;
+    const rowNumber = index + 1;
+    let documentValue;
+    try {
+      documentValue = applyRowToDocument(cloneDocument(baseDocument), list[index], options);
+    } catch (error) {
+      throw rowError(rowNumber, '这一行的数据无法填入模板', error);
+    }
+    clearUnfilledFields(documentValue, value, usedFields);
+    documentValue.name = (value.name || value.code || `第 ${rowNumber} 行`).slice(0, 80);
+    if (validate) {
+      try {
+        validate(documentValue, rowNumber);
+      } catch (error) {
+        throw rowError(rowNumber, (error && error.message) || '数据不符合模板要求', error);
+      }
+    }
+    documents.push(documentValue);
+  });
+  return documents;
+}
+
 module.exports = {
   applyRowToDocument,
   assertBatchCompatible,
+  buildBatchDocuments,
   buildDocumentsFromRows,
   looksLikeCode,
   looksLikePrice

@@ -75,6 +75,10 @@ let mini;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 function withTimeout(promise, milliseconds, label) {
   let timer;
+  // A call that loses the race can still reject later (DevTools answers with its
+  // own timeout); that late rejection must not crash the run before the report
+  // is saved.
+  Promise.resolve(promise).catch(() => undefined);
   return Promise.race([
     promise,
     new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`调用超时：${label}`)), milliseconds); })
@@ -87,17 +91,23 @@ function saveReport() {
 async function until(callback, label, timeout = 15000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
-    const value = await withTimeout(Promise.resolve().then(callback), Math.min(5000, Math.max(1, deadline - Date.now())), label);
+    let value;
+    try {
+      value = await withTimeout(Promise.resolve().then(callback), Math.min(5000, Math.max(1, deadline - Date.now())), label);
+    } catch (error) {
+      // A slow simulator answer (cold start) is "not yet"; the deadline decides.
+      if (!/^调用超时：/.test(error.message) || Date.now() >= deadline) throw error;
+    }
     if (value) return value;
     await sleep(150);
   }
   throw new Error(`等待超时：${label}`);
 }
-async function current(route) {
+async function current(route, timeout) {
   return until(async () => {
     const page = await mini.currentPage();
     return page && page.path === route && page;
-  }, route);
+  }, route, timeout);
 }
 async function tap(page, selector) {
   const element = await until(() => page.$(selector), selector);
@@ -248,7 +258,8 @@ async function canvasScreenshot(stage, file) {
     assert.equal(report.system.SDKVersion, requestedLibrary);
     assert.equal(report.system.platform, 'devtools', '此脚本只可运行在专用模拟器项目');
     const width = report.system.windowWidth;
-    let home = await current('pages/home/index');
+    // The first answer after a cold DevTools start can take tens of seconds.
+    let home = await current('pages/home/index', 60000);
     await check('首次编译、首页与引导', async () => {
       assert.equal(await home.data('storageError'), '');
       assert.equal(await home.data('showOnboarding'), true);

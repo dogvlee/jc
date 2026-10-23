@@ -38,9 +38,9 @@
 
 | 模块 | 责任 | 主要导出 | 主要调用方 | 副作用/状态 | 测试 |
 |---|---|---|---|---|---|
-| `core/document.js` | 创建文档/10 类元素、JSON 克隆、放置、边界限制和旋转命中测试 | `createDocument`、`createElement`、`cloneDocument`、`placeNewElement`、`clampElement`、`hitTest` | 仓储、模板构建、导入器、首页、编辑页、多个 core 测试 | 使用模块级 ID 序号和 `Date.now()`；多个函数修改传入元素 | `tests/document.test.js`、`tests/dynamic-elements.test.js`、`tests/editor-page.test.js` 等 |
-| `core/geometry.js` | 文字方向切换、旋转元素缩放、吸附、角度和选择内容适配 | `changeTextDirection`、`changeTextMode`、`fitElementToSelectionBounds`、`normalizeAngleDelta`、`pointerAngle`、`resizeRotatedElement`、`snapElementPosition`、`snapScalar` | 编辑页、`text-style.js` | 方向/缩放函数修改传入元素；吸附函数返回新坐标/辅助线 | `tests/geometry.test.js`、`tests/editor-snap.test.js`、`tests/text-direction.test.js` 间接覆盖 |
-| `core/editor-gesture.js` | 编辑器 chrome 颜色/尺寸、长按多选和大触摸命中区域 | `CHROME`、`handleHitRegion`、`longPressSelection` | 编辑页、渲染器 | 纯、常量冻结 | `tests/editor-gesture.test.js` |
+| `core/document.js` | 创建文档/10 类元素、JSON 克隆、放置、图片框按图片比例、边界限制和旋转命中测试 | `createDocument`、`createElement`、`cloneDocument`、`placeNewElement`、`fitImageToPicture`、`clampElement`、`hitTest` | 仓储、模板构建、导入器、首页、编辑页、多个 core 测试 | 使用模块级 ID 序号和 `Date.now()`；多个函数修改传入元素 | `tests/document.test.js`、`tests/dynamic-elements.test.js`、`tests/editor-page.test.js` 等 |
+| `core/geometry.js` | 文字方向切换、旋转元素拉伸和右下角等比缩放、手柄命中、吸附、角度和选择内容适配 | `changeTextDirection`、`changeTextMode`、`fitElementToSelectionBounds`、`normalizeAngleDelta`、`pointerAngle`、`resizeRotatedElement`、`scaleRotatedElement`、`selectionHandleModeAtPoint`、`snapElementPosition`、`snapScalar` | 编辑页、`text-style.js` | 方向/缩放函数修改传入元素；吸附函数返回新坐标/辅助线 | `tests/geometry.test.js`、`tests/editor-snap.test.js`、`tests/text-direction.test.js` 间接覆盖 |
+| `core/editor-gesture.js` | 编辑器 chrome 颜色/尺寸、长按多选、大触摸命中区域和旋转圆钮位置 | `CHROME`、`handleHitRegion`、`rotateHandleLocal`、`longPressSelection` | 编辑页、渲染器 | 纯、常量冻结 | `tests/editor-gesture.test.js` |
 | `core/date-links.js` | 日期主项/效期伴随项的语义复制、同步与解除 | `LINKED_DATE_FIELDS`、`companionDates`、`copyDateSemantics`、`linkedPrimary`、`syncLinkedDates`、`unlinkDate` | 当前仅测试 | 修改文档元素和日期字段；可删除伴随元素 | `tests/date-links.test.js`；**当前编辑页主路径未接入** |
 | `core/text-direction.js` | 六种文字模式元数据、模式规范化和弧角限制 | `TEXT_MODE_OPTIONS`、`normalizeTextMode`、`legacyDirectionForMode`、`clampTextArcAngle` | 编辑页、几何、渲染器 | 纯、选项冻结 | `tests/text-direction.test.js`、几何/渲染测试间接覆盖 |
 | `core/text-style.js` | 恢复文字/日期/表格的排版默认值 | `resetTextStyle` | 当前仅测试 | 修改传入元素，可能通过 geometry 恢复水平盒 | `tests/text-style.test.js`；**当前编辑页主路径未接入** |
@@ -53,15 +53,14 @@
 
 | 模块 | 责任 | 主要导出 | 主要调用方 | 副作用/状态 | 测试 |
 |---|---|---|---|---|---|
-| `core/bytes.js` | Uint8Array 转换/连接、16 位大端、读大端、位计数、异步等待 | `asUint8Array`、`concatBytes`、`countBits`、`readU16be`、`u16be`、`sleep` | 协议、编码、计划、BLE、客户端、连接管理器 | 除 `sleep` 使用计时器外为纯函数 | 无独立测试；由 protocol/image-encoder/print-plan/BLE/client 测试间接覆盖 |
+| `core/bytes.js` | Uint8Array 转换/连接、16 位大端、读大端、位计数、异步等待 | `asUint8Array`、`concatBytes`、`countBits`、`readU16be`、`u16be`、`sleep` | BLE、客户端、连接管理器（主要用 `sleep`） | 除 `sleep` 使用计时器外为纯函数 | 无独立测试；由 BLE/client 测试间接覆盖 |
 | `core/code128.js` | Code 128B 编码 | `encodeCode128B` | 渲染器 | 纯；非法输入抛错 | `tests/code128.test.js`、`tests/renderer.test.js` 间接覆盖 |
 | `core/ean13.js` | EAN-13 校验位与编码 | `checksum`、`encodeEan13` | 渲染器 | 纯；非法输入抛错 | `tests/ean13.test.js`、`tests/renderer.test.js` 间接覆盖 |
 | `core/niim-template-import.js` | 把 NIIM JSON 模板/元素转换为本地文档，映射对齐、字体、码制和资源路径；离线导入默认拒绝远程路径，授权目录显式选择保留 HTTPS 图片 | `importNiimTemplate`、`convertElement`、`mapAlignH`、`mapAlignV`、`parseFontStyle`、`isMissingImagePath`、`resolveImagePath`、`CODE_TYPE_MAP` | 导入模板模块、授权在线目录、首页 JSON 模板导入 | 新建并填充文档；跳过畸形元素；不访问网络 | `tests/niim-template-import.test.js`、`tests/authorized-template-catalog.test.js` |
 | `core/scan-label.js` | 规范化扫码结果，区分一维码/二维码，限制长度，把结果写入元素或构造成新标签 | `MAX_BARCODE_VALUE_LENGTH`、`MAX_SCAN_VALUE_LENGTH`、`applyScanToElement`、`buildScanDocument`、`inferBarcodeFormat`、`isOneDimensionalType`、`normalizeScanResult` | 首页扫码建标、编辑页扫码填入 | `applyScanToElement` 修改传入元素；其他函数纯；校验失败抛带 code 的错误 | `tests/scan-label.test.js`、`tests/editor-page.test.js` 间接覆盖 |
-| `core/profiles.js` | 设备 profile、型号/名称路由、预览尺寸、打印头对齐和非破坏式可打印性评估 | `PROFILES`、`getProfile`、`guessProfile`、`profileForModelId`、`previewCanvasSize`、`alignedCanvasSize`、`evaluatePrintability` | 首页、编辑页、打印逻辑测试 | 纯；非法/超尺寸抛错或返回阻断 | `tests/profiles.test.js`、`tests/print-plan.test.js` 间接覆盖 |
-| `core/image-encoder.js` | RGBA 阈值二值化、方向转换、行 RLE、稀疏索引/位图/空行/检查行编码 | `encodeImageData`、`isBlackPixel`、`indexBlackPixels`、`pixelCounts`、`rowToCommand` | `PrinterClient`、`print-plan.js` | 纯；分配点阵数组 | `tests/image-encoder.test.js`、`tests/print-plan.test.js` 间接覆盖 |
-| `core/print-plan.js` | 按 task 组合密度、纸型、开始、页面、份数、打印行和页面结束时序 | `buildPrintPlan`、`pageSizeData` | `PrinterClient` | 纯；份数/密度在计划内约束 | `tests/print-plan.test.js` |
-| `core/protocol.js` | NIIMBOT 命令/响应枚举、帧编码、校验和增量解析 | `COMMAND`、`RESPONSE`、`PacketParser`、`checksum`、`encodePacket` | BLE 会话、打印客户端、编码和计划 | 编码纯；`PacketParser` 持有 buffer/errors 可变状态 | `tests/protocol.test.js`、`tests/ble-session.test.js` 间接覆盖 |
+| `core/profiles.js` | 58mm / 80mm 两种 ESC/POS 型号、按蓝牙名选纸宽、预览尺寸、打印头对齐、非破坏式可打印性评估和货架系列 | `PROFILES`、`getProfile`、`profileForPrinterName`、`savedPrinterProfile`、`previewCanvasSize`、`alignedCanvasSize`、`evaluatePrintability`、`printableProfilesForDocument`、`PRINTER_FAMILIES` | 首页、编辑页、货架、打印逻辑 | 纯；非法/超尺寸抛错或返回阻断 | `tests/profiles.test.js` |
+| `core/image-encoder.js` | 判断一个像素打黑还是打白（透明度叠白底后的亮度低于阈值） | `isBlackPixel` | `core/escpos.js`、`core/print-area.js` | 纯 | `tests/image-encoder.test.js` |
+| `core/escpos.js` | ESC/POS 标签指令：复位、`GS v 0` 分条光栅、`GS FF` 下一张、连续纸走纸、份数规范化 | `INIT`、`NEXT_LABEL`、`TEAR_FEED`、`labelEnd`、`rasterize`、`rasterBands`、`normalizeCopies` | `PrinterClient`、打印任务服务 | 纯；分配点阵数组 | `tests/escpos.test.js` |
 
 ## 5. `miniprogram/services/` 服务模块
 
@@ -73,7 +72,7 @@
 | `services/authorized-template-catalog.js` | 匿名读取已授权的模板、素材和边框分页；模板转换为编辑文档，三类目录均按来源 ID 去重 | `fetchAuthorizedTemplatePage`、`fetchAuthorizedMaterialPage`、`fetchAuthorizedBorderPage`、`mergeRemoteTemplates` 及规范化函数 | 首页模板库、编辑器素材/边框面板 | 只调用固定的 3 个公开目录接口；内存返回，不访问用户/VIP 接口 | `tests/authorized-template-catalog.test.js`、`tests/editor-page.test.js` |
 | `services/remote-image-cache.js` | 在打开在线模板时按需下载 HTTPS 图片，复用本地缓存并把文档路径改成本地文件 | `localizeDocumentImages`、`localizeUrl`、`isRemoteImage` | 首页 → 编辑器 | 调用 `wx.downloadFile` 和文件系统；模块内缓存 URL→路径 | `tests/remote-image-cache.test.js` |
 | `services/ble-session.js` | 适配器/扫描/GATT/可信通道/MTU/notify、完整帧写入、请求队列、解析和断线清理 | `BleSession`、`PRIMARY_SERVICE`、`PRIMARY_WRITE_CHARACTERISTIC`、`PRIMARY_NOTIFY_CHARACTERISTIC`、`callWx`、`withTimeout`、`isAlreadyConnectedError` | 连接管理器、编辑页后备、测试 | 调用微信 BLE API；注册全局监听；计时器；维护 parser/pending/queue/连接状态 | `tests/ble-session.test.js` |
-| `services/printer-client.js` | NIIMBOT transport 后握手、信息读取、点阵计划发送、任务族完成等待和取消 | `PrinterClient` | 连接管理器、编辑页后备 | 发送 BLE 请求；维护 connecting/ready/printing/cancelled/pageIndex；使用计时器轮询 | `tests/printer-client.test.js`、`tests/print-plan.test.js` 间接覆盖 |
+| `services/printer-client.js` | 打开蓝牙链路（不发字节）；按 ESC/POS 打印：复位、分条 `GS v 0`、每张后走纸；两条之间响应取消 | `PrinterClient` | 连接管理器、编辑页后备 | 调 `BleSession.writeRaw`；维护 connecting/ready/printing/cancelled；条间等待用计时器 | `tests/printer-client.test.js` |
 | `services/printer-connection-manager.js` | 应用级单例连接编排：单飞、TTL、OS 连接检查、already/zombie 恢复、持久化、自动重连、kill switch、诊断 | `PrinterConnectionManager`、`codedError`、`DEFAULT_DEVICE_STORAGE_KEY`、`DEFAULT_KILL_SWITCH_KEY`、`DEFAULT_SESSION_TTL_MS`、`DEFAULT_FAST_REUSE_TTL_MS`、`DEFAULT_REOPEN_DELAY_MS` | `app.js`、首页订阅、编辑页连接/诊断/打印前确认 | storage；适配器监听；重连计时器；连接缓存和订阅；调用 session/client | `tests/printer-connection-manager.test.js` |
 
 服务所有权关系：
@@ -119,9 +118,9 @@ Repository 独立于连接栈；二者只通过 lastDevice 存储键在应用装
 | `printer-connection-manager.test.js` | 单飞、TTL、zombie、force-fresh、kill switch、自动重连、诊断、忘记设备 |
 | `printer-client.test.js` | 握手、ready 失效、existing 重新握手 |
 | `protocol.test.js` | 帧、校验、前导、拆包/粘包、坏帧恢复 |
-| `print-plan.test.js` | D110、D11 legacy、B1、B21 legacy 时序 |
 | `profiles.test.js` | 尺寸/打印头、建议 profile、名称和型号边界 |
-| `image-encoder.test.js` | 方向、二值行、RLE、检查行、四类行命令 |
+| `image-encoder.test.js` | 黑白阈值、颜色亮度权重、透明度叠白底、按行读取像素 |
+| `escpos.test.js` | ESC/POS 指令字节、居中光栅、分条大小、份数规范化 |
 | `renderer.test.js` | Canvas 渲染、文字、条码、二维码、校验 |
 | `document.test.js` | 元素默认值、边界、放置、命中 |
 | `geometry.test.js` | 旋转几何、文字方向、选择适配 |

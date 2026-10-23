@@ -12,6 +12,9 @@ const sourceRoot = path.join(projectRoot, 'miniprogram');
 
 export function collectAcceptanceInventory(root) {
   const { FONT_CATALOG } = require(path.join(root, 'core/font-family.js'));
+  const auth = require(path.join(root, 'config/auth.js'));
+  let accountServiceOrigin = '';
+  try { accountServiceOrigin = auth.apiBaseUrl ? new URL(auth.apiBaseUrl).origin : ''; } catch (_) {}
   const fonts = FONT_CATALOG.flatMap((font) => (font.files || []).map((file) => ({
     fontId: font.id, family: font.family, weight: file.weight, url: file.url
   })));
@@ -24,7 +27,7 @@ export function collectAcceptanceInventory(root) {
       if (entry.isDirectory()) scan(absolute);
       else if (entry.isFile() && entry.name.endsWith('.js')) {
         const source = fs.readFileSync(absolute, 'utf8');
-        for (const api of ['chooseMedia', 'chooseMessageFile', 'scanCode', 'openBluetoothAdapter', 'startBluetoothDevicesDiscovery', 'shareFileMessage']) {
+        for (const api of ['chooseMedia', 'chooseMessageFile', 'scanCode', 'openBluetoothAdapter', 'startBluetoothDevicesDiscovery', 'shareFileMessage', 'login', 'request']) {
           if (new RegExp(`\\b${api}\\b`).test(source)) uses.push({ api, file: relative });
         }
       }
@@ -35,6 +38,8 @@ export function collectAcceptanceInventory(root) {
     generatedAt: new Date().toISOString(),
     scope: '代码清单；未读取微信后台配置，不表示微信审核或真机验收通过',
     network: {
+      accountServiceOrigin,
+      accountServiceStatus: accountServiceOrigin ? '自有服务地址已配置，仍需核验合法域名和服务端部署' : '自有服务地址待提供；本地功能可用，不宣称真实登录已接通',
       fontOrigins: [...new Set(fonts.map((font) => new URL(font.url).origin))].sort(),
       fontFiles: fonts,
       builtInRemoteImages: [],
@@ -44,6 +49,7 @@ export function collectAcceptanceInventory(root) {
     },
     apiUsesToReview: uses,
     dataPractices: [
+      '用户同意协议并主动授权手机号后，微信登录码与一次性取号凭证发送到自有账号服务校验；仅保存脱敏账号资料，登录凭据不进入标签备份',
       '项目、模板、批量数据、草稿与打印历史保存在本机；JSON 备份不含图片文件本体',
       '相机/相册用于用户主动添加标签图片，相机扫码用于建标或填写编码内容',
       '聊天文件用于用户主动导入 CSV、模板或 JSON 备份；导出分享由用户主动触发',

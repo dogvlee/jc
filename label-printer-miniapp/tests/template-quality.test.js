@@ -12,6 +12,35 @@ function text(id, x, y, width, height, fontSize, value) {
   return { id, type: 'text', x, y, width, height, fontSize, text: value || id };
 }
 
+// Everything a template puts on paper: text, code values, date captions,
+// serial prefixes / suffixes and table cells.
+function printedFields(document) {
+  const fields = [];
+  document.elements.forEach((element) => {
+    ['text', 'value', 'label', 'fixedValue', 'prefix', 'suffix'].forEach((key) => {
+      if (element[key] != null && element[key] !== '') fields.push({ element, key, value: String(element[key]) });
+    });
+    (Array.isArray(element.cells) ? element.cells : []).forEach((cell, index) => {
+      fields.push({ element, key: `cells[${index}]`, value: String(cell) });
+    });
+  });
+  return fields;
+}
+
+// The app's own brand stays in names, badges and metadata, never on the label
+// a shop prints for its own goods. "SY" is the house prefix of the old
+// sample codes (SY-Guest, SYJ8842, SY2026…), so codes and ids must not carry it.
+const APP_BRAND = /商跃|shang\s*yue/i;
+const HOUSE_PREFIX = /(?<![A-Za-z])SY(?=[-\d]|[A-Z]\d)|(?<![A-Za-z])sy(?=\d)/;
+
+function brandedFields(document) {
+  const meta = document.templateMeta || {};
+  const label = meta.libraryId || meta.templateId || document.name;
+  return printedFields(document)
+    .filter((field) => APP_BRAND.test(field.value) || HOUSE_PREFIX.test(field.value))
+    .map((field) => `${label}（${field.element.type}.${field.key}）：${JSON.stringify(field.value)}`);
+}
+
 test('single-document gate reports print geometry, font, code and content defects', () => {
   const report = auditLibraryDocument({
     id: 'broken',
@@ -143,4 +172,52 @@ test('every shelf template fits its text at the declared size', () => {
     if (errors.length) failures.push(`${template.id}：${errors[0].message}`);
   }
   assert.deepEqual(failures, []);
+});
+
+test('the brand scan covers text, codes, date captions, serial affixes and table cells', () => {
+  const branded = brandedFields({
+    name: '自检',
+    elements: [
+      { type: 'text', text: '商跃价签' },
+      { type: 'qrcode', value: 'WIFI:T:WPA;S:SY-Guest;P:sy202609;;' },
+      { type: 'barcode', value: 'SYJ8842' },
+      { type: 'date', label: '商跃效期' },
+      { type: 'serial', prefix: 'SY-', suffix: '' },
+      { type: 'serial', prefix: 'NO.', suffix: ' Shangyue' },
+      { type: 'table', cells: ['品名', '商跃青提'] }
+    ]
+  });
+  assert.deepEqual(branded, [
+    '自检（text.text）："商跃价签"',
+    '自检（qrcode.value）："WIFI:T:WPA;S:SY-Guest;P:sy202609;;"',
+    '自检（barcode.value）："SYJ8842"',
+    '自检（date.label）："商跃效期"',
+    '自检（serial.prefix）："SY-"',
+    '自检（serial.suffix）：" Shangyue"',
+    '自检（table.cells[1]）："商跃青提"'
+  ]);
+  assert.deepEqual(brandedFields({
+    name: '中性',
+    elements: [
+      { type: 'text', text: '明码标价 · EASY · SYSTEM' },
+      { type: 'qrcode', value: 'WIFI:T:WPA;S:HQ-Guest;P:hq202609;;' },
+      { type: 'table', cells: ['邻里超市', 'SKU WH-0817'] }
+    ]
+  }), []);
+});
+
+test('no shelf or batch template prints the app brand on the user\'s label', () => {
+  const { PUBLIC_TEMPLATES, BUILTIN_BASE_TEMPLATES } = require('../miniprogram/app/catalog');
+  const { buildTemplateDocument } = require('../miniprogram/app/template-layouts');
+  assert.ok(PUBLIC_TEMPLATES.length > 0 && BUILTIN_BASE_TEMPLATES.length > 0);
+  const branded = PUBLIC_TEMPLATES.concat(BUILTIN_BASE_TEMPLATES)
+    .flatMap((template) => brandedFields(buildTemplateDocument(template)));
+  assert.deepEqual(branded, []);
+});
+
+test('no curated template prints the app brand on the user\'s label', () => {
+  // The whole library, including templates kept off the shelf for existing projects.
+  assert.ok(CURATED_INDEX.length > 0);
+  const branded = CURATED_INDEX.flatMap((entry) => brandedFields(buildCuratedDocument(entry.id)));
+  assert.deepEqual(branded, []);
 });

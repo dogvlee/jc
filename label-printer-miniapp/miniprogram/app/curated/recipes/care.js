@@ -24,24 +24,24 @@ const BEDS = [
 ];
 
 const GARMENTS = [
-  { name: '纯棉圆领T恤', code: 'SY26T018', color: '雾霾蓝', size: 'L', fabric: '棉 100%', standard: 'FZ/T 73043', safety: 'B 类', price: '129', ean: `690765432101${checksum('690765432101')}` },
-  { name: '休闲直筒裤', code: 'SY26K205', color: '卡其', size: '32', fabric: '棉 98% 氨纶 2%', standard: 'FZ/T 81007', safety: 'B 类', price: '239', ean: `690765432118${checksum('690765432118')}` }
+  { name: '纯棉圆领T恤', code: 'QY26T018', color: '雾霾蓝', size: 'L', fabric: '棉 100%', standard: 'FZ/T 73043', safety: 'B 类', price: '129', ean: `690765432101${checksum('690765432101')}` },
+  { name: '休闲直筒裤', code: 'QY26K205', color: '卡其', size: '32', fabric: '棉 98% 氨纶 2%', standard: 'FZ/T 81007', safety: 'B 类', price: '239', ean: `690765432118${checksum('690765432118')}` }
 ];
 
 const GREETINGS = [
   { title: '生日快乐', line: '愿你眼里有光，心中有爱', sign: '—— 爱你的家人' },
-  { title: '新婚快乐', line: '执子之手，与子偕老', sign: '—— 商跃全体同事' },
-  { title: '中秋快乐', line: '花好月圆，阖家团圆', sign: '—— 商跃敬贺' },
-  { title: '感谢有你', line: '谢谢你一直以来的支持', sign: '—— 商跃小店' }
+  { title: '新婚快乐', line: '执子之手，与子偕老', sign: '—— 部门全体同事' },
+  { title: '中秋快乐', line: '花好月圆，阖家团圆', sign: '—— 小店敬贺' },
+  { title: '感谢有你', line: '谢谢你一直以来的支持', sign: '—— 南风花店' }
 ];
 
 const GIFTS = [
   { to: '亲爱的小雨', from: '妈妈', note: '愿你每天都开心' },
-  { to: '尊敬的客户', from: '商跃小店', note: '感谢您的信任与支持' }
+  { to: '尊敬的客户', from: '暖心小店', note: '感谢您的信任与支持' }
 ];
 
 const WIFI = [
-  { ssid: 'SY-Guest', password: 'welcome26' }
+  { ssid: 'Home-5G', password: 'welcome26' }
 ];
 
 const PANTRY = [
@@ -170,7 +170,7 @@ function garmentTag(doc, W, H, g) {
     return;
   }
   const [brand, name, lines, price, code] = rows(safe, [0.8, 1.1, 4.2, 1.3, 1.9], 0.8);
-  chip(doc, safe.x, brand.y, brand.h, '商跃服饰', { max: Math.min(4, 3.2 * k) });
+  chip(doc, safe.x, brand.y, brand.h, '清屿服饰', { max: Math.min(4, 3.2 * k) });
   text(doc, frame(safe.x + safe.w * 0.5, brand.y, safe.w * 0.5, brand.h), `尺码 ${g.size}`, { bold: true, align: 'right', max: Math.min(4.4, 3.4 * k) });
   text(doc, name, g.name, { bold: true, max: Math.min(6, 4.6 * k) });
   infoRows(doc, lines, [['货号', g.code], ['颜色', g.color], ['成分', g.fabric], ['执行标准', g.standard], ['安全类别', g.safety], ['检验', '合格']], { max: Math.min(3.8, 3 * k) });
@@ -205,7 +205,7 @@ function garmentTagSize(doc, W, H, g) {
   text(doc, caption, '尺码', { reverse: true, max: Math.min(3.4, 2.6 * k), align: 'center' });
   text(doc, size, g.size, { bold: true, reverse: true, max: size.h, align: 'center' });
   const [brand, name] = rows(head, [1, 1.6], 0.4);
-  text(doc, brand, '商跃服饰', { bold: true, max: Math.min(4, 3.2 * k) });
+  text(doc, brand, '清屿服饰', { bold: true, max: Math.min(4, 3.2 * k) });
   text(doc, name, g.name, { bold: true, max: Math.min(5.4, 4.2 * k) });
   infoRows(doc, lines, [['货号', g.code], ['颜色', g.color], ['成分', g.fabric], ['执行标准', g.standard], ['安全类别', g.safety]], { max: Math.min(3.6, 2.8 * k) });
   priceUnit(doc, price, `¥${g.price}`, '', { max: Math.min(8, 6 * k), center: true });

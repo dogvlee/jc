@@ -20,8 +20,8 @@ test('barcode preflight requires two printer dots per module and gives a usable 
   assert.throws(() => validateCodeElement(element, 203), (error) => {
     assert.equal(error.code, 'CODE_MODULE_DENSITY_LOW');
     assert.equal(error.elementId, 'code-a');
-    assert.match(error.message, /2 打印点\/模块/);
-    assert.match(error.message, /宽度至少/);
+    assert.match(error.message, /条码太密/);
+    assert.match(error.message, new RegExp(`拉宽到至少 ${metrics.minimumMmRounded.toFixed(1)} mm`));
     return true;
   });
 });
@@ -68,7 +68,7 @@ test('unsupported source symbology and retained EAN errors use actionable blocke
   }, 203), (error) => {
     assert.equal(error.code, 'UNSUPPORTED_CODE_TYPE');
     assert.equal(error.elementId, 'unknown-16');
-    assert.match(error.message, /明确选择 Code128 或 EAN-13/);
+    assert.match(error.message, /在「条码类型」里选商品条码 EAN-13 或通用 Code 128/);
     return true;
   });
 
@@ -98,6 +98,6 @@ test('explicit code repair only resizes when the minimum box fits the label', ()
   const before = { ...impossible };
   const blocked = resizeCodeElementToMinimum(impossible, document, 203);
   assert.equal(blocked.ok, false);
-  assert.match(blocked.message, /当前标签放不下/);
+  assert.match(blocked.message, /这张标签放不下/);
   assert.deepEqual(impossible, before);
 });

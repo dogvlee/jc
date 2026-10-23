@@ -1,5 +1,7 @@
 # BLE 连接与打印协议
 
+> **2026-10-07 起只支持 ESC/POS 热敏打印机（ADR-015）。** 当前打印方式见第 11 节；连接与通道发现见第 2 节。其余描述精臣（NIIMBOT）帧、握手、打印计划和型号映射的章节，对应代码已删除，只作历史记录保留。
+
 ## 1. 范围、证据和保密边界
 
 本文只描述仓库当前代码可见的 BLE/GATT 选择、帧边界、连接状态机、打印编排和安全限制。它不是厂商完整协议规范，也不包含未出现在源码中的命令、固件秘密或逆向结论。
@@ -11,9 +13,8 @@
 - `miniprogram/services/ble-session.js`
 - `miniprogram/services/printer-connection-manager.js`
 - `miniprogram/services/printer-client.js`
-- `miniprogram/core/protocol.js`
+- `miniprogram/core/escpos.js`
 - `miniprogram/core/image-encoder.js`
-- `miniprogram/core/print-plan.js`
 - `miniprogram/core/profiles.js`
 
 ## 2. GATT 通道
@@ -23,21 +24,33 @@
 | 角色 | 常量 | UUID | 必要属性 |
 |---|---|---|---|
 | E781 主服务 | `PRIMARY_SERVICE` | `e7810a71-73ae-499d-8c15-faa9aef0c3f2` | 被服务发现返回 |
-| 写入特征 | `PRIMARY_WRITE_CHARACTERISTIC` | `bef8d6c9-9c21-4c9e-b632-bd58c1009f9f` | `write` 或 `writeNoResponse` |
-| 通知特征 | `PRIMARY_NOTIFY_CHARACTERISTIC` | `bef8d6c9-9c21-4c9e-b632-bd58c1009f9e` | `notify` 或 `indicate` |
+| 写入特征 | `PRIMARY_WRITE_CHARACTERISTIC` | `bef8d6c9-9c21-4c9e-b632-bd58c1009f9f` | `write` 或 `writeNoResponse`；带 `notify` 时也在它上面收通知 |
+| 备用通知特征 | `PRIMARY_NOTIFY_CHARACTERISTIC` | `bef8d6c9-9c21-4c9e-b632-bd58c1009f9e` | `notify` 或 `indicate`；无真机证据，仅在 9f 不能通知时使用 |
 
 若写特征支持 `writeNoResponse`，会话优先使用该写入类型；否则使用 `write`。通知特征支持 `indicate` 时，启用时传 `indication`，否则传 `notification`。
 
-### 2.1 可信发现规则
+### 2.1 通道发现规则（ADR-013：连上即可打印）
 
-连接后不会选择“第一个可写特征”。发现算法只检查：
+服务按以下顺序尝试，跳过通用访问、通用属性、设备信息和电量服务（`1800`、`1801`、`180A`、`180F`）：
 
-1. 上述 E781 主服务；或
-2. 设备记录中同时存在 `serviceId`、`writeCharacteristicId`、`notifyCharacteristicId` 时，检查该完整持久化通道。
+1. E781 主服务；
+2. 设备记录里此前连接成功的 `serviceId`（其中记住的写/通知特征优先）；
+3. 其他服务，`isPrimary` 的在前。
 
-对 E781 服务始终使用代码内固定的 9f 写特征和 9e 通知特征；不会因为同一服务里还有其他可写/通知特征而切换。对持久化的非主服务，也必须 UUID 精确匹配且属性满足要求。
+同一服务内的选择（`channelIn`）：
 
-正常应用只会在一次可信连接成功后保存该通道。持久化回退用于重新发现已知通道，不是允许扫描任意 BLE 设备。若没有找到可信成对特征，会先断开并抛出 `NO_NIIMBOT_CHANNEL`，且不会发送协议字节。
+- E781：写入用 `…9f9f`（没有时用服务内其他可写特征）；通知优先用写入特征本身（NIIMBOT 打印机在被写入的 9f 特征上回包，开源实现和 RC1 之前的代码都是这样），其次 `…9f9e`，再次服务内任一通知特征。
+- 其他服务：优先“既能写又能通知”的单个特征；否则取第一个可写特征加第一个通知特征。
+
+写入和通知必须在同一服务里。没有任何服务同时有写入和通知时，退而用第一个只能写入的通道（`notify: null`）。服务列表为空或不完整时，间隔 500 ms、1000 ms 再查两次（`discoveryRetryDelaysMs`）；`getBLEDeviceServices` 本身报错或超时不重查，避免叠加等待。
+
+链路建立后一律保持连接（ADR-013）：
+
+- 什么都写不进的设备：`connected = true`，写入通道为空；任何写入（握手或打印）抛出 `NO_NIIMBOT_CHANNEL`（“这台设备不能接收打印内容，可能不是打印机……”）。
+- 通知开不了（重试一次后）：不开通知继续连接，之后的请求收不到回包，记为未回应。
+- 只有链路本身没了（错误码 10006/10002、断开事件、`TRANSPORT_RESET`/`CONNECT_CANCELLED`）才让连接失败。
+
+`PrinterClient` 的握手和信息查询都是尽力而为（`optional`）：CONNECT 不回或回包无效时 `answered = false`，不再发型号/序列号等查询，连接照样成功；v3 打印机个别信息查询或心跳不回，只把对应字段记为 `null`。每次打印前若 `answered` 为 false，先再握手一次：回应了就照常打印；仍不回应则不发送任何打印数据，抛出 `PRINTER_UNANSWERED`（“已经连上这台打印机，但它不回应商跃标签的打印指令，暂时不能用它打印。”），没有可写通道时抛出 `NO_NIIMBOT_CHANNEL`。“检查连接”对未回应的设备显示“已连接。这台设备还没有回应打印指令，打印时会再试一次。”。成功连接后，通道随设备记录保存，下次连接优先使用。
 
 ## 3. 传输帧和完整写入
 
@@ -277,18 +290,35 @@ iOS 可能不提供 `setBLEMTU`，代码允许只读取系统报告值。`onBLEM
 | `b21-c2b` | `b1` | 384 px | `top` | 771、775 |
 | `b21s` | `d110` | 384 px | `top` | 776、777 |
 
-边界规则：
+边界规则（ADR-013：连上即可打印，不按型号阻断）：
 
-- 返回了未知非空型号 ID 时，不按相似设备名称猜 profile，直接要求人工确认/阻止打印。
-- 设备没有返回型号 ID 时，才允许按已知名称规则回退。
-- `B21_PRO` 名称显式返回 `null`。
-- 300 DPI 代码（测试覆盖 4097、528、785）保持未映射。
-- `2320 → d110` 和 `4098 → b1` 在当前代码中可路由，但仓库文档把它们列为候选映射；未形成对应真机证据前不得对外承诺支持。
-- 手动选 profile 只确认参数选择，不把未知硬件自动升级为已验证型号。
+- 完成握手的打印机都可以打印。`reportedProfile` 只认打印机上报、且在上表中能直接映射的型号 ID（候选 ID 除外），命中即由它决定 profile；没有上报型号 ID 时，按名称识别出的型号只算猜测。
+- 否则依次使用：打印机连上前在编辑器手动选的型号（连上后按设备 ID 记住）> 用户为这台打印机选过的型号 > `likelyProfile` > 能放下当前标签的 profile。不弹窗要求确认型号。
+- `likelyProfile` 的顺序：`profileForModelId`（含候选 ID 和无型号 ID 时的 D11 名称/协议版本规则）→ 厂商机型表按型号 ID → `guessProfile` 名称规则 → `nameFamilyProfile`（厂商机型表按名称，名称须是 `<型号>-<序列号>` 形式且序列号含数字，避免把 `H1_Headset`、`D2` 之类的耳机、音箱当成打印机；再按首字母 `D…` → `d110`、`B…` → `b1`）。
+- 厂商机型表（`profiles.js` 的 `VENDOR_MODELS`）来自 `research/extracted-configs/printerList.json` 的 `printDirection`：90°/270° 侧向出纸的窄打印头（B16 1792、B18 3584、B18S 3585、D101 2560、H1 3840、H1S 4352、D11_H 528 等）按 `d110`；0° 顶部出纸（B3S 256/260/262、K3 4864、A8 256、B21_Pro 785、B1 Pro 4097 等）按 `b1`。
+- `B21_PRO` 名称在 `guessProfile` 中返回 `null`，`D110M_V4` 专用路径未适配；连接后按厂商机型表使用 `b1` 尝试，输出可能不正确。
+- 300 DPI 机型（4097、528、785 等）按 203 dpi profile 打印，输出约为设计尺寸的 2/3；打印头宽于 48 mm 的机型只打中间 48 mm；270° 出纸机型（B16、A1 Pro）内容可能倒置。
+- `2320 → d110` 和 `4098 → b1` 是候选映射，作为最可能的型号直接用于打印，但未形成对应真机证据前不得对外承诺支持。
+- 型号不确定时，用户在打印弹层“打印机型号”或设置中改选的 profile 会为该设备记住（打印机不在时选的型号，在它连上或自动重连时记到它名下）；只是用户选定、并非打印机上报的型号，尺寸不符时仍给出“切换为 X”；手动选型只决定打印参数，不把未知硬件升级为已验证型号。
+- 标签超过所选 profile 打印头和最大纸宽的物理尺寸检查仍会阻断打印。
 
 profile 同时决定 DPI、打印头像素、点阵方向、密度范围和 task。新增型号必须验证完整组合，不能只扩充设备名称正则。
 
-## 11. 为什么不接 FF00 / FF02 / FF03 ESC/POS
+## 11. ESC/POS 打印机（ADR-014）
+
+不走 E781 服务连上的打印机由 `PrinterClient` 记为 `protocol: 'escpos'`：连接时不握手、不发任何字节；`savedDevice.protocol` 随设备保存。打印走 `printEscPos()`（`core/escpos.js`），整个过程只调用 `BleSession.writeRaw()`。`writeRaw()` 按 `maxWriteSize` 分包、顺序写；特征支持写应答时用 `write`，否则用 `writeNoResponse` 并隔 `writeDelayMs`。
+
+| 步骤 | 字节 | 来源 |
+|---|---|---|
+| 开始 | `1B 40 1B 61 00 1B 33 18`（ESC @、左对齐、行距 24） | `print` 打印工具 `INIT_BYTES` |
+| 图像 | 每条 `1D 76 30 00 xL xH yL yH` + 像素，≤32 点行、≤1400 字节、≤8 包，条间 80 ms | `print-table-simple.js sendBitmapBanded` 稳定模式 |
+| 下一张 | `1D 0C`（GS FF，走纸到下一张），之后等 400 ms | 厂家《打印指令 v1.06》第 3 章 |
+
+光栅按编辑器同一黑白阈值生成，行从上到下，每字节最高位在左；标签宽度小于打印头时居中补白。ESC/POS 没有取消命令，取消只在两条 `GS v 0` 之间停下；不发 NIIMBOT 取消帧。打印机不回打印完成，写完最后一条和走纸即算完成。
+
+尚未接入：FF03 信用令牌高速模式、厂家私有的黑标检测开关与票长设置、电量与休眠命令。
+
+### 11.1 原先不接 FF00 / FF02 / FF03 的分析（ADR-008，保留备查）
 
 FF00 Data Transmission Service、FF02 写入、FF03 credit/notify 的常见路径服务于另一类以 ESC/POS 位图命令（例如 `GS v 0`）发送，并用令牌/信用做背压的热敏打印机。它与当前链路在多个层面不同：
 
@@ -306,9 +336,7 @@ FF00 Data Transmission Service、FF02 写入、FF03 credit/notify 的常见路�
 2. 忽略 credit，造成丢包或阻塞；
 3. 让当前 `PacketParser` 和 `PrinterClient` 等待永远不会出现的 NIIMBOT 响应。
 
-当前测试专门证明：即使一个通用 BLE 设备提供 FF02 风格的可写特征和 FF03 风格通知，只要缺少可信 NIIMBOT 通道，就在发送任何字节前拒绝。
-
-未来若要支持 FF00 打印机，应新增独立的 transport、信用状态机、ESC/POS encoder、printer client 和 profile 家族；设备发现阶段先判协议族，不能在现有 `BleSession` 中添加“找不到 E781 就随便用 FF02”的回退。
+ADR-014 按这里的建议做了：设备连上后按服务先判协议族，ESC/POS 打印机走独立的 encoder（`core/escpos.js`）和打印分支，不复用 NIIMBOT 帧、解析器或响应等待；信用状态机暂未实现，只用稳定模式。
 
 ## 12. 可观测性和测试证据
 

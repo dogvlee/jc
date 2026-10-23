@@ -87,3 +87,19 @@ SOFTWARE.
 The editor can load 20 Chinese font families on demand from exact-version Fontsource/jsDelivr URLs. These font binaries are not bundled in the WeChat package. Every remote family is distributed by its font author under the SIL Open Font License 1.1.
 
 The family-by-family source and license links are maintained in [the open-source font catalog](docs/OPEN_SOURCE_FONT_CATALOG.md). If these files are later self-hosted or bundled with the application, retain the copyright notice and full OFL text supplied with each family.
+
+## tiny-inflate
+
+The bundled `miniprogram/vendor/tiny-inflate.js` is `tiny-inflate` 1.0.3 (a port of tinf by Joergen Ibsen). It opens the desktop label designer's QR payload (`miniprogram/core/pc-template-code.js`). Local change: truncated or corrupt input throws instead of spinning.
+
+Source: <https://github.com/foliojs/tiny-inflate>
+
+MIT License
+
+Copyright (c) 2015-present Devon Govett
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

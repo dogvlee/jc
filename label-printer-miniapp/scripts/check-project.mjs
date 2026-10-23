@@ -7,6 +7,8 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(scriptDir, '..');
 const miniRoot = path.join(projectRoot, 'miniprogram');
 const MAIN_PACKAGE_LIMIT = 2 * 1024 * 1024;
+// Warming well before the hard limit gives time to split the package.
+const PACKAGE_WARN_USAGE = 0.85;
 const warnings = [];
 const errors = [];
 
@@ -251,8 +253,16 @@ console.log(`[check] Pack ignore: ${ignoredPackageFiles.length} files, ${ignored
 console.log(`[check] Main package: ${packageFiles.length} files, ${packageBytes} bytes (${packageMiB.toFixed(2)} MiB, ${(usage * 100).toFixed(1)}% of 2 MiB)`);
 if (packageBytes > MAIN_PACKAGE_LIMIT) {
   errors.push(`Main package is ${packageBytes - MAIN_PACKAGE_LIMIT} bytes over the 2 MiB limit`);
-} else if (usage >= 0.9) {
-  warnings.push(`Main package has only ${MAIN_PACKAGE_LIMIT - packageBytes} bytes of headroom`);
+} else if (usage >= PACKAGE_WARN_USAGE) {
+  // Uploading fails once the package passes 2 MiB, so warn with room to react,
+  // and say which bundles are eating the budget.
+  const largest = packageFiles
+    .map((file) => ({ name: file.slice(Math.max(miniRoot.length + 1, 0)), size: fs.statSync(file).size }))
+    .sort((left, right) => right.size - left.size)
+    .slice(0, 3)
+    .map((entry) => `${entry.name} ${(entry.size / 1024).toFixed(0)} KB`)
+    .join(', ');
+  warnings.push(`Main package is at ${(usage * 100).toFixed(1)}% of the 2 MiB limit (${MAIN_PACKAGE_LIMIT - packageBytes} bytes left); move bundled templates, thumbnails or fonts into a subpackage before adding more. Largest: ${largest}`);
 }
 
 for (const warning of warnings) console.warn(`[warn] ${warning}`);

@@ -42,8 +42,8 @@ const DRINKS = [
 ];
 
 const TAKEOUT = [
-  { shop: '商跃小厨', number: 18, note: '不要葱 · 多加辣', seal: '已封口 · 拆封前请检查' },
-  { shop: '商跃轻食', number: 52, note: '酱汁分装', seal: '食品安全封签' }
+  { shop: '巷口小厨', number: 18, note: '不要葱 · 多加辣', seal: '已封口 · 拆封前请检查' },
+  { shop: '绿野轻食', number: 52, note: '酱汁分装', seal: '食品安全封签' }
 ];
 
 const FLAVORS = [

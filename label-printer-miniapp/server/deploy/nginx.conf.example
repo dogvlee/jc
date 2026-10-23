@@ -1,0 +1,57 @@
+# Linux host Nginx: include inside its http {} context, for example conf.d/.
+# Replace auth.example.invalid and both certificate paths before nginx -t.
+# The certificate must already exist; this file does not provision one.
+limit_req_zone $binary_remote_addr zone=shangyue_login:10m rate=10r/m;
+limit_req_zone $binary_remote_addr zone=shangyue_session:10m rate=120r/m;
+
+server {
+    listen 443 ssl;
+    server_name auth.example.invalid;
+    ssl_certificate /etc/nginx/tls/shangyue/fullchain.pem;
+    ssl_certificate_key /etc/nginx/tls/shangyue/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    # Request URLs, bodies and authorization headers are account data.
+    access_log off;
+    error_log /var/log/nginx/shangyue-auth-error.log crit;
+    server_tokens off;
+    client_max_body_size 8k;
+    client_body_timeout 5s;
+    send_timeout 30s;
+    limit_req_status 429;
+
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header Connection '';
+    # Never forward client versions of these headers. X-Real-IP is overwritten
+    # with the real peer so the login service (TRUST_PROXY=1) can rate-limit per
+    # client instead of lumping every user into the proxy's 127.0.0.1 bucket.
+    proxy_set_header X-Forwarded-For '';
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_connect_timeout 3s;
+    proxy_read_timeout 25s;
+    proxy_send_timeout 10s;
+    proxy_next_upstream off;
+    proxy_redirect off;
+    proxy_cache off;
+
+    location = /api/auth/wechat/phone {
+        limit_req zone=shangyue_login burst=5 nodelay;
+        proxy_pass http://127.0.0.1:8787;
+    }
+    location ~ ^/api/auth/(session|logout)$ {
+        limit_req zone=shangyue_session burst=10 nodelay;
+        proxy_pass http://127.0.0.1:8787;
+    }
+    location = /healthz {
+        proxy_pass http://127.0.0.1:8787;
+    }
+    # Never redirect login APIs, including trailing-slash variants.
+    location / { return 404; }
+    error_page 429 = @account_rate_limited;
+    location @account_rate_limited {
+        default_type application/json;
+        add_header Cache-Control no-store always;
+        return 429 '{"ok":false,"code":"AUTH_RATE_LIMITED","msg":"登录尝试较多，请稍后再试"}';
+    }
+}

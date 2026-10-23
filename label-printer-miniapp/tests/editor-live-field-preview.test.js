@@ -150,3 +150,29 @@ test('page unload persists a focused live field even when blur never fires', asy
   assert.equal(editor.persistCount, 1);
   assert.equal(editor.undoStack.length, 1);
 });
+
+test('typing after onHide dropped the draft still reaches the label and stays undoable', () => {
+  const document = createDocument(40, 30);
+  const textElement = createElement('text', document);
+  textElement.text = '原文字';
+  const editor = editorFor([textElement], textElement.id);
+
+  editor.startFieldEdit(event('text', ''));
+  editor.previewField(event('text', '第一段'));
+  // onHide / the print sheet commit and drop the draft while the input keeps
+  // its focus; the next keystroke must not vanish into the native input.
+  editor.commitFieldEditDraft();
+  assert.equal(editor.fieldEditDraft, null);
+  const undoAfterCommit = editor.undoStack.length;
+
+  editor.previewField(event('text', '第一段第二段'));
+
+  assert.equal(textElement.text, '第一段第二段', 'the character reaches the label');
+  assert.equal(editor.fieldEditDraft.field, 'text', 'a fresh draft captures the next edit');
+  assert.equal(editor.data.selected.text, '第一段第二段');
+  assert.equal(editor.undoStack.length, undoAfterCommit, 'typing alone adds no undo entry yet');
+
+  editor.finishFieldEdit(event('text', '第一段第二段'));
+  assert.equal(editor.undoStack.length, undoAfterCommit + 1, 'and the edit is undoable once it settles');
+  assert.equal(editor.undoStack[undoAfterCommit].elements[0].text, '第一段');
+});

@@ -155,7 +155,7 @@ test('unsupported imported barcode renders an explicit notice instead of guessed
     value: 'ABC-16', format: 'unsupported', unsupportedCodeType: true
   };
   renderDocument(context, { elements: [element] }, { width: 40, height: 20 }, 25.4, {});
-  assert.ok(context.textCalls.some((call) => call.value === '码制待确认'));
+  assert.ok(context.textCalls.some((call) => call.value === '请选条码类型'));
   assert.equal(context.fillRects.length, 1, 'only the white canvas background is filled');
 });
 
@@ -200,7 +200,7 @@ test('QR validation supports UTF-8 content and rejects undersized elements', () 
   assert.doesNotThrow(() => validateDocument(document, 203));
   document.elements[0].width = 1;
   document.elements[0].height = 1;
-  assert.throws(() => validateDocument(document, 203), /二维码清晰度不足/);
+  assert.throws(() => validateDocument(document, 203), /二维码太小/);
 });
 
 test('barcode validation requires at least two printer dots per module', () => {
@@ -214,7 +214,7 @@ test('barcode validation requires at least two printer dots per module', () => {
       value: '1234567890'
     }]
   };
-  assert.throws(() => validateDocument(document, 203), /条码清晰度不足/);
+  assert.throws(() => validateDocument(document, 203), /条码太密/);
   document.elements[0].width = 42;
   assert.doesNotThrow(() => validateDocument(document, 203));
 });
@@ -382,7 +382,7 @@ test('QR rendering and validation reserve four quiet modules on every side', () 
   assert.doesNotThrow(() => validateDocument(document, 25.4));
   document.elements[0].width = minimumPrintDots - 0.5;
   document.elements[0].height = minimumPrintDots - 0.5;
-  assert.throws(() => validateDocument(document, 25.4), /二维码清晰度不足/);
+  assert.throws(() => validateDocument(document, 25.4), /二维码太小/);
 
   document.elements[0].width = requiredDots;
   document.elements[0].height = requiredDots;
@@ -435,6 +435,73 @@ test('image thresholding uses the WeChat offscreen canvas API when available', (
   assert.equal(created, 1);
   assert.equal(context.drawImageCalls[0][0], raster);
   assert.deepEqual(Array.from(raster.output.data), [0, 0, 0, 255]);
+});
+
+test('while a finger resizes a picture the last black and white copy is reused', (t) => {
+  const previousWx = global.wx;
+  const previousOffscreenCanvas = global.OffscreenCanvas;
+  delete global.OffscreenCanvas;
+  const sizes = [];
+  global.wx = {
+    createOffscreenCanvas(options) {
+      sizes.push(`${options.width}x${options.height}`);
+      return {
+        getContext() {
+          return {
+            fillRect() {},
+            drawImage() {},
+            getImageData: (x, y, width, height) => ({ data: new Uint8ClampedArray(width * height * 4), width, height }),
+            putImageData() {}
+          };
+        }
+      };
+    }
+  };
+  t.after(() => {
+    if (previousWx === undefined) delete global.wx;
+    else global.wx = previousWx;
+    if (previousOffscreenCanvas === undefined) delete global.OffscreenCanvas;
+    else global.OffscreenCanvas = previousOffscreenCanvas;
+  });
+
+  const photo = {};
+  const label = (width) => ({
+    elements: [{ id: 'photo', type: 'image', x: 0, y: 0, width, height: 2, threshold: 180 }]
+  });
+  const paint = (width, options) => {
+    const context = createCanvasContext();
+    renderDocument(context, label(width), { width: 10, height: 10 }, 25.4, { photo }, options);
+    return context.drawImageCalls[0][0];
+  };
+
+  const settled = paint(2);
+  assert.deepEqual(sizes, ['2x2']);
+  // Mid-gesture sizes draw the cached copy instead of converting every pixel.
+  assert.equal(paint(3, { interactive: true }), settled);
+  assert.equal(paint(4, { interactive: true }), settled);
+  assert.deepEqual(sizes, ['2x2']);
+  // The settled paint makes the exact copy once.
+  assert.notEqual(paint(4), settled);
+  assert.deepEqual(sizes, ['2x2', '4x2']);
+  // A picture never converted before is still converted mid-gesture.
+  const other = createCanvasContext();
+  renderDocument(other, label(5), { width: 10, height: 10 }, 25.4, { photo: {} }, { interactive: true });
+  assert.deepEqual(sizes, ['2x2', '4x2', '5x2']);
+});
+
+test('a code that cannot be drawn says so on the canvas instead of vanishing', () => {
+  const context = createCanvasContext();
+  renderDocument(context, {
+    widthMm: 40,
+    heightMm: 20,
+    elements: [
+      { id: 'cn', type: 'barcode', format: 'ean13', value: '中文', x: 1, y: 1, width: 30, height: 8 },
+      { id: 'blank', type: 'barcode', format: 'code128', value: '', x: 1, y: 10, width: 30, height: 8 }
+    ]
+  }, { width: 320, height: 160 }, 203, {});
+  const values = context.textCalls.map((call) => call.value);
+  assert.ok(values.includes('条码内容不对'), values.join(' | '));
+  assert.ok(values.includes('请填条码内容'), values.join(' | '));
 });
 
 test('a barcode that follows the serial prints each page serial as its readable text', () => {

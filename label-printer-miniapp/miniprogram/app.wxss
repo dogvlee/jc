@@ -16,19 +16,30 @@ page {
   --color-text-1: #1F2329;
   --color-text-2: #51565D;
   --color-text-3: #646A73;
-  --color-text-4: #8F959E;
+  /* 5:1 on white, so hints and notes in text-4 stay readable. */
+  --color-text-4: #6B7079;
   --color-success: #1E9E62;
   --color-success-soft: #E8F7EF;
+  /* Success and warning text: the base colours are too light for words,
+     especially on their soft backgrounds. Icons and dots keep the base. */
+  --color-success-text: #137A4A;
   --color-warning: #B86E00;
   --color-warning-soft: #FFF6E5;
+  --color-warning-text: #8A5200;
   --color-danger: #E02D26;
   --color-danger-soft: #FFF1F0;
   --color-mask: rgba(15, 17, 20, 0.5);
+  /* The editor's canvas stage: a shade darker than --color-bg so the
+     white label stands out. */
+  --color-stage: #EEF0F3;
   --font-display: 40rpx;
   --font-title: 34rpx;
   --font-subtitle: 30rpx;
   --font-body: 28rpx;
   --font-caption: 24rpx;
+  /* Smallest size for words people read: input labels and tags. */
+  --font-small: 22rpx;
+  /* Corner badges only. */
   --font-tiny: 20rpx;
   --space-1: 8rpx;
   --space-2: 12rpx;
@@ -147,16 +158,18 @@ button.outline-button.button-hover {
   background: var(--color-fill);
 }
 
+/* Red words on the soft red fill use the pressed red: the brand red only
+   reaches about 4.2:1 there. */
 .danger-button,
 .danger-outline {
   border: 1rpx solid var(--color-primary-line);
-  color: var(--color-danger);
+  color: var(--color-primary-pressed);
   background: var(--color-danger-soft);
 }
 
 .primary-small,
 .btn-s {
-  min-height: 56rpx;
+  min-height: 64rpx;
   padding: 0 24rpx;
   font-size: var(--font-caption);
 }
@@ -180,7 +193,7 @@ button.full-button {
 }
 
 .text-button {
-  min-height: 56rpx;
+  min-height: 72rpx;
   padding: 0 8rpx;
   display: inline-flex;
   align-items: center;
@@ -207,7 +220,7 @@ button.full-button {
 
 .chip.active {
   border-color: var(--color-primary-line);
-  color: var(--color-primary);
+  color: var(--color-primary-pressed);
   background: var(--color-primary-soft);
   font-weight: 600;
 }
@@ -328,10 +341,14 @@ button.full-button {
   font-size: var(--font-caption);
 }
 
+/* The grey circle stays 60rpx; the transparent padding around it makes the
+   touch target 88rpx, and the negative margin keeps the circle where it was. */
 button.close-button,
 button.sheet-close {
-  width: 60rpx;
-  height: 60rpx;
+  width: 88rpx;
+  height: 88rpx;
+  margin-right: -14rpx;
+  padding: 14rpx;
   flex: none;
   border-radius: 50%;
   display: flex;
@@ -339,6 +356,7 @@ button.sheet-close {
   justify-content: center;
   color: var(--color-text-2);
   background: var(--color-fill);
+  background-clip: content-box;
   font-size: 32rpx;
 }
 

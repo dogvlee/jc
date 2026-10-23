@@ -1,0 +1,48 @@
+<block wx:if="{{show}}">
+  <view class="modal-backdrop" bindtap="onClose"></view>
+  <view class="bottom-sheet device-sheet">
+    <view class="sheet-handle"></view>
+    <view class="sheet-heading">
+      <view class="picker-heading-copy"><text class="sheet-title">连接打印机</text><text class="sheet-subtitle">{{notice ? '请在手机上连接打印机' : scanning ? '正在搜索附近的蓝牙设备…' : devices.length ? '点一下你的打印机就能连接' : '没有找到蓝牙设备'}}</text></view>
+      <button class="sheet-close" bindtap="onClose" aria-label="关闭"><text class="icon icon-x" aria-hidden="true"></text></button>
+    </view>
+
+    <view wx:if="{{notice}}" class="picker-empty picker-notice">
+      <view class="glyph-badge neutral"><text class="icon icon-bluetooth" aria-hidden="true"></text></view>
+      <text>{{notice}}</text>
+    </view>
+    <block wx:else>
+      <view wx:if="{{linkStatus == 'connected'}}" class="connected-card">
+        <view class="connected-icon"><text class="icon icon-bluetooth-connected" aria-hidden="true"></text></view>
+        <view class="connected-copy"><text class="connected-name">{{linkName}}</text><text>{{linkPaper ? '已连接 · 按 ' + linkPaper + ' 纸宽打印' : '已连接，可以打印'}}</text></view>
+        <view class="connected-actions">
+          <button class="outline-button btn-s" bindtap="disconnectPrinter" disabled="{{busy}}">断开</button>
+          <button class="danger-outline btn-s" bindtap="forgetPrinter" disabled="{{busy}}">忘记设备</button>
+        </view>
+      </view>
+      <view wx:elif="{{linkStatus == 'connecting' && !connectingId}}" class="connected-card pending">
+        <view class="connected-icon"><text class="icon icon-bluetooth-searching" aria-hidden="true"></text></view>
+        <view class="connected-copy"><text class="connected-name">{{linkName}}</text><text>{{linkBackground ? '正在自动连接上次用的打印机，也可以直接选下面的打印机' : '正在连接…'}}</text></view>
+      </view>
+
+      <scroll-view class="device-list" scroll-y enhanced show-scrollbar="{{false}}">
+        <button wx:for="{{devices}}" wx:key="deviceId" class="device-item {{connectingId == item.deviceId ? 'connecting' : ''}}" data-id="{{item.deviceId}}" bindtap="connectDevice" disabled="{{connectingId && connectingId != item.deviceId}}">
+          <view class="device-icon {{item.printer ? 'printer' : ''}}"><text class="icon {{item.printer ? 'icon-printer' : 'icon-bluetooth'}}" aria-hidden="true"></text></view>
+          <view class="device-copy"><text class="device-name">{{item.name}}</text><text wx:if="{{item.label}}" class="device-meta">{{item.label}}</text></view>
+          <text wx:if="{{connectingId == item.deviceId}}" class="device-status">连接中…</text>
+          <view wx:elif="{{item.signal}}" class="signal"><text class="icon icon-signal" aria-hidden="true"></text><text>{{item.signal}}</text></view>
+          <text class="icon icon-chevron-right device-chevron" aria-hidden="true"></text>
+        </button>
+        <view wx:if="{{!devices.length}}" class="picker-empty">
+          <view class="glyph-badge neutral"><text class="icon icon-bluetooth-searching" aria-hidden="true"></text></view>
+          <text>{{scanHint || (scanning ? '请打开打印机，并把它放在手机旁边' : androidHint ? '没有找到蓝牙设备。请确认打印机已开机、在手机旁边；安卓手机还要打开定位服务。' : '没有找到蓝牙设备。请确认打印机已开机、在手机旁边，然后重新搜索。')}}</text>
+        </view>
+      </scroll-view>
+
+      <view class="picker-actions">
+        <button class="outline-button picker-rescan" bindtap="rescan" disabled="{{scanning || connectingId}}"><text class="icon icon-rotate-ccw" aria-hidden="true"></text>{{scanning ? '正在搜索…' : '重新搜索'}}</button>
+        <button class="text-button picker-check" bindtap="checkConnection" disabled="{{checking || connectingId}}"><text class="icon icon-activity" aria-hidden="true"></text>检查连接</button>
+      </view>
+    </block>
+  </view>
+</block>

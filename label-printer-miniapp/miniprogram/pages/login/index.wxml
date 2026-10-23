@@ -1,0 +1,27 @@
+<view class="login-page">
+  <view class="login-header" style="padding-top: {{headerTop}}px;">
+    <button class="login-back" bindtap="goBack" aria-label="返回上一页"><text class="login-back-chevron" aria-hidden="true">‹</text><text>返回</text></button>
+  </view>
+  <view class="login-body">
+    <view class="login-brand">
+      <view class="login-logo" aria-hidden="true">商</view>
+      <text class="login-title">登录商跃标签</text>
+      <text class="login-subtitle">选纸 · 改字 · 连机 · 打印</text>
+    </view>
+    <view class="login-notice">
+      <view class="login-notice-heading"><text class="icon icon-shield-check" aria-hidden="true"></text><text>你的标签，仍在这台设备</text></view>
+      <text class="login-notice-copy">登录用于识别账号，不会自动上传标签、图片或打印记录。</text>
+    </view>
+    <view class="login-actions">
+      <view class="login-consent">
+        <checkbox-group bindchange="onConsentChange" class="login-checkbox-group"><label class="login-checkbox-label"><checkbox value="agree" checked="{{consent}}" disabled="{{submitting}}" color="#E02D26" aria-label="同意用户协议和隐私说明" /></label></checkbox-group>
+        <view class="login-consent-copy"><text>我已阅读并同意</text><text class="login-link" catchtap="openTerms" role="link">《用户协议》</text><text>和</text><text class="login-link" catchtap="openPrivacy" role="link">《隐私说明》</text></view>
+      </view>
+      <view wx:if="{{errorText}}" class="login-error" role="alert"><text>{{errorText}}</text></view>
+      <button wx:if="{{consent && serviceConfigured}}" class="primary-button btn-l login-submit" open-type="getPhoneNumber|agreePrivacyAuthorization" bindgetphonenumber="onGetPhoneNumber" binderror="onPhoneButtonError" loading="{{submitting || authStatus == 'restoring'}}" disabled="{{submitting || authStatus == 'restoring'}}">{{submitting ? '正在登录…' : '微信手机号快捷登录'}}</button>
+      <button wx:else class="primary-button btn-l login-submit" bindtap="requestLogin">微信手机号快捷登录</button>
+      <button class="outline-button btn-l login-skip" bindtap="goBack">{{submitting ? '取消登录' : '暂不登录'}}</button>
+      <text class="login-purpose">手机号仅用于创建和识别账号</text>
+    </view>
+  </view>
+</view>

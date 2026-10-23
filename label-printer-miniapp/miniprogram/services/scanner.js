@@ -1,5 +1,13 @@
+const { isDesktopWeChat } = require('./platform');
+
 const BRAND_RED = '#E02D26';
-const CONTENT_ERRORS = ['SCAN_EMPTY', 'SCAN_TOO_LONG', 'SCAN_KIND_MISMATCH', 'BARCODE_TOO_LONG', 'BARCODE_UNSUPPORTED_TEXT'];
+const CONTENT_ERRORS = ['SCAN_EMPTY', 'SCAN_TOO_LONG', 'SCAN_KIND_MISMATCH', 'BARCODE_TOO_LONG', 'BARCODE_UNSUPPORTED_TEXT', 'PC_CODE_CORRUPT'];
+
+function unavailable(message) {
+  const error = new Error(message);
+  error.code = 'SCAN_UNAVAILABLE';
+  return Promise.reject(error);
+}
 
 function cameraDenied(client) {
   try {
@@ -12,11 +20,9 @@ function cameraDenied(client) {
 
 function scanCode(api, options) {
   const client = api || (typeof wx !== 'undefined' ? wx : null);
-  if (!client || typeof client.scanCode !== 'function') {
-    const error = new Error('当前微信环境不支持扫码，请升级微信后重试');
-    error.code = 'SCAN_UNAVAILABLE';
-    return Promise.reject(error);
-  }
+  // Desktop WeChat has the API but no camera to open, so the call never returns.
+  if (client && isDesktopWeChat(client)) return unavailable('电脑版微信不能扫码，请在手机微信里使用扫码功能');
+  if (!client || typeof client.scanCode !== 'function') return unavailable('当前微信环境不支持扫码，请升级微信后重试');
   const config = options || {};
   return new Promise((resolve, reject) => {
     client.scanCode({
