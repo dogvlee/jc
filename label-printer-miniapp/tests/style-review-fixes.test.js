@@ -8,6 +8,7 @@ const read = (file) => fs.readFileSync(path.join(mini, file), 'utf8').replace(/\
 const app = read('app.wxss');
 const editor = read('pages/editor/index.wxss');
 const picker = read('components/printer-picker/index.wxss');
+const home = read('pages/home/index.wxss');
 
 // Body of the first rule whose whole selector list is `selector`.
 function rule(source, selector) {
@@ -103,6 +104,7 @@ test('readable text does not use the faintest grey, and coloured words use their
   assert.equal(value(rule(editor, '.connection-status.connecting'), 'color'), 'var(--color-warning-text)');
   assert.equal(value(rule(editor, '.template-attention'), 'color'), 'var(--color-warning-text)');
   assert.equal(value(rule(picker, '.connected-card'), 'color'), 'var(--color-success-text)');
+  assert.equal(value(rule(home, '.history-status.success'), 'color'), 'var(--color-success-text)');
   assert.equal(value(rule(picker, '.device-meta'), 'color'), 'var(--color-text-3)');
 });
 
@@ -115,7 +117,10 @@ test('red words on the soft red fills use the pressed red', () => {
     [editor, '.layer-actions .danger-text'],
     [editor, 'button.layer-item.active'],
     [editor, '.style-actions button.active'],
-    [picker, '.device-item.connecting .device-status']
+    [picker, '.device-item.connecting .device-status'],
+    [home, '.template-badge'],
+    [home, '.scan-cta'],
+    [home, '.history-status.failed,\n.history-status.error']
   ]) {
     assert.equal(value(rule(source, selector), 'color'), 'var(--color-primary-pressed)', selector);
   }
@@ -142,4 +147,20 @@ test('the selection tip wraps instead of running past its pill', () => {
   assert.equal(value(tip, 'width'), 'max-content');
   assert.match(value(tip, 'max-width'), /calc\(100% - 2 \* var\(--gutter\)\)/);
   assert.doesNotMatch(tip, /white-space:\s*nowrap/);
+});
+
+test('the hero buttons keep their look but reach the 44px touch target', () => {
+  const home = read('pages/home/index.wxss');
+  const circle = rule(home, 'button.circle-button');
+  assert.equal(value(circle, 'width'), '64rpx', 'the plate keeps the header rhythm');
+  assert.equal(value(circle, 'position'), 'relative');
+  // 64rpx plate + 12rpx of transparent growth on each side = 88rpx (44px).
+  const ring = rule(home, 'button.circle-button::after');
+  assert.equal(value(ring, 'top'), '-12rpx');
+  assert.equal(value(ring, 'left'), '-12rpx');
+  const pill = rule(home, 'button.device-pill');
+  assert.equal(value(pill, 'min-height'), '64rpx');
+  const pillRing = rule(home, 'button.device-pill::after');
+  assert.equal(value(pillRing, 'top'), '-12rpx');
+  assert.equal(Number(value(pill, 'min-height').replace('rpx', '')) + 2 * 12, 88);
 });

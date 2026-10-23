@@ -106,6 +106,16 @@ button.button-hover {
   background-color: rgba(31, 35, 41, 0.06);
 }
 
+/* Rows and pills are <view>s, so the platform gives them no press state at
+   all; these are their hover-class values. */
+.pressed-row {
+  background-color: var(--color-fill);
+}
+
+.pressed-fade {
+  opacity: 0.6;
+}
+
 button[disabled] {
   opacity: 0.4;
 }

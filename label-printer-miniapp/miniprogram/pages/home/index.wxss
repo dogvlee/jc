@@ -108,6 +108,20 @@ button.circle-button {
   color: var(--color-text-2);
   background: rgba(255, 255, 255, 0.78);
   font-size: 36rpx;
+  /* The plate stays 64rpx so the header keeps its rhythm; the invisible ring
+     around it gives the 44px touch target a thumb needs (same idea as
+     .sheet-close in app.wxss). */
+  position: relative;
+}
+
+button.circle-button::after {
+  content: '';
+  position: absolute;
+  top: -12rpx;
+  right: -12rpx;
+  bottom: -12rpx;
+  left: -12rpx;
+  border-radius: 50%;
 }
 
 button.device-pill {
@@ -117,12 +131,25 @@ button.device-pill {
   display: flex;
   align-items: center;
   gap: 8rpx;
+  /* The pill is already wider than 44px; growing it vertically keeps it a
+     32px-tall visual but an 88rpx (44px) target. */
+  position: relative;
   color: var(--color-text-1);
   background: var(--color-surface);
   box-shadow: var(--shadow-card);
   font-size: var(--font-caption);
   font-weight: 500;
   white-space: nowrap;
+}
+
+/* The extra 12rpx above and below the pill are part of the button, not layout. */
+button.device-pill::after {
+  content: '';
+  position: absolute;
+  top: -12rpx;
+  right: 0;
+  bottom: -12rpx;
+  left: 0;
 }
 
 .device-pill .icon {
@@ -396,7 +423,8 @@ button.template-card {
   flex: none;
   padding: 0 8rpx;
   border-radius: 6rpx;
-  color: var(--color-primary);
+  /* Red on the soft red fill: the brand red reaches only 4.18:1 there. */
+  color: var(--color-primary-pressed);
   background: var(--color-primary-soft);
   font-size: var(--font-tiny);
   font-weight: 500;
@@ -592,7 +620,8 @@ button.scan-banner {
   flex: none;
   padding: 12rpx 24rpx;
   border-radius: var(--radius-full);
-  color: var(--color-primary);
+  /* Same 4.18:1 problem as the template badge: use the pressed red. */
+  color: var(--color-primary-pressed);
   background: var(--color-primary-soft);
   font-size: var(--font-caption);
   font-weight: 500;
@@ -788,14 +817,17 @@ button.delete-card .icon {
   line-height: 1.5;
 }
 
+/* A long table scrolls inside this box instead of pushing the 批量打印 card off
+   the page: 1000 rows used to make the whole page about 4 万 rpx tall. */
 .data-table-scroll {
   width: 100%;
+  max-height: 52vh;
   border-radius: var(--radius-lg);
   background: var(--color-surface);
 }
 
 .data-table {
-  width: 1100rpx;
+  width: 1164rpx;
   padding: 12rpx;
   box-sizing: border-box;
 }
@@ -803,13 +835,20 @@ button.delete-card .icon {
 .data-row {
   min-height: 80rpx;
   display: grid;
-  grid-template-columns: 230rpx 260rpx 180rpx 240rpx 80rpx;
+  grid-template-columns: 64rpx 230rpx 260rpx 180rpx 240rpx 80rpx;
   align-items: center;
   border-bottom: 1rpx solid var(--color-divider);
 }
 
 .data-row:last-child {
   border-bottom: 0;
+}
+
+/* The row number the error messages talk about. */
+.row-index {
+  color: var(--color-text-3);
+  font-size: var(--font-small);
+  text-align: center;
 }
 
 .data-row input {
@@ -1288,13 +1327,15 @@ button.profile-account-button {
 }
 
 .history-status.success {
-  color: var(--color-success);
+  /* Words, not icons: the base green is 3.1:1 on this fill, the text green 4.85:1. */
+  color: var(--color-success-text);
   background: var(--color-success-soft);
 }
 
 .history-status.failed,
 .history-status.error {
-  color: var(--color-danger);
+  /* 4.18:1 with the brand red; the pressed red reaches 5.3:1. */
+  color: var(--color-primary-pressed);
   background: var(--color-danger-soft);
 }
 

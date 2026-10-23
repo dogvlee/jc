@@ -952,8 +952,12 @@ Page({
       libraryScene: '全部',
       librarySize: '全部',
       templateQuery: '',
+      familyFilterOn: false,
       templateVisibleCount: PAGE_SIZE
-    }, () => this.refreshTemplates());
+    }, () => {
+      this.refreshFamilyViews();
+      this.refreshTemplates();
+    });
   },
 
   queryCuratedPage(offset, limit, state) {
@@ -1294,6 +1298,7 @@ Page({
           return;
         }
         this.refresh();
+        wx.showToast({ title: '标签已删除', icon: 'success' });
       }
     });
   },
@@ -1598,7 +1603,20 @@ Page({
       });
       return { base, rows, documents };
     } catch (error) {
-      wx.showModal({ title: '这一行数据要改一下', content: error.message || '数据不符合模板要求', showCancel: false });
+      // The table has no row numbers of its own for the owner to count from, so
+      // the message names the row and the screen jumps to it.
+      const rowNumber = Number(error && error.rowNumber) || 0;
+      const row = rowNumber ? rows[rowNumber - 1] : null;
+      const name = row ? String(row.name || row.code || '').trim() : '';
+      const where = row && name ? `第 ${rowNumber} 行「${name}」` : (rowNumber ? `第 ${rowNumber} 行` : '');
+      wx.showModal({
+        title: '这一行数据要改一下',
+        content: `${where ? `${where}：` : ''}${String(error.message || '数据不符合模板要求').replace(/^第 \d+ 行[^：]*：/, '')}`,
+        showCancel: false
+      });
+      if (rowNumber && typeof wx.pageScrollTo === 'function') {
+        wx.pageScrollTo({ selector: `#data-row-${rowNumber - 1}`, offsetTop: -160, duration: 200 });
+      }
       return null;
     }
   },

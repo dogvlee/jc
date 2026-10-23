@@ -21,7 +21,7 @@
     <view class="document-row">
       <view class="document-name"><text class="icon icon-pencil" aria-hidden="true"></text><input class="document-title" value="{{document.name}}" bindinput="previewDocumentName" bindblur="updateDocumentName" maxlength="40" /></view>
       <text class="size-label">{{currentSizeLabel}}</text>
-      <view class="connection-status {{connectionState}}" bindtap="openDevices" aria-role="button" aria-label="连接打印机，当前{{connectionLabel}}"><text class="connection-dot {{connectionState}}"></text><text>{{connectionLabel}}</text></view>
+      <view class="connection-status {{connectionState}}" hover-class="pressed-fade" bindtap="openDevices" aria-role="button" aria-label="连接打印机，当前{{connectionLabel}}"><text class="connection-dot {{connectionState}}"></text><text>{{connectionLabel}}</text></view>
     </view>
   </view>
 
@@ -216,7 +216,7 @@
             <button class="{{selected.italic ? 'active' : ''}}" data-field="italic" bindtap="toggleSelectedFlag" aria-label="斜体"><text class="icon icon-italic" aria-hidden="true"></text></button>
             <button class="{{selected.underline ? 'active' : ''}}" data-field="underline" bindtap="toggleSelectedFlag" aria-label="下划线"><text class="icon icon-underline" aria-hidden="true"></text></button>
             <button class="{{selected.strike ? 'active' : ''}}" data-field="strike" bindtap="toggleSelectedFlag" aria-label="删除线"><text class="icon icon-strikethrough" aria-hidden="true"></text></button>
-            <button wx:if="{{selected.type != 'table'}}" class="{{selected.reverse ? 'active' : ''}}" data-field="reverse" bindtap="toggleSelectedFlag">反白</button>
+            <button wx:if="{{selected.type != 'table'}}" class="{{selected.reverse ? 'active' : ''}}" data-field="reverse" bindtap="toggleSelectedFlag">黑底白字</button>
           </view>
           <text wx:if="{{fontFallbackNote}}" class="helper-text">{{fontFallbackNote}}</text>
           <text class="helper-text">{{fontCatalogNote}}</text>
@@ -285,9 +285,11 @@
     </view>
 
     <view wx:else class="simple-panel">
-      <text class="simple-title">批量打印</text>
-      <text class="helper-text">批量打印用专门的价签、库位模板，不能直接用当前这张标签。在首页的批量页面导入表格或逐行填写，每行打一张。</text>
-      <button class="outline-wide" bindtap="openDataManager"><text class="icon icon-sheet" aria-hidden="true"></text>退出编辑器，去批量打印</button>
+      <text class="simple-title">{{batchRowCount ? '批量模式' : '批量打印'}}</text>
+      <text wx:if="{{batchRowCount}}" class="helper-text">正在用当前这张标签批量打印：表格里每一行出一张，改设计会影响每一行。退出批量不会删除数据。</text>
+      <text wx:else class="helper-text">批量打印用专门的价签、库位模板，不能直接用当前这张标签。在首页的批量页面导入表格或逐行填写，每行打一张。</text>
+      <button wx:if="{{batchRowCount}}" class="outline-wide" bindtap="openDataManager"><text class="icon icon-sheet" aria-hidden="true"></text>回到批量数据</button>
+      <button wx:else class="outline-wide" bindtap="openDataManager"><text class="icon icon-sheet" aria-hidden="true"></text>退出编辑器，去批量打印</button>
     </view>
 
     <view class="editor-actions">
@@ -320,18 +322,19 @@
     </view>
     <view wx:if="{{printError}}" class="error-card"><view class="warning-head"><text class="icon icon-circle-alert" aria-hidden="true"></text><text class="warning-title">打印未完成</text></view><text>{{printError}}</text><text wx:if="{{printMayHavePrinted}}">为免重复打印，不会自动重打，请先看看已经出来的标签。</text></view>
     <view class="print-summary">
-      <view class="summary-action" bindtap="choosePrinterFromPrint" aria-role="button" aria-label="更换打印机"><text>打印机</text><text>{{connectedDevice || (savedPrinterName ? '上次的 ' + savedPrinterName + '，打印时自动连接' : '还没有选择')}}<text class="icon icon-chevron-right summary-chevron" aria-hidden="true"></text></text></view>
-      <view class="summary-action" bindtap="openProfilePicker" aria-role="button" aria-label="更换打印机纸宽"><text>打印机纸宽</text><text>{{profileOptions[profileIndex]}}<text class="icon icon-chevron-right summary-chevron" aria-hidden="true"></text></text></view>
+      <view class="summary-action" hover-class="pressed-row" bindtap="choosePrinterFromPrint" aria-role="button" aria-label="更换打印机"><text>打印机</text><text>{{connectedDevice || (savedPrinterName ? '上次的 ' + savedPrinterName + '，打印时自动连接' : '还没有选择')}}<text class="icon icon-chevron-right summary-chevron" aria-hidden="true"></text></text></view>
+      <view class="summary-action" hover-class="pressed-row" bindtap="openProfilePicker" aria-role="button" aria-label="更换打印机纸宽"><text>打印机纸宽</text><text>{{profileOptions[profileIndex]}}<text class="icon icon-chevron-right summary-chevron" aria-hidden="true"></text></text></view>
       <view><text>纸张类型</text><text>{{labelTypeOptions[labelTypeIndex]}}</text></view>
       <view wx:if="{{densityAdjustable}}"><text>浓度</text><text>{{density}}</text></view>
       <view wx:if="{{batchRowCount}}"><text>批量数据</text><text>{{batchRowCount}} 行</text></view>
     </view>
     <view wx:if="{{printAreaNote}}" class="print-note"><text class="icon icon-info" aria-hidden="true"></text><text>{{printAreaNote}}</text></view>
     </scroll-view>
-    <view class="copies-row"><text>{{batchRowCount ? '每行份数' : '打印份数'}}</text><view class="stepper"><button data-delta="-1" bindtap="changeCopies" aria-label="减少份数"><text class="icon icon-minus" aria-hidden="true"></text></button><input class="copies-input" type="number" value="{{copies}}" bindinput="setCopiesInput" bindblur="setCopiesInput" /><button data-delta="1" bindtap="changeCopies" aria-label="增加份数"><text class="icon icon-plus" aria-hidden="true"></text></button></view></view>
+    <view class="copies-row"><text>{{batchRowCount ? '每行份数' : '打印份数'}}</text><view class="stepper"><button data-delta="-1" bindtap="changeCopies" aria-label="减少份数"><text class="icon icon-minus" aria-hidden="true"></text></button><input class="copies-input" type="number" value="{{copiesInput}}" bindinput="setCopiesInput" bindblur="setCopiesInput" disabled="{{printing}}" aria-label="打印份数" /><button data-delta="1" bindtap="changeCopies" aria-label="增加份数"><text class="icon icon-plus" aria-hidden="true"></text></button></view></view>
     <view wx:if="{{printing || printProgress > 0}}" class="progress-card"><view class="progress-track"><view class="progress-fill" style="width: {{printProgress}}%;"></view></view><text>{{printMessage}}</text></view>
     <view class="sheet-actions print-actions">
       <button wx:if="{{printing}}" class="danger-outline" bindtap="cancelPrint">取消打印</button>
+      <button wx:elif="{{printMayHavePrinted}}" class="danger-outline" bindtap="confirmReprint"><text class="icon icon-printer" aria-hidden="true"></text>我已核对，再打一次</button>
       <button wx:else class="primary-button" bindtap="startPrint" disabled="{{connectedDevice && printBlock}}"><text class="icon icon-printer" aria-hidden="true"></text>{{connectedDevice ? '开始打印' : savedPrinterName ? '连接并打印' : '选择打印机'}}</button>
     </view>
   </view>

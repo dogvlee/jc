@@ -200,11 +200,12 @@
       <view class="data-toolbar"><button class="outline-button btn-s" bindtap="importCsv"><text class="icon icon-file-input" aria-hidden="true"></text>导入 CSV</button><button class="outline-button btn-s" bindtap="exportCsv"><text class="icon icon-upload" aria-hidden="true"></text>导出 CSV</button></view>
       <text class="data-hint">先把 CSV 文件发到微信聊天（如文件传输助手），再点「导入 CSV」</text>
       <view wx:if="{{dataSaveFailed}}" class="save-failed card" role="alert"><text class="icon icon-triangle-alert" aria-hidden="true"></text><text class="damage-copy">有修改还没保存，手机存储可能满了</text><button class="outline-button btn-s" bindtap="retryDataSave">重试</button></view>
-      <scroll-view wx:if="{{dataRows.length}}" class="data-table-scroll" scroll-x="true">
+      <scroll-view wx:if="{{dataRows.length}}" class="data-table-scroll" scroll-x="true" scroll-y="true" enhanced show-scrollbar="{{false}}">
         <view class="data-table">
-          <view class="data-row data-header"><text>名称</text><text>编码/条码</text><text>价格</text><text>日期</text><text></text></view>
-          <view wx:for="{{dataRows}}" wx:key="id" class="data-row">
-            <input value="{{item.name}}" data-index="{{index}}" data-field="name" bindinput="onDataCellInput" bindblur="updateDataCell" placeholder="商品名称" />
+          <view class="data-row data-header"><text class="row-index">#</text><text>名称</text><text>编码/条码</text><text>价格</text><text>日期</text><text></text></view>
+          <view wx:for="{{dataRows}}" wx:key="id" id="data-row-{{index}}" class="data-row">
+            <text class="row-index">{{index + 1}}</text>
+            <input value="{{item.name}}" data-index="{{index}}" data-field="name" bindinput="onDataCellInput" bindblur="updateDataCell" placeholder="商品名称" cursor-spacing="24" />
             <input value="{{item.code}}" data-index="{{index}}" data-field="code" bindinput="onDataCellInput" bindblur="updateDataCell" placeholder="6901234567890" />
             <input type="digit" value="{{item.price}}" data-index="{{index}}" data-field="price" bindinput="onDataCellInput" bindblur="updateDataCell" placeholder="19.90" />
             <input value="{{item.date}}" data-index="{{index}}" data-field="date" bindinput="onDataCellInput" bindblur="updateDataCell" placeholder="{{datePlaceholder}}" />
@@ -227,7 +228,7 @@
     <view class="profile-hero" style="padding-top: {{headerTop}}px;">
       <view class="avatar">商</view>
       <view class="profile-copy"><view class="profile-title-row"><text class="plain-title">{{authStatus == 'authenticated' ? '商跃用户' : '登录商跃标签'}}</text></view><text class="plain-subtitle">{{authStatus == 'authenticated' ? accountPhone : (authStatus == 'restoring' ? '正在确认登录状态…' : '登录后查看账号，标签仍保存在本机')}}</text></view>
-      <button wx:if="{{authStatus != 'authenticated'}}" class="outline-button profile-account-button" bindtap="openLogin">登录</button>
+      <button wx:if="{{authStatus != 'authenticated' && authStatus != 'restoring'}}" class="outline-button profile-account-button" bindtap="openLogin">登录</button>
       <button wx:else class="text-button profile-account-button" bindtap="logoutAccount">退出</button>
     </view>
     <view class="route-content profile-content">
@@ -257,7 +258,7 @@
     <button class="{{route == 'templates' ? 'active' : ''}}" data-route="templates" bindtap="navigate"><text class="nav-icon icon icon-layout-grid" aria-hidden="true"></text><text>模板</text></button>
     <button class="create-nav" bindtap="createBlank" aria-label="新建标签"><text class="icon icon-plus" aria-hidden="true"></text></button>
     <button class="{{route == 'projects' ? 'active' : ''}}" data-route="projects" bindtap="navigate"><text class="nav-icon icon icon-tags" aria-hidden="true"></text><text>标签</text></button>
-    <button class="{{route == 'profile' ? 'active' : ''}}" data-route="profile" bindtap="navigate"><text class="nav-icon icon icon-circle-user-round" aria-hidden="true"></text><text>我的</text></button>
+    <button class="{{route == 'profile' || route == 'data' ? 'active' : ''}}" data-route="profile" bindtap="navigate"><text class="nav-icon icon icon-circle-user-round" aria-hidden="true"></text><text>我的</text></button>
   </view>
 </view>
 
@@ -285,7 +286,7 @@
     <view class="preset-grid">
       <button wx:for="{{stockPresets}}" wx:key="id" class="{{settings.stockWidthMm == item.widthMm && settings.stockHeightMm == item.heightMm ? 'active' : ''}}" data-value="{{item.id}}" bindtap="chooseStockPreset"><text class="preset-size">{{item.widthMm}}×{{item.heightMm}}</text><text class="preset-name">{{item.name}}</text><text wx:if="{{settings.stockWidthMm == item.widthMm && settings.stockHeightMm == item.heightMm}}" class="preset-check icon icon-check" aria-hidden="true"></text></button>
     </view>
-    <view class="custom-size"><label><text>宽 / mm</text><input type="digit" value="{{settings.stockWidthMm}}" data-field="stockWidthMm" bindblur="updateStockField" /></label><label><text>高 / mm</text><input type="digit" value="{{settings.stockHeightMm}}" data-field="stockHeightMm" bindblur="updateStockField" /></label></view>
+    <view class="custom-size"><label><text>宽 / mm</text><input type="digit" value="{{settings.stockWidthMm}}" data-field="stockWidthMm" bindblur="updateStockField" cursor-spacing="32" confirm-type="done" /></label><label><text>高 / mm</text><input type="digit" value="{{settings.stockHeightMm}}" data-field="stockHeightMm" bindblur="updateStockField" cursor-spacing="32" confirm-type="done" /></label></view>
   </view>
 </view>
 

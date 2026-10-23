@@ -276,7 +276,7 @@ test('the model row of the print sheet opens the picker and returns to printing'
   editor.onPrinterConnected({ detail: { result: Object.assign({}, EY260) } });
   editor.openPrintSheet();
 
-  assert.match(read('index.wxml'), /class="summary-action" bindtap="openProfilePicker"/);
+  assert.match(read('index.wxml'), /class="summary-action"[^>]*bindtap="openProfilePicker"/);
   editor.openProfilePicker();
   assert.equal(editor.data.showPrintSheet, false);
   assert.equal(editor.data.showSettingsSheet, true);
@@ -872,4 +872,20 @@ test('a text that really has ink in the strip still stops before printing', asyn
   await editor.startPrint();
   assert.equal(printer.prints.length, 0);
   assert.match(editor.data.printError, /打不到/);
+});
+
+test('a possibly printed failure asks before the same label goes out again', async () => {
+  const calls = useWx({ showModal(options) { calls.modals.push(options); } });
+  const printer = fakePrinter();
+  const editor = editorFor(barLabel(40, 30), {
+    connectionManager: fakeManager(SYD58), printer, createPrintImageData: pageDefinition.createPrintImageData
+  });
+  editor.setData({ printMayHavePrinted: true, connectedDevice: 'SYD-58' });
+
+  // The red 开始打印 is replaced by a deliberate second step.
+  assert.match(read('index.wxml'), /wx:elif="\{\{printMayHavePrinted\}\}"[^>]*bindtap="confirmReprint"/);
+  await editor.confirmReprint();
+  assert.equal(calls.modals.length, 1);
+  assert.match(calls.modals[0].content, /可能已经有标签打出来/);
+  assert.equal(printer.prints.length, 0, 'nothing goes out until the owner confirms');
 });

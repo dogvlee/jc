@@ -3,7 +3,7 @@
   <view class="bottom-sheet device-sheet">
     <view class="sheet-handle"></view>
     <view class="sheet-heading">
-      <view class="picker-heading-copy"><text class="sheet-title">连接打印机</text><text class="sheet-subtitle">{{notice ? '请在手机上连接打印机' : scanning ? '正在搜索附近的蓝牙设备…' : devices.length ? '点一下你的打印机就能连接' : '没有找到蓝牙设备'}}</text></view>
+      <view class="picker-heading-copy"><text class="sheet-title">连接打印机</text><text class="sheet-subtitle">{{notice ? '请在手机上连接打印机' : linkStatus == 'connected' ? '已连接，也可以换一台打印机' : scanning ? '正在搜索附近的蓝牙设备…' : devices.length ? '点一下你的打印机就能连接' : '没有找到蓝牙设备'}}</text></view>
       <button class="sheet-close" bindtap="onClose" aria-label="关闭"><text class="icon icon-x" aria-hidden="true"></text></button>
     </view>
 

@@ -916,7 +916,9 @@ button.outline-wide .icon {
 }
 
 .warning-actions button {
-  min-height: 64rpx;
+  /* The recovery actions are the way out of a blocked print, so they get the
+     medium button size rather than the small one. */
+  min-height: 72rpx;
   padding: 0 24rpx;
   border-radius: var(--radius-full);
   display: flex;

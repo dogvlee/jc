@@ -508,6 +508,7 @@ Page({
     densityAdjustable: true,
     threshold: 180,
     copies: 1,
+    copiesInput: '1',
     loadError: '',
     saveState: '',
     previewHeightPx: 104,
@@ -766,7 +767,11 @@ Page({
     try {
       const session = this.editorSession || new EditorSession(this.repository);
       session.checkpoint(this.document, this.projectId, this.dirtySinceSave);
-      this.setData({ saveState: this.projectId && !this.dirtySinceSave ? '已保存' : '已自动保存' });
+      // "已自动保存" next to "有未保存的修改" made owners guess what was saved:
+      // the draft is the editor's own copy, the label is what 标签 shows.
+      this.setData({
+        saveState: this.projectId && !this.dirtySinceSave ? '已保存为标签' : '草稿已保存 · 未存为标签'
+      });
       return true;
     } catch (error) {
       this.setData({ saveState: '草稿保存失败，请勿退出，点此重试' });
@@ -2477,18 +2482,29 @@ Page({
   },
 
   changeCopies(event) {
+    if (this.data.printing) return;
     const delta = Number(event.currentTarget.dataset.delta);
-    this.setData({ copies: Math.max(1, Math.min(99, this.data.copies + delta)) });
+    const copies = Math.max(1, Math.min(99, this.data.copies + delta));
+    this.setData({ copies, copiesInput: String(copies) });
   },
 
   setCopiesInput(event) {
+    const previous = Number(this.data.copies) || 1;
+    if (this.data.printing) {
+      // The job took its copies when it started; late edits only confuse.
+      this.setData({ copies: previous, copiesInput: String(previous) });
+      return;
+    }
     const rawText = String(event.detail.value == null ? '' : event.detail.value).trim();
-    const value = Math.round(Number(rawText));
-    this.setData({
-      copies: rawText && Number.isFinite(value)
-        ? Math.max(1, Math.min(99, value))
-        : this.data.copies
-    });
+    const typed = Math.round(Number(rawText));
+    const usable = Boolean(rawText) && Number.isFinite(typed);
+    const copies = usable ? Math.max(1, Math.min(99, typed)) : previous;
+    // The box shows copiesInput, not copies: typing "500" must visibly become
+    // "99" rather than sit there while one label prints.
+    this.setData({ copies, copiesInput: String(copies) });
+    if (usable && copies !== typed && typeof wx !== 'undefined' && typeof wx.showToast === 'function') {
+      wx.showToast({ title: `份数已调整为 ${copies}`, icon: 'none' });
+    }
   },
 
   saveTemplate() {
@@ -2519,7 +2535,7 @@ Page({
       const project = this.repository.saveEditorProject(this.document, this.projectId);
       this.projectId = project.id;
       this.dirtySinceSave = false;
-      this.setData({ projectId: project.id, saveState: '已保存' });
+      this.setData({ projectId: project.id, saveState: '已保存为标签' });
       return { ok: true, isNew };
     } catch (error) {
       wx.showModal({ title: '保存失败', content: error.message, showCancel: false });
@@ -2566,7 +2582,7 @@ Page({
       return;
     }
     wx.showActionSheet({
-      alertText: '标签有未保存的修改',
+      alertText: '这张标签还没存为标签（草稿已保存）',
       itemList: ['保存并退出', '保留草稿退出', '放弃修改退出'],
       success: (result) => {
         if (result.tapIndex === 0) {
@@ -3215,6 +3231,24 @@ Page({
       throw error;
     }
     return cropImageData(imageData, plan.crop);
+  },
+
+  /**
+   * The last print may already have produced a label. A second attempt is a
+   * decision the owner makes on purpose, never a reflex tap on the red button.
+   */
+  confirmReprint() {
+    if (this.data.printing) return;
+    wx.showModal({
+      title: '刚才可能已经出纸了',
+      content: '上一次打印中断，可能已经有标签打出来。再打一次会多出一张，请先核对已经出来的标签。',
+      confirmText: '确认重打',
+      cancelText: '先看看',
+      confirmColor: '#E02D26',
+      success: (result) => {
+        if (result && result.confirm) this.startPrint();
+      }
+    });
   },
 
   assertPrintActive(generation) {

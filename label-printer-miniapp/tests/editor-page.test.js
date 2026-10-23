@@ -797,3 +797,22 @@ test('the code inspector offers serial follow only when the label has a serial n
   assert.ok(row.includes('wx:if="{{documentHasSerial || selected.serialLinked}}"'), row);
   assert.ok(markup.includes('data-field="serialLinked" bindchange="updateSwitch"'));
 });
+
+test('a copies value out of range snaps back in the box the owner is looking at', () => {
+  const editor = Object.assign({}, pageDefinition, {
+    data: { copies: 3, copiesInput: '3' },
+    setData(patch) { Object.assign(this.data, patch); }
+  });
+  editor.setCopiesInput({ detail: { value: '500' } });
+  assert.equal(editor.data.copies, 99);
+  assert.equal(editor.data.copiesInput, '99', 'the box shows the number that will print');
+
+  editor.setCopiesInput({ detail: { value: '' } });
+  assert.equal(editor.data.copies, 99, 'an emptied box keeps the last usable count');
+
+  // The job keeps the count it started with, whatever is typed meanwhile.
+  editor.data.printing = true;
+  editor.setCopiesInput({ detail: { value: '7' } });
+  assert.equal(editor.data.copies, 99);
+  assert.equal(editor.data.copiesInput, '99');
+});

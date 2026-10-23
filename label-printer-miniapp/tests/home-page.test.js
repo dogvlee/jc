@@ -820,7 +820,8 @@ test('批量打印 checks every row first, then opens the editor in batch mode',
   ];
   page.printBatch();
   assert.equal(staged, null);
-  assert.equal(modal.content, '第 3 行无法生成：请先填写条码内容');
+  // The message names the row so the owner can find it without counting.
+  assert.equal(modal.content, '第 3 行「香蕉」：请先填写条码内容');
 
   modal = null;
   page.data.dataRows[2] = { id: 'r3', name: '香蕉', code: 'BN-2001', price: '5.5', date: '' };
@@ -1120,4 +1121,19 @@ test('a sample row whose date the owner edited is not replaced by an import with
   page.importCsv();
   assert.ok(state.sheet, 'the owner data prompts for replace or append');
   assert.match(state.sheet.itemList[0], /替换现有 1 行/);
+});
+
+test('a long table scrolls in its own box so the print buttons stay reachable', () => {
+  const markup = readHome('index.wxml');
+  assert.match(markup, /class="data-table-scroll"[^>]*scroll-y="true"/);
+  // Every row carries the number the error messages talk about.
+  assert.match(markup, /<text class="row-index">#<\/text>/);
+  assert.match(markup, /<text class="row-index">\{\{index \+ 1\}\}<\/text>/);
+  assert.match(markup, /id="data-row-\{\{index\}\}"/);
+  // 批量数据 is a page under 我的, so the tab keeps its highlight.
+  assert.match(markup, /\{\{route == 'profile' \|\| route == 'data' \? 'active' : ''\}\}/);
+
+  const wxss = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'home', 'index.wxss'), 'utf8');
+  assert.match(wxss, /\.data-table-scroll \{[^}]*max-height: 52vh/);
+  assert.match(wxss, /grid-template-columns: 64rpx 230rpx 260rpx 180rpx 240rpx 80rpx/);
 });
