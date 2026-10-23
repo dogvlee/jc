@@ -855,6 +855,12 @@ button.load-more {
   text-align: center;
 }
 
+/* Rows outside the rendered window keep their height, so the scrollbar and the
+   scroll position stay honest while only ~60 rows exist as nodes. */
+.data-row-spacer {
+  width: 100%;
+}
+
 .data-row input {
   height: 64rpx;
   margin: 6rpx;

@@ -150,3 +150,23 @@
 4. **属性面板**：文字元素的 inspector 约 3.4 屏，滚动条被隐藏，「位置与尺寸」沉底；建议把该段移到内容段之后，或做成可折叠分组。
 
 我按这个顺序继续也可以，但 1 和 3 各自都值得单独一轮 + 真机回归。
+
+---
+
+# 第五轮：批量表格窗口化（性能）
+
+按上一轮写下的五步方案落地，未改数据语义（`dataRows` 仍是完整列表，逻辑与测试都照旧），只改渲染层。
+
+- 常量：`ROW_HEIGHT_RPX = 80`、`DATA_WINDOW_ROWS = 60`、`DATA_WINDOW_OVERSCAN = 8`；
+- 新增 `dataWindowAt(rows, start)`：算出 `dataWindowRows = [{ index, row }]` 与上下占位 `dataWindowTopPx / dataWindowBottomPx`（行高按 `windowWidth / 750 × 80` 换算，375 宽屏是 40px）；
+- WXML 只渲染窗口，行号、`data-index`、`id="data-row-N"` 全部用 `item.index`，上下各一个撑高的 `data-row-spacer`；
+- `onDataTableScroll`：按 `scrollTop / 行高` 算首行，偏移超过半个窗口才换片；
+- `tableViewPatch`：结构性变化（导入/增删行）重建窗口；只有单元格变化时，除 `dataRows[i].field` 外再补一条 `dataWindowRows[offset].row.field`，payload 仍是几个键；
+- 跳转改为表内滚动：原来的 `pageScrollTo` 对嵌套 `scroll-view` 无效（上一轮把表格限高后就已失效），现在 `revealDataRow(index)` 先把窗口移到目标附近，再用 `scroll-into-view` 滚过去；
+- 进入批量数据页时窗口回到顶部（否则滚动条在顶部、渲染却从第 500 行开始）。
+
+效果：1000 行时节点数从约 5000 个 input 降到 300 个左右；首屏只传一页窗口；编辑仍然只发一个单元格。
+
+测试新增 5 条：千行只渲染 60 行与占位高度、滚动换片且小幅晃动不重发、编辑同时更新行与窗口副本、删行后窗口与占位正确、返回页面窗口归零。全套 **860 pass**。
+
+注意：`dataRows` 仍在页面数据里（首次进入批量数据页仍会下发一次完整列表）。若以后要连这一次也省掉，把逻辑改为只依赖 `tableRows` 即可，但那会牵动现有测试对 `page.data.dataRows` 的断言，属于下一层重构。

@@ -207,17 +207,19 @@
       <view class="data-toolbar"><button class="outline-button btn-s" bindtap="importCsv"><text class="icon icon-file-input" aria-hidden="true"></text>导入 CSV</button><button class="outline-button btn-s" bindtap="exportCsv"><text class="icon icon-upload" aria-hidden="true"></text>导出 CSV</button></view>
       <text class="data-hint">先把 CSV 文件发到微信聊天（如文件传输助手），再点「导入 CSV」</text>
       <view wx:if="{{dataSaveFailed}}" class="save-failed card" role="alert"><text class="icon icon-triangle-alert" aria-hidden="true"></text><text class="damage-copy">有修改还没保存，手机存储可能满了</text><button class="outline-button btn-s" bindtap="retryDataSave">重试</button></view>
-      <scroll-view wx:if="{{dataRows.length}}" class="data-table-scroll" scroll-x="true" scroll-y="true" enhanced show-scrollbar="{{false}}">
+      <scroll-view wx:if="{{dataRows.length}}" class="data-table-scroll" scroll-x="true" scroll-y="true" enhanced show-scrollbar="{{false}}" scroll-into-view="{{dataScrollIntoView}}" bindscroll="onDataTableScroll">
         <view class="data-table">
           <view class="data-row data-header"><text class="row-index">#</text><text>名称</text><text>编码/条码</text><text>价格</text><text>日期</text><text></text></view>
-          <view wx:for="{{dataRows}}" wx:key="id" id="data-row-{{index}}" class="data-row">
-            <text class="row-index">{{index + 1}}</text>
-            <input value="{{item.name}}" data-index="{{index}}" data-field="name" bindinput="onDataCellInput" bindblur="updateDataCell" placeholder="商品名称" cursor-spacing="24" />
-            <input value="{{item.code}}" data-index="{{index}}" data-field="code" bindinput="onDataCellInput" bindblur="updateDataCell" placeholder="6901234567890" />
-            <input type="digit" value="{{item.price}}" data-index="{{index}}" data-field="price" bindinput="onDataCellInput" bindblur="updateDataCell" placeholder="19.90" />
-            <input value="{{item.date}}" data-index="{{index}}" data-field="date" bindinput="onDataCellInput" bindblur="updateDataCell" placeholder="{{datePlaceholder}}" />
-            <button class="row-remove" data-index="{{index}}" bindtap="removeDataRow" aria-label="删除第 {{index + 1}} 行"><text class="icon icon-x" aria-hidden="true"></text></button>
+          <view wx:if="{{dataWindowTopPx}}" class="data-row-spacer" style="height: {{dataWindowTopPx}}px;"></view>
+          <view wx:for="{{dataWindowRows}}" wx:key="index" id="data-row-{{item.index}}" class="data-row">
+            <text class="row-index">{{item.index + 1}}</text>
+            <input value="{{item.row.name}}" data-index="{{item.index}}" data-field="name" bindinput="onDataCellInput" bindblur="updateDataCell" placeholder="商品名称" cursor-spacing="24" />
+            <input value="{{item.row.code}}" data-index="{{item.index}}" data-field="code" bindinput="onDataCellInput" bindblur="updateDataCell" placeholder="6901234567890" />
+            <input type="digit" value="{{item.row.price}}" data-index="{{item.index}}" data-field="price" bindinput="onDataCellInput" bindblur="updateDataCell" placeholder="19.90" />
+            <input value="{{item.row.date}}" data-index="{{item.index}}" data-field="date" bindinput="onDataCellInput" bindblur="updateDataCell" placeholder="{{datePlaceholder}}" />
+            <button class="row-remove" data-index="{{item.index}}" bindtap="removeDataRow" aria-label="删除第 {{item.index + 1}} 行"><text class="icon icon-x" aria-hidden="true"></text></button>
           </view>
+          <view wx:if="{{dataWindowBottomPx}}" class="data-row-spacer" style="height: {{dataWindowBottomPx}}px;"></view>
         </view>
       </scroll-view>
       <view wx:else class="friendly-empty card"><view class="glyph-badge neutral"><text class="icon icon-sheet" aria-hidden="true"></text></view><text class="empty-title">暂无数据行</text><text class="muted">添加行或导入 CSV，每一行打印一张标签</text><view class="empty-actions"><button class="outline-button" bindtap="importCsv">导入 CSV</button><button class="primary-button" bindtap="addDataRow">添加一行</button></view></view>

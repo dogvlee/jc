@@ -454,7 +454,7 @@ test('restoring checks the backup before asking to overwrite anything', (t) => {
 test('table rows show real examples, a number pad for prices, and ask before deleting a filled row', (t) => {
   const markup = read('index.wxml');
   assert.match(markup, /placeholder="6901234567890"/);
-  assert.match(markup, /<input type="digit" value="\{\{item\.price\}\}"/);
+  assert.match(markup, /<input type="digit" value="\{\{item\.row\.price\}\}"/);
   assert.match(markup, /placeholder="\{\{datePlaceholder\}\}"/);
   assert.doesNotMatch(markup, /YYYY-MM-DD|690\.\.\./);
   assert.match(pageDefinition.data.datePlaceholder, /^\d{4}-\d{2}-\d{2}$/);
@@ -616,4 +616,102 @@ test('leaving while the batch toast shows opens no editor from a dead page', (t)
   page.onUnload();
   t.mock.timers.tick(500);
   assert.equal(opened, 0);
+});
+
+function thousandRows() {
+  return Array.from({ length: 1000 }, (item, index) => ({
+    id: `r${index}`, name: `商品${index}`, code: '', price: '', date: ''
+  }));
+}
+
+test('a thousand-row table renders a window of sixty rows, not five thousand inputs', (t) => {
+  useWx(t, { getWindowInfo: () => ({ windowWidth: 375, windowHeight: 667 }) });
+  const { page } = storedHome();
+  const rows = thousandRows();
+  page.data.route = 'data';
+  page.setData(page.tableViewPatch(rows));
+
+  assert.equal(page.data.dataRows.length, 1000, 'the data keeps every row');
+  assert.equal(page.data.dataWindowRows.length, 60, 'only the window is rendered');
+  assert.equal(page.data.dataWindowStart, 0);
+  assert.equal(page.data.dataWindowRows[0].index, 0);
+  assert.equal(page.data.dataWindowRows[59].index, 59);
+  // 40px a row at 375px wide: the other 940 rows are one spacer.
+  assert.equal(page.data.dataWindowTopPx, 0);
+  assert.equal(page.data.dataWindowBottomPx, 940 * 40);
+});
+
+test('scrolling past half a window moves the rendered slice and its spacers', (t) => {
+  useWx(t, { getWindowInfo: () => ({ windowWidth: 375, windowHeight: 667 }) });
+  const { page } = storedHome();
+  page.data.route = 'data';
+  page.setData(page.tableViewPatch(thousandRows()));
+
+  page.onDataTableScroll({ detail: { scrollTop: 500 * 40 } });
+
+  const start = page.data.dataWindowStart;
+  assert.ok(start >= 480 && start <= 500, 'the window follows the finger');
+  assert.equal(page.data.dataWindowRows[0].index, start);
+  assert.equal(page.data.dataWindowRows[59].index, start + 59);
+  assert.equal(page.data.dataWindowTopPx, start * 40);
+  assert.equal(page.data.dataWindowBottomPx, (1000 - start - 60) * 40);
+
+  // A small wobble inside the window must not re-send anything.
+  page.patches.length = 0;
+  page.onDataTableScroll({ detail: { scrollTop: (start + 5) * 40 } });
+  assert.equal(page.patches.length, 0);
+});
+
+test('editing a visible cell patches the row and the window copy in one update', (t) => {
+  useWx(t, { getWindowInfo: () => ({ windowWidth: 375, windowHeight: 667 }) });
+  const { page, repository } = storedHome();
+  page.data.route = 'data';
+  page.setData(page.tableViewPatch(thousandRows()));
+  page.patches.length = 0;
+
+  page.updateDataCell(cell(3, 'price', '9.9'));
+
+  const patch = page.patches[page.patches.length - 1];
+  assert.equal(patch['dataRows[3].price'], '9.9');
+  assert.equal(patch['dataWindowRows[3].row.price'], '9.9', 'the rendered copy follows');
+  assert.equal(page.data.dataWindowRows[3].row.price, '9.9');
+  assert.equal(repository.getDataRows()[3].price, '9.9');
+});
+
+test('removing a row keeps the window and corrects the spacers', (t) => {
+  let modal = null;
+  useWx(t, {
+    getWindowInfo: () => ({ windowWidth: 375, windowHeight: 667 }),
+    showModal(options) { modal = options; }, showToast() {}
+  });
+  const { page } = storedHome();
+  page.data.route = 'data';
+  const rows = thousandRows();
+  page.setData(page.tableViewPatch(rows));
+  page.patches.length = 0;
+
+  page.removeDataRow(tap({ index: 0 }));
+  assert.ok(modal, 'a filled row asks first');
+  modal.success({ confirm: true });
+
+  const patch = page.patches[page.patches.length - 1];
+  assert.equal(patch.dataRows.length, 999, 'the whole list is re-sent for a structural change');
+  assert.equal(page.data.dataWindowRows.length, 60);
+  assert.equal(page.data.dataWindowBottomPx, (999 - 60) * 40);
+});
+
+test('coming back to 批量数据 starts the window at the top again', (t) => {
+  useWx(t, { getWindowInfo: () => ({ windowWidth: 375, windowHeight: 667 }), showToast() {} });
+  const { page, repository } = storedHome();
+  repository.saveDataRows(thousandRows());
+  page.refresh();
+  page.navigate(tap({ route: 'data' }));
+  page.onDataTableScroll({ detail: { scrollTop: 500 * 40 } });
+  assert.ok(page.data.dataWindowStart > 0);
+
+  page.navigate(tap({ route: 'profile' }));
+  page.navigate(tap({ route: 'data' }));
+  assert.equal(page.data.dataWindowStart, 0, 'the scroll-view starts at the top, so must the window');
+  assert.equal(page.data.dataWindowRows[0].index, 0);
+  assert.equal(page.data.dataScrollIntoView, '');
 });

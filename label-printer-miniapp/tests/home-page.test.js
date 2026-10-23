@@ -1128,8 +1128,11 @@ test('a long table scrolls in its own box so the print buttons stay reachable', 
   assert.match(markup, /class="data-table-scroll"[^>]*scroll-y="true"/);
   // Every row carries the number the error messages talk about.
   assert.match(markup, /<text class="row-index">#<\/text>/);
-  assert.match(markup, /<text class="row-index">\{\{index \+ 1\}\}<\/text>/);
-  assert.match(markup, /id="data-row-\{\{index\}\}"/);
+  assert.match(markup, /<text class="row-index">\{\{item\.index \+ 1\}\}<\/text>/);
+  assert.match(markup, /id="data-row-\{\{item\.index\}\}"/);
+  // The table renders the window, not every row.
+  assert.match(markup, /wx:for="\{\{dataWindowRows\}\}"/);
+  assert.doesNotMatch(markup, /wx:for="\{\{dataRows\}\}"/);
   // 批量数据 is a page under 我的, so the tab keeps its highlight.
   assert.match(markup, /\{\{route == 'profile' \|\| route == 'data' \? 'active' : ''\}\}/);
 
@@ -1148,23 +1151,26 @@ test('the unreadable-storage screen is not a dead end', () => {
   assert.equal(typeof pageDefinition.showRecoveryHelp, 'function');
 });
 
-test('adding a row says so and jumps to it in a long table', () => {
-  const calls = { toasts: [], scrolled: [] };
+test('adding a row says so and scrolls the table to it', () => {
+  const calls = { toasts: [] };
   global.wx = {
     showToast(options) { calls.toasts.push(options.title); },
-    pageScrollTo(options) { calls.scrolled.push(options.selector); }
+    getWindowInfo() { return { windowWidth: 375, windowHeight: 667 }; }
   };
   try {
     const page = homePage({
       repository: { saveDataRows() {} },
       tableRows: null,
-      data: Object.assign(structuredClone(pageDefinition.data), { dataRows: [] })
+      data: Object.assign(structuredClone(pageDefinition.data), { dataRows: [], route: 'data' })
     });
     page.addDataRow();
     assert.deepEqual(calls.toasts, ['已添加第 1 行']);
-    assert.deepEqual(calls.scrolled, ['#data-row-0']);
+    // The table scrolls inside its own box, so the jump is scroll-into-view.
+    assert.equal(page.data.dataScrollIntoView, 'data-row-0');
+    assert.deepEqual(page.data.dataWindowRows.map((item) => item.index), [0]);
     const markup = readHome('index.wxml');
-    assert.match(markup, /id="data-row-\{\{index\}\}"/, 'the selector exists in the table');
+    assert.match(markup, /id="data-row-\{\{item\.index\}\}"/, 'the target id exists in the table');
+    assert.match(markup, /scroll-into-view="\{\{dataScrollIntoView\}\}"/);
   } finally {
     delete global.wx;
   }

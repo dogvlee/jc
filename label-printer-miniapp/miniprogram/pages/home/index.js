@@ -52,6 +52,11 @@ const MAX_DATA_ROWS = 1000;
 const MAX_BATCH_FIELD_LENGTH = 256;
 // Table edits are saved this long after the last keystroke, and on blur.
 const DATA_SAVE_DELAY_MS = 400;
+// The table renders a moving window instead of every row: 1,000 rows x 5 inputs
+// is 5,000 nodes and seconds of first paint on a low-end Android.
+const ROW_HEIGHT_RPX = 80;
+const DATA_WINDOW_ROWS = 60;
+const DATA_WINDOW_OVERSCAN = 8;
 // The template shelf is filtered this long after the last keystroke.
 const SEARCH_DELAY_MS = 250;
 // The history sheet lists the newest records; storage keeps up to 80.
@@ -477,6 +482,11 @@ Page({
     showHelpSheet: false,
     projectQuery: '',
     labelTypeNames: ['间隙纸', '黑标纸', '连续纸', '定孔纸'],
+    dataWindowRows: [],
+    dataWindowStart: 0,
+    dataWindowTopPx: 0,
+    dataWindowBottomPx: 0,
+    dataScrollIntoView: '',
     stockPresets: STOCK_PRESETS.map((item) => Object.assign({}, item, {
       // The tile already shows 40×12 in large type; the name adds the use.
       name: item.name.replace(/^\d+×\d+\s*/, '')
@@ -871,8 +881,15 @@ Page({
     if (!ROUTE_TITLES[route]) return;
     if (this.data.route === 'data' && route !== 'data') this.commitDataRows(true);
     const patch = { route, routeTitle: ROUTE_TITLES[route] };
-    // The table goes to the page only when its route opens.
-    if (route === 'data' && this.data.route !== 'data') Object.assign(patch, this.tableViewPatch(this.currentDataRows(), { route }));
+    // The table goes to the page only when its route opens, from the top: the
+    // scroll-view starts at the top again, so the rendered window must too.
+    if (route === 'data' && this.data.route !== 'data') {
+      const rows = this.currentDataRows();
+      // The scroll-view starts at the top again, so the rendered window must too.
+      Object.assign(patch, this.tableViewPatch(rows, { route, dataWindowStart: 0 }));
+      Object.assign(patch, this.dataWindowAt(rows, 0));
+      patch.dataScrollIntoView = '';
+    }
     this.setData(patch, () => {
       // Cards already on screen stay put unless what they show changed.
       if (route === 'templates' && this.templatesSignature() !== this.shownTemplatesSignature) {
@@ -1453,26 +1470,96 @@ Page({
 
   skipOnboarding() { this.finishOnboarding(); },
 
+  /** Height of one table row in CSS pixels; the window math depends on it. */
+  tableRowHeightPx() {
+    let windowWidth = 375;
+    try {
+      const info = typeof wx !== 'undefined' && wx.getWindowInfo ? wx.getWindowInfo() : null;
+      const width = Number(info && info.windowWidth);
+      if (Number.isFinite(width) && width > 0) windowWidth = width;
+    } catch (error) {
+      // A host without window info keeps the 375px default.
+    }
+    return windowWidth / 750 * ROW_HEIGHT_RPX;
+  },
+
+  /**
+   * The slice of rows around `start` that is actually rendered, plus the spacer
+   * heights that keep the scrollbar honest for the rows outside it.
+   */
+  dataWindowAt(rows, start) {
+    const list = Array.isArray(rows) ? rows : [];
+    const maxStart = Math.max(0, list.length - DATA_WINDOW_ROWS);
+    const from = Math.max(0, Math.min(Math.round(Number(start) || 0), maxStart));
+    const rowHeight = this.tableRowHeightPx();
+    const length = Math.min(DATA_WINDOW_ROWS, Math.max(0, list.length - from));
+    return {
+      dataWindowStart: from,
+      dataWindowRows: list.slice(from, from + length).map((row, offset) => ({ index: from + offset, row })),
+      dataWindowTopPx: Number((from * rowHeight).toFixed(2)),
+      dataWindowBottomPx: Number(((list.length - from - length) * rowHeight).toFixed(2))
+    };
+  },
+
+  /** Re-renders the next slice once the finger has moved half a window. */
+  onDataTableScroll(event) {
+    if (this.data.route !== 'data') return;
+    const rows = this.currentDataRows();
+    if (rows.length <= DATA_WINDOW_ROWS) return;
+    const rowHeight = this.tableRowHeightPx();
+    const scrollTop = Number(event && event.detail && event.detail.scrollTop) || 0;
+    const start = Math.max(0, Math.floor(scrollTop / rowHeight) - DATA_WINDOW_OVERSCAN);
+    if (Math.abs(start - (this.data.dataWindowStart || 0)) < DATA_WINDOW_ROWS / 2) return;
+    this.setData(this.dataWindowAt(rows, start));
+  },
+
+  /**
+   * Brings row `index` into the rendered window, then scrolls the table to it.
+   * The table scrolls inside its own box, so pageScrollTo would do nothing.
+   */
+  revealDataRow(index, options) {
+    const rows = this.currentDataRows();
+    if (!rows.length) return;
+    const target = Math.max(0, Math.min(Number(index) || 0, rows.length - 1));
+    const patch = this.dataWindowAt(rows, Math.max(0, target - DATA_WINDOW_OVERSCAN));
+    if (options && typeof options.onReveal === 'function') options.onReveal(target);
+    this.setData(patch, () => {
+      // Clearing first lets the same row be scrolled to twice in a row.
+      this.setData({ dataScrollIntoView: '' }, () => {
+        this.setData({ dataScrollIntoView: `data-row-${target}` });
+      });
+    });
+  },
+
   /**
    * The batch table for the page. Rows are sent only while the data route is
-   * open (1,000 rows are about 95 KB), and when the rows on screen are the
-   * same rows, only the cells that changed are sent.
+   * open (1,000 rows are about 95 KB); the table renders a window of them, and
+   * when only cells changed, just those cells are sent.
    */
   tableViewPatch(rows, state) {
+    const view = state || this.data;
     const patch = { batchRowCount: rows.filter(hasRowData).length };
-    if ((state || this.data).route !== 'data') {
+    if (view.route !== 'data') {
       this.tableShownRows = null;
       return patch;
     }
     const shown = this.tableShownRows;
     if (shown && shown.length === rows.length && shown.every((row, index) => row && rows[index] && row.id === rows[index].id)) {
+      const start = Number(view.dataWindowStart) || 0;
+      const length = Math.min(DATA_WINDOW_ROWS, Math.max(0, rows.length - start));
       rows.forEach((row, index) => {
         DATA_COLUMNS.forEach((field) => {
-          if (cellText(row, field) !== cellText(shown[index], field)) patch[`dataRows[${index}].${field}`] = cellText(row, field);
+          const value = cellText(row, field);
+          if (value === cellText(shown[index], field)) return;
+          patch[`dataRows[${index}].${field}`] = value;
+          const offset = index - start;
+          // The window renders copies of the row, so the cell is patched there too.
+          if (offset >= 0 && offset < length) patch[`dataWindowRows[${offset}].row.${field}`] = value;
         });
       });
     } else {
       patch.dataRows = rows;
+      Object.assign(patch, this.dataWindowAt(rows, view.dataWindowStart || 0));
     }
     this.tableShownRows = rows;
     return patch;
@@ -1564,9 +1651,7 @@ Page({
     // The new row lands at the bottom, off screen in a long table; say so and
     // jump to it rather than leaving the button looking dead.
     wx.showToast({ title: `已添加第 ${next.length} 行`, icon: 'none' });
-    if (typeof wx.pageScrollTo === 'function') {
-      wx.pageScrollTo({ selector: `#data-row-${next.length - 1}`, offsetTop: -160, duration: 200 });
-    }
+    this.revealDataRow(next.length - 1);
   },
 
   // A row with content is deleted only after a confirmation; a blank row goes at once.
@@ -1637,9 +1722,7 @@ Page({
         content: `${where ? `${where}：` : ''}${String(error.message || '数据不符合模板要求').replace(/^第 \d+ 行[^：]*：/, '')}`,
         showCancel: false
       });
-      if (rowNumber && typeof wx.pageScrollTo === 'function') {
-        wx.pageScrollTo({ selector: `#data-row-${rowNumber - 1}`, offsetTop: -160, duration: 200 });
-      }
+      if (rowNumber) this.revealDataRow(rowNumber - 1);
       return null;
     }
   },
