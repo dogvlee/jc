@@ -896,3 +896,12 @@ test('on a short phone the text content field fits in the panel without scrollin
     + firstSectionTop + label.top + 24 * LINE_HEIGHT + label.bottom + textArea;
   assert.ok(used <= panelHeight - chrome, `${used}rpx of ${panelHeight - chrome}rpx`);
 });
+
+test('size and position come before the long style block, and the panel says it scrolls', () => {
+  const wxml = read('index.wxml');
+  const position = wxml.indexOf('位置与尺寸');
+  const style = wxml.indexOf('文字样式');
+  assert.ok(position > 0 && style > 0);
+  assert.ok(position < style, 'the fields people reach for after a drag are not 3 screens down');
+  assert.match(wxml, /class="panel-scroll"[^>]*show-scrollbar="\{\{true\}\}"/);
+});

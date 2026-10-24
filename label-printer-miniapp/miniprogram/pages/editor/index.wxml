@@ -73,7 +73,7 @@
       <button class="{{editorPanelTab == 'data' ? 'active' : ''}}" data-value="data" bindtap="setEditorPanelTab">批量</button>
     </view>
 
-    <scroll-view wx:if="{{editorPanelTab == 'elements'}}" class="panel-scroll" scroll-y enhanced show-scrollbar="{{false}}" scroll-into-view="{{panelScrollTarget}}">
+    <scroll-view wx:if="{{editorPanelTab == 'elements'}}" class="panel-scroll" scroll-y enhanced show-scrollbar="{{true}}" scroll-into-view="{{panelScrollTarget}}">
       <view wx:if="{{selected}}" id="panel-tools" class="tool-strip">
         <scroll-view class="tool-strip-scroll" scroll-x enhanced show-scrollbar="{{false}}">
           <view class="tool-strip-row">
@@ -210,6 +210,24 @@
           </view>
         </view>
 
+        <view class="property-section">
+          <text class="section-label">位置与尺寸 / mm</text>
+          <view class="field-grid four">
+            <label><text>X</text><input type="digit" value="{{selected.x}}" data-field="x" bindblur="updateField" /></label>
+            <label><text>Y</text><input type="digit" value="{{selected.y}}" data-field="y" bindblur="updateField" /></label>
+            <label><text>宽</text><input type="digit" value="{{selected.width}}" data-field="width" bindblur="updateField" /></label>
+            <label><text>高</text><input type="digit" value="{{selected.height}}" data-field="height" bindblur="updateField" /></label>
+          </view>
+          <text class="section-label">旋转 {{selected.rotation}}°</text>
+          <slider min="0" max="359" step="1" value="{{selected.rotation}}" data-field="rotation" bindchange="updateSlider" activeColor="#E02D26" block-size="20" />
+          <view class="style-actions wide">
+            <button data-field="mirrorX" class="{{selected.mirrorX ? 'active' : ''}}" bindtap="toggleSelectedFlag"><text class="icon icon-flip-horizontal-2" aria-hidden="true"></text>水平镜像</button>
+            <button data-field="mirrorY" class="{{selected.mirrorY ? 'active' : ''}}" bindtap="toggleSelectedFlag"><text class="icon icon-flip-vertical-2" aria-hidden="true"></text>垂直镜像</button>
+            <button data-direction="-1" bindtap="moveLayer"><text class="icon icon-arrow-down" aria-hidden="true"></text>下移一层</button>
+            <button data-direction="1" bindtap="moveLayer"><text class="icon icon-arrow-up" aria-hidden="true"></text>上移一层</button>
+          </view>
+        </view>
+
         <view wx:if="{{selected.type == 'text' || selected.type == 'date' || selected.type == 'serial' || selected.type == 'table'}}" class="property-section">
           <text class="section-label">文字样式</text>
           <view class="style-actions">
@@ -255,23 +273,6 @@
           <view wx:if="{{selected.textMode == 'arc'}}"><text class="section-label">弧度 {{selected.textArcAngle}}°</text><slider min="0" max="180" step="5" value="{{selected.textArcAngle}}" data-field="textArcAngle" bindchange="updateSlider" activeColor="#E02D26" block-size="20" /></view>
         </view>
 
-        <view class="property-section">
-          <text class="section-label">位置与尺寸 / mm</text>
-          <view class="field-grid four">
-            <label><text>X</text><input type="digit" value="{{selected.x}}" data-field="x" bindblur="updateField" /></label>
-            <label><text>Y</text><input type="digit" value="{{selected.y}}" data-field="y" bindblur="updateField" /></label>
-            <label><text>宽</text><input type="digit" value="{{selected.width}}" data-field="width" bindblur="updateField" /></label>
-            <label><text>高</text><input type="digit" value="{{selected.height}}" data-field="height" bindblur="updateField" /></label>
-          </view>
-          <text class="section-label">旋转 {{selected.rotation}}°</text>
-          <slider min="0" max="359" step="1" value="{{selected.rotation}}" data-field="rotation" bindchange="updateSlider" activeColor="#E02D26" block-size="20" />
-          <view class="style-actions wide">
-            <button data-field="mirrorX" class="{{selected.mirrorX ? 'active' : ''}}" bindtap="toggleSelectedFlag"><text class="icon icon-flip-horizontal-2" aria-hidden="true"></text>水平镜像</button>
-            <button data-field="mirrorY" class="{{selected.mirrorY ? 'active' : ''}}" bindtap="toggleSelectedFlag"><text class="icon icon-flip-vertical-2" aria-hidden="true"></text>垂直镜像</button>
-            <button data-direction="-1" bindtap="moveLayer"><text class="icon icon-arrow-down" aria-hidden="true"></text>下移一层</button>
-            <button data-direction="1" bindtap="moveLayer"><text class="icon icon-arrow-up" aria-hidden="true"></text>上移一层</button>
-          </view>
-        </view>
         </block>
       </view>
 
