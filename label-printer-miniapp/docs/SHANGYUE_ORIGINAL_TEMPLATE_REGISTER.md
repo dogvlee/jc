@@ -18,7 +18,7 @@
 | 当前版本 | 1.0.0 |
 | 署名标记 | `© 2026 商跃` |
 | 小程序源码 | `miniprogram/app/catalog.js`、`miniprogram/app/template-layouts.js` |
-| 实际渲染缩略图 | `miniprogram/assets/shangyue-thumbs/shangyue-wish-card-v1.png`（640×480，SHA-256 `45737271c651558cf0d57c62597501bc9e1879f1cac330d86a7ed4f857943147`） |
+| 实际渲染缩略图 | `miniprogram/assets/shangyue-thumbs/shangyue-wish-card-v1.png`（640×480，SHA-256 `7218c4333a278c8f0e18fb6be15b2f7c44bcb584b2e4ac7309c6eff319da8410`） |
 | 网页/App 镜像 | `../niim-label-app/src/app/catalog.js`、`../niim-label-app/src/app/template-layouts.js` |
 | 设计方式 | 洁净室独立排版，全部由可编辑文字、线条、矩形、二维码和序列号组成 |
 | 第三方图片 | 无 |
@@ -57,7 +57,7 @@
 | 当前版本 | 1.0.0 |
 | 署名标记 | `© 2026 商跃` |
 | 小程序源码 | `miniprogram/app/catalog.js`、`miniprogram/app/template-layouts.js` |
-| 实际渲染缩略图 | `miniprogram/assets/shangyue-thumbs/shangyue-price-tag-v1.png`（640×480，SHA-256 `dd371845753a31a11480dc1a2bc9075495f59fb974824223615a37443e83efa7`） |
+| 实际渲染缩略图 | `miniprogram/assets/shangyue-thumbs/shangyue-price-tag-v1.png`（640×480，SHA-256 `d909f1bc62244248f26bc07026662c18b64cab3d3190823004cc6722a2fff8b0`） |
 | 网页/App 镜像 | `../niim-label-app/src/app/catalog.js`、`../niim-label-app/src/app/template-layouts.js` |
 | 设计方式 | 洁净室独立排版：顶栏反白分区、品名、双价、EAN-13；无第三方图片或字体 |
 | 第三方图片 | 无 |
@@ -83,7 +83,7 @@
 | 当前版本 | 1.0.0 |
 | 署名标记 | `© 2026 商跃` |
 | 小程序源码 | `miniprogram/app/catalog.js`、`miniprogram/app/template-layouts.js` |
-| 实际渲染缩略图 | `miniprogram/assets/shangyue-thumbs/shangyue-bin-label-v1.png`（640×480，SHA-256 `2cd54a81677b1d88106d899bb8eed3434b1f74bf3e32f715a7e83c6e5a20dbfa`） |
+| 实际渲染缩略图 | `miniprogram/assets/shangyue-thumbs/shangyue-bin-label-v1.png`（640×480，SHA-256 `a9a6843c7d5153868e89b8c5b3e5a7a643a0a6f1ee99daf3240a4f69663eefaa`） |
 | 网页/App 镜像 | `../niim-label-app/src/app/catalog.js`、`../niim-label-app/src/app/template-layouts.js` |
 | 设计方式 | 洁净室独立排版：反白“库位”小签、货位码、SKU/批次、序列号、右侧入库二维码 |
 | 第三方图片 | 无 |
@@ -105,7 +105,7 @@
 | 当前版本 | 1.0.0 |
 | 署名标记 | `© 2026 商跃` |
 | 小程序源码 | `miniprogram/app/catalog.js`、`miniprogram/app/template-layouts.js` |
-| 实际渲染缩略图 | `miniprogram/assets/shangyue-thumbs/shangyue-name-sticker-v1.png`（640×480，SHA-256 `af550eb82411b22a4cdff874105bd8b3c169c5054742d6ca4947b960ee746ce9`） |
+| 实际渲染缩略图 | `miniprogram/assets/shangyue-thumbs/shangyue-name-sticker-v1.png`（640×480，SHA-256 `2440f66e9d9b4aa75e11e3d8151a42b0d8ffb6e105f753ddeed4531cd0104b83`） |
 | 网页/App 镜像 | `../niim-label-app/src/app/catalog.js`、`../niim-label-app/src/app/template-layouts.js` |
 | 设计方式 | 洁净室独立排版：横条签名、班级/部门、联系电话；40×20mm 不放二维码 |
 | 第三方图片 | 无 |
@@ -126,7 +126,7 @@
 | 当前版本 | 1.0.0 |
 | 署名标记 | `© 2026 商跃` |
 | 小程序源码 | `miniprogram/app/catalog.js`、`miniprogram/app/template-layouts.js` |
-| 实际渲染缩略图 | `miniprogram/assets/shangyue-thumbs/shangyue-fresh-date-v1.png`（640×480，SHA-256 `a4d5dba02be437f7961e954a48f98461b9fe2288cd1844ef0b4e77d95c5710f5`） |
+| 实际渲染缩略图 | `miniprogram/assets/shangyue-thumbs/shangyue-fresh-date-v1.png`（640×480，SHA-256 `a27e0e9b7f35b7b154a9ed89273f371cf707d2e1215e88bfd660e50749a2e2b5`） |
 | 网页/App 镜像 | `../niim-label-app/src/app/catalog.js`、`../niim-label-app/src/app/template-layouts.js` |
 | 设计方式 | 洁净室独立排版：顶栏冷藏分区、制作/食用日期表、开封提示 |
 | 第三方图片 | 无 |
@@ -149,7 +149,7 @@
 | 设计历史 | 内部记录：最初参考精诚同类用途，版式、文案与码值独立重做 |
 | 对外标记 | `© 2026 商跃` |
 | 小程序源码 | `miniprogram/app/catalog.js`、`miniprogram/app/template-layouts.js` |
-| 实际渲染缩略图 | `miniprogram/assets/shangyue-thumbs/shangyue-wifi-card-v1.png`（640×480，SHA-256 `6b394d88a11a187db232a89b582ea568eda11c84960a7c38d503a55ff6b503d2`） |
+| 实际渲染缩略图 | `miniprogram/assets/shangyue-thumbs/shangyue-wifi-card-v1.png`（640×480，SHA-256 `677d126f710cbe007873ea9dac3c61d6a2bdc9b72904fd010941ccd5e3f769d9`） |
 | 网页/App 镜像 | `../niim-label-app/src/app/catalog.js`、`../niim-label-app/src/app/template-layouts.js` |
 | 设计方式 | 独立重设计：左侧标准 `WIFI:` 二维码、右侧访客凭据和反白密码框 |
 | 第三方图片 | 无 |

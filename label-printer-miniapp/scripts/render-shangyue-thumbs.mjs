@@ -48,6 +48,7 @@ if (esbuild.status !== 0) {
 }
 
 const hashes = {};
+const written = [];
 
 for (const template of PUBLIC_TEMPLATES) {
   const htmlPath = path.join(workDir, `${template.id}.html`);
@@ -82,7 +83,31 @@ for (const template of PUBLIC_TEMPLATES) {
   const dest = path.join(outDir, destName);
   fs.copyFileSync(screenshotPath, dest);
   if (withWeb) fs.copyFileSync(screenshotPath, path.join(webOutDir, destName));
-  hashes[template.id] = createHash('sha256').update(fs.readFileSync(dest)).digest('hex');
+  written.push({ id: template.id, dest });
+}
+
+// A raw screenshot is RGBA with 300+ antialiased greys and costs about 30 KB;
+// the palette version is indistinguishable and a quarter of the size. The
+// hashes catalog.js records must be taken from the shrunk file.
+const quantize = spawnSync(process.env.PYTHON || 'python', [
+  path.join(root, 'scripts', 'quantize-png.py'),
+  outDir
+], { cwd: root, encoding: 'utf8' });
+if (quantize.status !== 0) {
+  console.error('缩略图已渲染，但压缩失败（需要 Pillow）：请手动运行 python scripts/quantize-png.py miniprogram/assets/shangyue-thumbs');
+} else {
+  console.log(quantize.stdout.trim());
+}
+if (withWeb) {
+  const webQuantize = spawnSync(process.env.PYTHON || 'python', [
+    path.join(root, 'scripts', 'quantize-png.py'),
+    webOutDir
+  ], { cwd: root, encoding: 'utf8' });
+  if (webQuantize.status === 0) console.log(webQuantize.stdout.trim());
+}
+
+for (const entry of written) {
+  hashes[entry.id] = createHash('sha256').update(fs.readFileSync(entry.dest)).digest('hex');
 }
 
 function pathToFileURL(filePath) {
