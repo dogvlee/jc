@@ -10,10 +10,10 @@ const { resetFontLoader } = require('../miniprogram/core/font-loader');
 
 let pageDefinition = null;
 global.Page = (definition) => { pageDefinition = definition; };
-require('../miniprogram/pages/editor/index');
+require('../miniprogram/pkg-editor/pages/editor/index');
 delete global.Page;
 
-const read = (file) => fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'editor', file), 'utf8');
+const read = (file) => fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pkg-editor', 'pages', 'editor', file), 'utf8');
 const FONT_FAILURE = '字体下载失败，已先用系统字体显示，联网后可再试';
 
 // A 40 x 20 mm label drawn on a 400 x 200 px canvas: 10 px per millimetre.

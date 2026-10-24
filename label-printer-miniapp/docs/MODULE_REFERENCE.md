@@ -11,13 +11,13 @@
 | 模块 | 责任 | 主要导出/页面入口 | 调用方 | 副作用 | 测试 |
 |---|---|---|---|---|---|
 | `miniprogram/app.js` | 组合应用级仓储、BLE 会话、打印客户端和连接管理器 | `App({ onLaunch, globalData })` | 微信小程序运行时 | 启动迁移；注册 BLE 监听；保存全局实例；800 ms 后尝试 force-fresh 恢复上次设备 | 无独立测试；连接与仓储逻辑由对应服务测试，项目结构由 `npm run check` 检查 |
-| `miniprogram/app.json` | 声明页面、窗口主题、基础运行选项 | `pages/home/index`、`pages/editor/index` | 微信小程序运行时 | 决定页面注册和导航栏 | `scripts/check-project.mjs` 验证页面配套文件 |
+| `miniprogram/app.json` | 声明页面、窗口主题、基础运行选项 | `pages/home/index`、`pkg-editor/pages/editor/index`（分包） | 微信小程序运行时 | 决定页面注册和导航栏 | `scripts/check-project.mjs` 验证页面配套文件 |
 | `pages/home/index.js` | 首页虚拟分区、模板/项目/批量数据/设置/历史、扫码建标、导入导出和编辑器入口 | `Page(...)` 方法 | WXML 事件、小程序生命周期 | 读写 storage；相机扫码；选择/读写/分享文件；弹窗；导航；订阅连接状态 | 无独立 home 页面测试；下层由 `scanner`、`scan-label`、`csv`、`data-bind`、`repository`、模板测试覆盖，WXML 事件由静态检查覆盖 |
 | `pages/home/index.wxml` | 首页、模板、项目、批量数据、“我的”和各 sheet 视图 | 页面模板 | 微信渲染层 | 绑定页面事件、展示本地数据 | `npm run check` 检查结构与处理器存在 |
 | `pages/home/index.wxss` | 首页视觉和布局 | 无 | 微信样式层 | 视觉呈现 | 无视觉自动化；需开发者工具/真机检查 |
-| `pages/editor/index.js` | Canvas 编辑、元素属性、扫码填入、手势、撤销/重做、自动保存、设备选择、预检、打印和取消 | `Page(...)` 方法 | WXML 事件、小程序生命周期 | Canvas 绘制；storage；相册/相机/扫码；用户文件复制；BLE；弹窗；打印历史 | `tests/editor-page.test.js`；扫码、几何、渲染、连接、打印等下层测试；WXML 静态检查 |
-| `pages/editor/index.wxml` | 编辑器工具栏、双 Canvas、属性区、设备/设置/打印/图层/素材/边框 sheet | 页面模板 | 微信渲染层 | 绑定触摸和页面事件 | `npm run check` 检查结构与处理器存在 |
-| `pages/editor/index.wxss` | 编辑器视觉、Canvas 外框和 sheet 布局 | 无 | 微信样式层 | 视觉呈现 | 无视觉自动化；需开发者工具/真机检查 |
+| `pkg-editor/pages/editor/index.js` | Canvas 编辑、元素属性、扫码填入、手势、撤销/重做、自动保存、设备选择、预检、打印和取消 | `Page(...)` 方法 | WXML 事件、小程序生命周期 | Canvas 绘制；storage；相册/相机/扫码；用户文件复制；BLE；弹窗；打印历史 | `tests/editor-page.test.js`；扫码、几何、渲染、连接、打印等下层测试；WXML 静态检查 |
+| `pkg-editor/pages/editor/index.wxml` | 编辑器工具栏、双 Canvas、属性区、设备/设置/打印/图层/素材/边框 sheet | 页面模板 | 微信渲染层 | 绑定触摸和页面事件 | `npm run check` 检查结构与处理器存在 |
+| `pkg-editor/pages/editor/index.wxss` | 编辑器视觉、Canvas 外框和 sheet 布局 | 无 | 微信样式层 | 视觉呈现 | 无视觉自动化；需开发者工具/真机检查 |
 
 页面 JSON 只定义页面级窗口/组件配置，当前没有自定义组件目录。
 

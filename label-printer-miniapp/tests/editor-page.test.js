@@ -10,7 +10,7 @@ const { PROFILES, getProfile } = require('../miniprogram/core/profiles');
 
 let pageDefinition = null;
 global.Page = (definition) => { pageDefinition = definition; };
-require('../miniprogram/pages/editor/index');
+require('../miniprogram/pkg-editor/pages/editor/index');
 delete global.Page;
 
 function editorWithRects() {
@@ -114,14 +114,14 @@ test('print preflight identifies the exact low-density code and exposes repair c
   assert.equal(block.elementId, 'low-density');
   assert.match(block.message, /条码太密.*拉宽到至少 [\d.]+ mm/);
 
-  const wxml = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'editor', 'index.wxml'), 'utf8');
+  const wxml = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pkg-editor', 'pages', 'editor', 'index.wxml'), 'utf8');
   assert.match(wxml, /bindtap="fixCodeSize">自动放大到能扫/);
   assert.match(wxml, /bindtap="focusPrintElement">定位并修改该元素/);
 });
 
 test('editor font picker exposes the open-source CJK catalog', () => {
   const catalog = listFontCatalog();
-  const wxml = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/editor/index.wxml'), 'utf8');
+  const wxml = fs.readFileSync(path.join(__dirname, '../miniprogram/pkg-editor/pages/editor/index.wxml'), 'utf8');
   assert.equal(catalog.length, 23);
   assert.equal(catalog.filter((font) => font.remote).length, 20);
   assert.match(wxml, /wx:for="\{\{fontCatalog\}\}"/);
@@ -360,10 +360,10 @@ test('the printer button opens the shared picker unless a label is printing', ()
   editor.openDevices();
   assert.equal(editor.data.showDevices, false);
 
-  const wxml = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'editor', 'index.wxml'), 'utf8');
+  const wxml = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pkg-editor', 'pages', 'editor', 'index.wxml'), 'utf8');
   assert.match(wxml, /<printer-picker show="\{\{showDevices\}\}" bind:close="closeDevices" bind:connected="onPrinterConnected" \/>/);
   assert.doesNotMatch(wxml, /device-sheet|connectDevice|disconnectDevice|forgetDevice|diagnoseConnection/);
-  const json = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'editor', 'index.json'), 'utf8'));
+  const json = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pkg-editor', 'pages', 'editor', 'index.json'), 'utf8'));
   assert.equal(json.usingComponents['printer-picker'], '/components/printer-picker/index');
   for (const removed of ['connectDevice', 'disconnectDevice', 'forgetDevice', 'diagnoseConnection']) {
     assert.equal(pageDefinition[removed], undefined, `${removed} 已由打印机选择组件接管`);
@@ -529,7 +529,7 @@ test('print copies accept direct input and clamp to the valid range', () => {
   editor.setCopiesInput({ detail: { value: '12' } });
   editor.setCopiesInput({ detail: { value: '' } });
   assert.equal(editor.data.copies, 12);
-  const wxml = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'editor', 'index.wxml'), 'utf8');
+  const wxml = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pkg-editor', 'pages', 'editor', 'index.wxml'), 'utf8');
   assert.match(wxml, /class="copies-input"[^>]*bindinput="setCopiesInput"/, 'typing updates the count right away');
   assert.match(wxml, /class="copies-input"[^>]*bindblur="setCopiesInput"/);
 });
@@ -539,7 +539,7 @@ test('inspector and layer list surface Chinese element type labels', () => {
   assert.equal(elementTypeLabel('qrcode'), '二维码');
   assert.equal(elementTypeLabel('serial'), '序列号');
   assert.equal(elementTypeLabel('unknown-type'), '元素');
-  const wxml = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'editor', 'index.wxml'), 'utf8');
+  const wxml = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pkg-editor', 'pages', 'editor', 'index.wxml'), 'utf8');
   assert.match(wxml, /: selectedTypeLabel\}\}/);
   assert.match(wxml, /class="layer-type">\{\{item\._typeLabel\}\}/);
   assert.equal(/inspector-title">[^<]*selected\.type/.test(wxml), false);
@@ -662,7 +662,7 @@ test('turning on serial follow makes the code print the serial text and keeps it
 });
 
 test('the code inspector offers serial follow only when the label has a serial number', () => {
-  const markup = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'editor', 'index.wxml'), 'utf8');
+  const markup = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pkg-editor', 'pages', 'editor', 'index.wxml'), 'utf8');
   const row = markup.slice(markup.lastIndexOf('<view', markup.indexOf('跟随序号递增')), markup.indexOf('跟随序号递增'));
   assert.ok(row.includes('wx:if="{{documentHasSerial || selected.serialLinked}}"'), row);
   assert.ok(markup.includes('data-field="serialLinked" bindchange="updateSwitch"'));
@@ -712,7 +712,7 @@ test('the bottom panel lifts above an open keyboard instead of being covered', (
   } finally {
     delete global.wx;
   }
-  const markup = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'editor', 'index.wxml'), 'utf8');
+  const markup = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pkg-editor', 'pages', 'editor', 'index.wxml'), 'utf8');
   assert.match(markup, /class="editor-page" style="padding-bottom: \{\{keyboardHeight\}\}px;"/);
 });
 
@@ -843,7 +843,7 @@ test('the material sheet filters its symbols with the catalogue chips', () => {
   editor.selectMaterialChip({ currentTarget: { dataset: { chip: '全部' } } });
   assert.equal(editor.data.materialOptions.length, MATERIAL_CATALOG.length);
 
-  const markup = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'editor', 'index.wxml'), 'utf8');
+  const markup = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pkg-editor', 'pages', 'editor', 'index.wxml'), 'utf8');
   assert.match(markup, /wx:for="\{\{materialChips\}\}"[^>]*bindtap="selectMaterialChip"/);
   assert.match(markup, /wx:for="\{\{materialOptions\}\}"/);
   assert.match(markup, /这一类还没有素材/);

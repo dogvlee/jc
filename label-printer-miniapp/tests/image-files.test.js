@@ -114,7 +114,7 @@ test('the default age guard is a minute', () => {
 test('the editor sweeps when it closes, keeping what a stored label still uses', () => {
   let pageDefinition = null;
   global.Page = (definition) => { pageDefinition = definition; };
-  require('../miniprogram/pages/editor/index');
+  require('../miniprogram/pkg-editor/pages/editor/index');
   delete global.Page;
 
   const { api, removed } = fakeApi(['label-image-orphan.png', 'label-image-in-project.png', 'label-image-in-document.png']);

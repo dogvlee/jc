@@ -5,7 +5,7 @@ const path = require('node:path');
 
 const mini = path.join(__dirname, '..', 'miniprogram');
 const read = (file) => fs.readFileSync(path.join(mini, file), 'utf8');
-const STYLE_FILES = ['app.wxss', 'pages/home/index.wxss', 'pages/editor/index.wxss', 'pages/login/index.wxss', 'pages/legal/index.wxss'];
+const STYLE_FILES = ['app.wxss', 'pages/home/index.wxss', 'pkg-editor/pages/editor/index.wxss', 'pages/login/index.wxss', 'pages/legal/index.wxss'];
 // Reds used before the design-token refresh; the brand primary is now #E02D26.
 const LEGACY_REDS = /#(?:f44336|f4433b|ef433c|e53935|f13932|ff5b53|ff4b43|ee3e37|f24840|e23c31|e43f34|e54438)\b/i;
 
@@ -30,7 +30,7 @@ test('every CSS variable used by styles is defined on page in app.wxss', () => {
 });
 
 test('legacy brand reds are gone from app and page sources', () => {
-  const files = [...STYLE_FILES, 'app.json', 'pages/home/index.wxml', 'pages/editor/index.wxml', 'pages/home/index.js', 'pages/editor/index.js'];
+  const files = [...STYLE_FILES, 'app.json', 'pages/home/index.wxml', 'pkg-editor/pages/editor/index.wxml', 'pages/home/index.js', 'pkg-editor/pages/editor/index.js'];
   for (const file of files) {
     const hit = read(file).match(LEGACY_REDS);
     assert.ok(!hit, `${file} 仍含旧红色 ${hit && hit[0]}`);
@@ -38,12 +38,12 @@ test('legacy brand reds are gone from app and page sources', () => {
 });
 
 test('native slider, switch and confirm colors use the brand primary', () => {
-  for (const file of ['pages/home/index.wxml', 'pages/editor/index.wxml']) {
+  for (const file of ['pages/home/index.wxml', 'pkg-editor/pages/editor/index.wxml']) {
     for (const match of read(file).matchAll(/(?:activeColor|color)="(#[0-9a-fA-F]{6})"/g)) {
       assert.equal(match[1].toUpperCase(), '#E02D26', `${file} ${match[0]}`);
     }
   }
-  for (const file of ['pages/home/index.js', 'pages/editor/index.js']) {
+  for (const file of ['pages/home/index.js', 'pkg-editor/pages/editor/index.js']) {
     for (const match of read(file).matchAll(/confirmColor:\s*'(#[0-9a-fA-F]{6})'/g)) {
       assert.equal(match[1].toUpperCase(), '#E02D26', `${file} ${match[0]}`);
     }
@@ -51,7 +51,7 @@ test('native slider, switch and confirm colors use the brand primary', () => {
 });
 
 test('page stylesheets leave the global font and text color to app.wxss', () => {
-  for (const file of ['pages/home/index.wxss', 'pages/editor/index.wxss']) {
+  for (const file of ['pages/home/index.wxss', 'pkg-editor/pages/editor/index.wxss']) {
     const block = pageBlock(read(file));
     if (block) assert.doesNotMatch(block, /font-family|(?:^|;)\s*color\s*:/, `${file} 不应覆盖全局字体和文字色`);
   }

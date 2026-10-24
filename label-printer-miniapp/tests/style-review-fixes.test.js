@@ -6,7 +6,7 @@ const path = require('node:path');
 const mini = path.join(__dirname, '..', 'miniprogram');
 const read = (file) => fs.readFileSync(path.join(mini, file), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
 const app = read('app.wxss');
-const editor = read('pages/editor/index.wxss');
+const editor = read('pkg-editor/pages/editor/index.wxss');
 const picker = read('components/printer-picker/index.wxss');
 const home = read('pages/home/index.wxss');
 

@@ -44,7 +44,7 @@
 | FR-04 | 项目最多 120、我的模板最多 80，可保存/打开/删除，系统模板不写入用户仓储 | `services/repository.js`、home/editor 页 | `repository.test.js` | 自动仓储通过；UI 部分 | 删除确认、存储失败、重进恢复；QA |
 | FR-05 | CSV 支持引号/逗号/换行，字段绑定和批量生成；坏行在打印前定位 | `services/csv.js`、`app/data-bind.js`、home 页 | `csv.test.js`、`data-bind.test.js`、`repository.test.js` 批量原子写 | 部分通过 | 文件选择、BOM/编码、大文件、100/1000 行、坏行 UI；QA/安全 |
 | FR-06 | JSON 备份/恢复覆盖项目、模板、设置、数据、历史；失败保留原数据 | `services/repository.js`、home 页 | `repository.test.js` 版本、往返、中途失败回滚 | 自动核心通过；真机待验 | DATA-DESTRUCT、覆盖确认、明文告知；QA/隐私 |
-| FR-07 | 编辑器支持文本、条码、二维码、图片、矩形、线、日期、序列、表格、素材 10 类元素 | `core/document.js`、`core/renderer.js`、`pages/editor/index.*` | `dynamic-elements`、`renderer`、`borders-table-shape`、`materials`、`date-links`、`text-*` 测试 | 自动核心通过；UI 部分 | 每类创建→编辑→保存→重开→打印样张；QA/硬件 |
+| FR-07 | 编辑器支持文本、条码、二维码、图片、矩形、线、日期、序列、表格、素材 10 类元素 | `core/document.js`、`core/renderer.js`、`pkg-editor/pages/editor/index.*` | `dynamic-elements`、`renderer`、`borders-table-shape`、`materials`、`date-links`、`text-*` 测试 | 自动核心通过；UI 部分 | 每类创建→编辑→保存→重开→打印样张；QA/硬件 |
 | FR-08 | 移动、缩放、旋转、吸附、多选、对齐/分布、锁定和图层行为正确 | `core/geometry.js`、`editor-gesture.js`、`document.js`、editor 页 | `geometry.test.js`、`editor-snap`、`editor-gesture`、`document`、`editor-page` | 部分通过 | 真实触摸、小屏、边缘手柄、键盘/安全区；QA |
 | FR-09 | 图片可从相册/相机添加/替换，阈值/镜像和异步替换安全 | editor 页、`core/image-cache.js`、`renderer.js` | `image-cache.test.js`、renderer 二值化测试 | 部分通过 | 权限拒绝、超大/损坏图片、iOS/Android Canvas；QA/安全 |
 | FR-10 | 标签可在超出当前机型时继续编辑；打印预检阻断尺寸、占位和非法元素（不按型号阻断，ADR-013），不改原稿 | `core/profiles.js`、`renderer.js`、editor `evaluatePrintBlock` | `profiles.test.js`、`renderer.test.js`、`repository.test.js` | 自动核心通过；UI 待验 | 预检弹层、建议 profile、不连接时恢复；QA |
@@ -57,7 +57,7 @@
 | FR-17 | 条码、二维码、日期、序列号在动态/批量场景值正确 | `code128.js`、`ean13.js`、renderer、date-links、data-bind | `code128`、`ean13`、`renderer`、`date-links`、`dynamic-elements`、`data-bind` | 自动核心通过 | 两类扫码器、跨日/时区、连续序列实物；QA/硬件 |
 | FR-18 | NIIM 模板 JSON/内部文档导入可归一化；无效/缺图安全拒绝 | `core/niim-template-import.js`、repository、home 页 | `niim-template-import.test.js`、`online-templates.test.js` | 自动核心通过；文件 UI 待验 | 恶意/超大/未知 schema、权限拒绝；QA/安全 |
 | FR-19 | CSV 和备份可生成并由用户主动分享 | home `shareTextFile`、CSV、repository backup | CSV 往返、backup 往返测试 | 部分通过 | 真机分享、取消、磁盘满、敏感提示、CSV 公式防护；QA/隐私 |
-| FR-20 | 本地 v1→v2 迁移幂等，草稿/自动保存可恢复，失败不虚报成功 | `services/repository.js`、`pages/editor/index.js`、`app.js` | `repository.test.js` 迁移/写失败/回滚 | 自动仓储通过；生命周期待验 | 杀进程、升级、存储满、回滚上一版本；QA |
+| FR-20 | 本地 v1→v2 迁移幂等，草稿/自动保存可恢复，失败不虚报成功 | `services/repository.js`、`pkg-editor/pages/editor/index.js`、`app.js` | `repository.test.js` 迁移/写失败/回滚 | 自动仓储通过；生命周期待验 | 杀进程、升级、存储满、回滚上一版本；QA |
 | FR-21 | 帮助、空状态、失败文案均给出下一步，耗时动作防重复点击 | home/editor WXML/JS | WXML 结构/handler 检查；部分连接单飞测试 | 部分通过 | UI-001/002/003、权限拒绝和恢复可理解性；产品/QA |
 | FR-22 | 首页扫码建标、编辑器扫码填入；按一维/二维码映射，取消/失败/类型不符不改原稿且不上传原文 | `core/scan-label.js`、`services/scanner.js`、home/editor 页 | `scan-label.test.js`、`scanner.test.js`、WXML handler 检查 | 规则自动通过；平台待验 | SCN-001–004、Android/iOS 权限、实物码与独立扫码器；QA/隐私 |
 

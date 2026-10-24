@@ -478,7 +478,7 @@ test('using a template closes its preview once the editor has opened', () => {
     setData(patch) { Object.assign(this.data, patch); }
   });
   page.navigateEditor();
-  assert.equal(navigated.url, '/pages/editor/index');
+  assert.equal(navigated.url, '/pkg-editor/pages/editor/index');
   assert.equal(page.data.showTemplatePreview, false);
   assert.equal(page.previewDocument, null);
   delete global.wx;

@@ -1,11 +1,11 @@
-const { BleSession } = require('../../services/ble-session');
-const { PrinterClient } = require('../../services/printer-client');
-const { describeBleError } = require('../../services/ble-errors');
-const { sweepOrphanImages } = require('../../services/image-files');
-const { templates: catalogTemplates } = require('../../app/catalog');
-const { assertBatchCompatible, buildBatchDocuments } = require('../../app/data-bind');
-const { buildTemplateDocument } = require('../../app/template-layouts');
-const { buildCuratedDocument, normalizeSearchText, queryCuratedMeta } = require('../../app/curated');
+const { BleSession } = require('../../../services/ble-session');
+const { PrinterClient } = require('../../../services/printer-client');
+const { describeBleError } = require('../../../services/ble-errors');
+const { sweepOrphanImages } = require('../../../services/image-files');
+const { templates: catalogTemplates } = require('../../../app/catalog');
+const { assertBatchCompatible, buildBatchDocuments } = require('../../../app/data-bind');
+const { buildTemplateDocument } = require('../../../app/template-layouts');
+const { buildCuratedDocument, normalizeSearchText, queryCuratedMeta } = require('../../../app/curated');
 const {
   clampElement,
   cloneDocument,
@@ -16,7 +16,7 @@ const {
   fitImageToPicture,
   hitTestAll,
   placeNewElement
-} = require('../../core/document');
+} = require('../../../core/document');
 const {
   changeTextMode,
   clampGroupDelta,
@@ -27,9 +27,9 @@ const {
   scaleRotatedElement,
   selectionHandleModeAtPoint,
   snapElementPosition
-} = require('../../core/geometry');
-const { BORDER_CATALOG } = require('../../core/borders');
-const { MATERIAL_CATALOG, MATERIAL_CHIPS } = require('../../core/materials');
+} = require('../../../core/geometry');
+const { BORDER_CATALOG } = require('../../../core/borders');
+const { MATERIAL_CATALOG, MATERIAL_CHIPS } = require('../../../core/materials');
 const {
   cropImageData,
   evaluatePrintability,
@@ -41,7 +41,7 @@ const {
   PROFILES,
   printerNameProfileId,
   profileForPrinterName
-} = require('../../core/profiles');
+} = require('../../../core/profiles');
 const {
   dateShowsTime,
   dateStyleOf,
@@ -52,26 +52,26 @@ const {
   renderSelection,
   serialValue,
   validateDocument
-} = require('../../core/renderer');
-const { TEXT_MODE_OPTIONS } = require('../../core/text-direction');
+} = require('../../../core/renderer');
+const { TEXT_MODE_OPTIONS } = require('../../../core/text-direction');
 const {
   longPressSelection,
   nextSelectionId,
   selectionHitDecision,
   selectionTargetSizeMm
-} = require('../../core/editor-gesture');
-const { createImageCacheRegistry } = require('../../core/image-cache');
-const { applyScanToElement } = require('../../core/scan-label');
-const { linkedCodeValue, syncLinkedCodes } = require('../../core/linked-codes');
-const { applySerialAdvance, serialAdvancePlan } = require('../../core/serial-advance');
-const { DOCUMENT_LIMITS, KEYS, Repository, normalizeDocument } = require('../../services/repository');
-const { STOCK_PRESETS } = require('../../app/stock-presets');
-const { scanCode, showScanFailure } = require('../../services/scanner');
-const { EditorSession } = require('../../services/editor-session');
-const { PrintJobService } = require('../../services/print-job-service');
-const { collectDocumentFontIds, fontFallbackInfo, listFontCatalog, resolveFontId } = require('../../core/font-family');
-const { ensureDocumentFonts, ensureFont } = require('../../core/font-loader');
-const { resizeCodeElementToMinimum } = require('../../core/code-quality');
+} = require('../../../core/editor-gesture');
+const { createImageCacheRegistry } = require('../../../core/image-cache');
+const { applyScanToElement } = require('../../../core/scan-label');
+const { linkedCodeValue, syncLinkedCodes } = require('../../../core/linked-codes');
+const { applySerialAdvance, serialAdvancePlan } = require('../../../core/serial-advance');
+const { DOCUMENT_LIMITS, KEYS, Repository, normalizeDocument } = require('../../../services/repository');
+const { STOCK_PRESETS } = require('../../../app/stock-presets');
+const { scanCode, showScanFailure } = require('../../../services/scanner');
+const { EditorSession } = require('../../../services/editor-session');
+const { PrintJobService } = require('../../../services/print-job-service');
+const { collectDocumentFontIds, fontFallbackInfo, listFontCatalog, resolveFontId } = require('../../../core/font-family');
+const { ensureDocumentFonts, ensureFont } = require('../../../core/font-loader');
+const { resizeCodeElementToMinimum } = require('../../../core/code-quality');
 
 function fontRuntime() {
   return { wx: typeof wx === 'undefined' ? null : wx };

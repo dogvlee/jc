@@ -9,7 +9,7 @@ const {
 
 let pageDefinition = null;
 global.Page = (definition) => { pageDefinition = definition; };
-require('../miniprogram/pages/editor/index');
+require('../miniprogram/pkg-editor/pages/editor/index');
 delete global.Page;
 
 test('group translation clamps once and preserves spacing at the label edge', () => {

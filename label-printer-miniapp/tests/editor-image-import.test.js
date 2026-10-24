@@ -5,7 +5,7 @@ const { createDocument, createElement } = require('../miniprogram/core/document'
 
 let pageDefinition = null;
 global.Page = (definition) => { pageDefinition = definition; };
-require('../miniprogram/pages/editor/index');
+require('../miniprogram/pkg-editor/pages/editor/index');
 delete global.Page;
 
 test.afterEach(() => {

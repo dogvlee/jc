@@ -283,7 +283,7 @@ async function canvasScreenshot(stage, file) {
     let projectId;
     await check('新建、Canvas、真实输入与保存', async () => {
       await tap(home, '.create-nav');
-      editor = await current('pages/editor/index');
+      editor = await current('pkg-editor/pages/editor/index');
       await until(() => editor.data('canvasReady'), 'Canvas ready');
       assert.equal(await editor.data('loadError'), '');
       await tap(editor, '.tool-button[data-type="text"]');
@@ -304,7 +304,7 @@ async function canvasScreenshot(stage, file) {
       assert.ok(await home.data('recoveryDraft'));
       await shot('04-draft-recovery');
       await tap(home, '.draft-recovery .primary-button');
-      editor = await current('pages/editor/index');
+      editor = await current('pkg-editor/pages/editor/index');
       await until(() => editor.data('canvasReady'), '恢复 Canvas');
       assert.equal((await editor.data('document.elements'))[0].text, '未保存的验收修改 B');
       assert.equal(await editor.data('projectId'), projectId);
@@ -316,7 +316,7 @@ async function canvasScreenshot(stage, file) {
     });
     await check('保存重开、打印预检与原稿一致', async () => {
       await tap(home, '.project-open');
-      editor = await current('pages/editor/index');
+      editor = await current('pkg-editor/pages/editor/index');
       await until(() => editor.data('canvasReady'), '重开 Canvas');
       assert.equal((await editor.data('document.elements'))[0].text, '未保存的验收修改 B');
       await tap(editor, '.print-button');
@@ -338,7 +338,7 @@ async function canvasScreenshot(stage, file) {
       await until(() => home.data('showTemplatePreview'), '打开模板预览');
       await shot('06-template-preview');
       await tap(home, '.preview-sheet .primary-button');
-      editor = await current('pages/editor/index');
+      editor = await current('pkg-editor/pages/editor/index');
       await until(() => editor.data('canvasReady'), '模板 Canvas');
       assert.ok((await editor.data('document.elements')).length > 0);
       await canvasGeometry(editor, 'template');

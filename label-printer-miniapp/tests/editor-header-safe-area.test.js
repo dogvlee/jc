@@ -5,7 +5,7 @@ const path = require('node:path');
 
 let pageDefinition = null;
 global.Page = (definition) => { pageDefinition = definition; };
-require('../miniprogram/pages/editor/index');
+require('../miniprogram/pkg-editor/pages/editor/index');
 delete global.Page;
 
 test('custom editor controls reserve the WeChat capsule area', () => {
@@ -27,7 +27,7 @@ test('editor header inset has a compact fallback when capsule metrics are unavai
 
 test('editor header applies the computed inset to the custom navigation row', () => {
   const template = fs.readFileSync(
-    path.join(__dirname, '../miniprogram/pages/editor/index.wxml'),
+    path.join(__dirname, '../miniprogram/pkg-editor/pages/editor/index.wxml'),
     'utf8'
   );
   assert.match(template, /class="header-main"\s+style="padding-right: \{\{menuSafeRightPx\}\}px;"/);

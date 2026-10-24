@@ -12,7 +12,7 @@ const {
 
 let pageDefinition = null;
 global.Page = (definition) => { pageDefinition = definition; };
-require('../miniprogram/pages/editor/index');
+require('../miniprogram/pkg-editor/pages/editor/index');
 delete global.Page;
 
 const NOW = new Date(2026, 9, 7, 9, 30, 15);

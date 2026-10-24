@@ -59,7 +59,7 @@ test('legal return ignores query destinations, goes back once and has a fixed ho
   const page = legalPage(t, {
     navigateBack(options) { calls.push('back'); back = options; },
     reLaunch(options) { calls.push(options.url); }
-  }, { returnTo: 'https://example.com', redirect: '/pages/editor/index' });
+  }, { returnTo: 'https://example.com', redirect: '/pkg-editor/pages/editor/index' });
   page.goBack();
   page.goBack();
   assert.deepEqual(calls, ['back']);

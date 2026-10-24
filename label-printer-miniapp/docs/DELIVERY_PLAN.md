@@ -34,7 +34,7 @@
 ```
 页面层
 ├─ pages/home     首页、模板、项目、数据、我的虚拟路由
-└─ pages/editor   画布编辑、属性、图层、预检与打印
+└─ pkg-editor/pages/editor   画布编辑、属性、图层、预检与打印
         │
 应用服务层
 ├─ Repository                本地 schema、迁移、项目/模板/历史/备份
@@ -75,7 +75,7 @@
 
 | 原应用能力 | 小程序落点 | 迁移策略 |
 | --- | --- | --- |
-| SPA 路由与视图 | `pages/home` 虚拟路由 + `pages/editor` | 复刻旅程，改用小程序 Page 生命周期和数据绑定 |
+| SPA 路由与视图 | `pages/home` 虚拟路由 + `pkg-editor/pages/editor` | 复刻旅程，改用小程序 Page 生命周期和数据绑定 |
 | 浏览器状态/store | `Repository` + Page data | 明确 schema 和容量上限，避免持久化系统模板全集 |
 | Canvas 编辑器 | 小程序 2D Canvas | 保留毫米坐标领域模型，视图层按设备像素比缩放 |
 | 模板与在线资源 | 本地 catalog、压缩 PNG | 固化 190 模板，资源离线化；发布前完成授权审核 |

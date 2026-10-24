@@ -9,7 +9,7 @@ let editorDefinition;
 global.Page = (page) => { homeDefinition = page; };
 require('../miniprogram/pages/home/index');
 global.Page = (page) => { editorDefinition = page; };
-require('../miniprogram/pages/editor/index');
+require('../miniprogram/pkg-editor/pages/editor/index');
 delete global.Page;
 
 function storage() {

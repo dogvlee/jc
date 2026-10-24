@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const read = (file) => fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'editor', file), 'utf8');
+const read = (file) => fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pkg-editor', 'pages', 'editor', file), 'utf8');
 
 // DevTools paints the 2D canvases above every sheet and ignores opacity and
 // visibility. Sliding them off-screen keeps sheets readable, while their layout

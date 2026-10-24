@@ -49,9 +49,9 @@ pages/home
   ├─ app/* catalog + template builders + data binding
   ├─ scanner + scan-label
   ├─ Repository + CSV
-  └─ editorDraft ──────────────► pages/editor
+  └─ editorDraft ──────────────► pkg-editor/pages/editor
 
-pages/editor
+pkg-editor/pages/editor
   ├─ document + geometry + renderer + profile
   ├─ Repository autosave/project/history
   └─ global connection manager/session/client
@@ -76,7 +76,7 @@ pages/editor
 | `miniprogram/core/` | 文档模型、几何、手势、渲染、条码/二维码、点阵编码、profile、协议帧、打印计划 |
 | `miniprogram/services/` | 仓储、CSV、BLE 会话、NIIMBOT 客户端、稳定连接管理器 |
 | `miniprogram/pages/home/` | 首页及模板、项目、批量数据、设置、历史、备份/恢复入口 |
-| `miniprogram/pages/editor/` | Canvas 编辑、属性面板、撤销/重做、设备选择、预检、打印和取消 |
+| `miniprogram/pkg-editor/pages/editor/` | Canvas 编辑、属性面板、撤销/重做、设备选择、预检、打印和取消。编辑器是最大的单页（约 210 KB），放在 `pkg-editor` 分包里按需下载，主包因此从 91% 降到 81% |
 | `miniprogram/data/` | 固化 NIIM 模板 JSON、原始素材清单 |
 | `miniprogram/assets/` | 原始素材、离线模板图和缩略图 |
 | `miniprogram/vendor/` | 构建后的二维码运行时代码 |

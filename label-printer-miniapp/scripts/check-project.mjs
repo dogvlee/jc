@@ -243,9 +243,21 @@ console.log(`[check] Static assets: ${resourceRefs.size} referenced paths`);
 
 const packIgnores = loadPackIgnores();
 const allPackageFiles = walk(miniRoot);
-const packageFiles = allPackageFiles.filter((file) => !isPackIgnored(file, packIgnores));
+const packagedFiles = allPackageFiles.filter((file) => !isPackIgnored(file, packIgnores));
 const ignoredPackageFiles = allPackageFiles.filter((file) => isPackIgnored(file, packIgnores));
 const ignoredPackageBytes = ignoredPackageFiles.reduce((sum, file) => sum + fs.statSync(file).size, 0);
+
+// Subpackages download on demand and do not count against the 2 MiB main package.
+const packageConfig = JSON.parse(readText(path.join(miniRoot, 'app.json')));
+const subPackages = (packageConfig.subPackages || packageConfig.subpackages || []).map((pack) => ({
+  root: String(pack.root || '').replace(/^\/+|\/+$/g, ''),
+  pages: pack.pages || []
+}));
+const inSubPackage = (file) => subPackages.some((pack) => {
+  const rel = path.relative(miniRoot, file).replaceAll('\\', '/');
+  return rel === pack.root || rel.startsWith(`${pack.root}/`);
+});
+const packageFiles = packagedFiles.filter((file) => !inSubPackage(file));
 const packageBytes = packageFiles.reduce((sum, file) => sum + fs.statSync(file).size, 0);
 const packageMiB = packageBytes / 1024 / 1024;
 const usage = packageBytes / MAIN_PACKAGE_LIMIT;
@@ -263,6 +275,20 @@ if (packageBytes > MAIN_PACKAGE_LIMIT) {
     .map((entry) => `${entry.name} ${(entry.size / 1024).toFixed(0)} KB`)
     .join(', ');
   warnings.push(`Main package is at ${(usage * 100).toFixed(1)}% of the 2 MiB limit (${MAIN_PACKAGE_LIMIT - packageBytes} bytes left); move bundled templates, thumbnails or fonts into a subpackage before adding more. Largest: ${largest}`);
+}
+
+for (const pack of subPackages) {
+  const files = packagedFiles.filter((file) => {
+    const rel = path.relative(miniRoot, file).replaceAll('\\', '/');
+    return rel === pack.root || rel.startsWith(`${pack.root}/`);
+  });
+  const bytes = files.reduce((sum, file) => sum + fs.statSync(file).size, 0);
+  const share = bytes / MAIN_PACKAGE_LIMIT;
+  console.log(`[check] Subpackage ${pack.root}: ${files.length} files, ${bytes} bytes (${(bytes / 1024 / 1024).toFixed(2)} MiB, ${(share * 100).toFixed(1)}% of 2 MiB)`);
+  if (bytes > MAIN_PACKAGE_LIMIT) errors.push(`Subpackage ${pack.root} is ${bytes - MAIN_PACKAGE_LIMIT} bytes over the 2 MiB limit`);
+  if (!files.some((file) => pack.pages.some((page) => path.relative(miniRoot, file).replaceAll('\\', '/') === `${pack.root}/${page}.js`))) {
+    errors.push(`Subpackage ${pack.root} declares pages that do not exist`);
+  }
 }
 
 for (const warning of warnings) console.warn(`[warn] ${warning}`);

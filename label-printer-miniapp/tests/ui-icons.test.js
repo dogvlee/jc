@@ -25,7 +25,11 @@ function componentSources(dir = path.join(mini, 'components')) {
 }
 
 function usedIcons() {
-  const declaredPages = JSON.parse(fs.readFileSync(path.join(mini, 'app.json'), 'utf8')).pages;
+  const appConfig = JSON.parse(fs.readFileSync(path.join(mini, 'app.json'), 'utf8'));
+  // Subpackage pages are pages too: their icons must be defined and used.
+  const declaredPages = (appConfig.pages || []).concat(
+    (appConfig.subPackages || []).flatMap((pack) => (pack.pages || []).map((page) => `${pack.root}/${page}`))
+  );
   const pages = declaredPages.flatMap((page) => [`${page}.wxml`, `${page}.js`]);
   const sources = [...pages, ...componentSources()]
     .map((file) => fs.readFileSync(path.join(mini, file), 'utf8'));
@@ -79,12 +83,12 @@ test('icons are inline masks only, never remote images', () => {
 
 test('legacy unicode glyph icons are gone from pages', () => {
   const glyphs = /[⌁▦▧♙⌂⌗⚙↻⇧⇩▣▰▱↶↷☺◷▥▤―⌕＋›✓]/u;
-  for (const file of ['pages/home/index.wxml', 'pages/editor/index.wxml', ...componentSources().filter((name) => name.endsWith('.wxml'))]) {
+  for (const file of ['pages/home/index.wxml', 'pkg-editor/pages/editor/index.wxml', ...componentSources().filter((name) => name.endsWith('.wxml'))]) {
     const markup = fs.readFileSync(path.join(mini, file), 'utf8');
     const hit = markup.match(glyphs);
     assert.ok(!hit, `${file} 仍含符号图标 ${hit && hit[0]}`);
   }
-  const editor = fs.readFileSync(path.join(mini, 'pages/editor/index.js'), 'utf8');
+  const editor = fs.readFileSync(path.join(mini, 'pkg-editor/pages/editor/index.js'), 'utf8');
   const start = editor.indexOf('const ELEMENT_TOOLS');
   const tools = editor.slice(start, editor.indexOf('];', start));
   assert.doesNotMatch(tools, /mark:/);

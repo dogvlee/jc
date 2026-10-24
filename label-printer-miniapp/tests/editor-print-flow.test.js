@@ -11,10 +11,10 @@ const { EditorSession } = require('../miniprogram/services/editor-session');
 
 let pageDefinition = null;
 global.Page = (definition) => { pageDefinition = definition; };
-require('../miniprogram/pages/editor/index');
+require('../miniprogram/pkg-editor/pages/editor/index');
 delete global.Page;
 
-const read = (file) => fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'editor', file), 'utf8');
+const read = (file) => fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pkg-editor', 'pages', 'editor', file), 'utf8');
 const indexOf = (id) => PROFILES.findIndex((profile) => profile.id === id);
 const LEAVE_MESSAGE = '正在打印，离开会中断打印。确定要离开吗？';
 

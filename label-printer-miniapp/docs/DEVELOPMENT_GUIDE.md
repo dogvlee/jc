@@ -35,7 +35,7 @@ npm.cmd run verify
 | `miniprogram/core/` | 文档模型、几何、渲染、扫码建标规则、编码、协议和打印计划等纯逻辑 |
 | `miniprogram/services/` | 本地仓储、CSV、微信原生扫码封装、BLE 会话、打印客户端和连接管理 |
 | `miniprogram/pages/home/` | 首页及模板、项目、数据、我的等虚拟分区 |
-| `miniprogram/pages/editor/` | 编辑器、属性面板、预检与打印交互 |
+| `miniprogram/pkg-editor/pages/editor/` | 编辑器、属性面板、预检与打印交互（`pkg-editor` 分包，按需下载） |
 | `miniprogram/assets/` | 随主包发布的黑白模板图、缩略图与素材 |
 | `tests/` | Node 单元、集成和微信 API mock 测试 |
 | `scripts/` | 静态门禁与资源转换脚本 |

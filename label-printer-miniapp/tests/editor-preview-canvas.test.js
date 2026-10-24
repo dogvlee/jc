@@ -9,7 +9,7 @@ const { Repository } = require('../miniprogram/services/repository');
 
 let pageDefinition = null;
 global.Page = (definition) => { pageDefinition = definition; };
-require('../miniprogram/pages/editor/index');
+require('../miniprogram/pkg-editor/pages/editor/index');
 delete global.Page;
 
 function editorFor(documentValue, overrides) {
@@ -230,7 +230,7 @@ test('print raster stays on the printer profile dpi instead of preview dpi', () 
 
 test('paper shell has no one-axis height clamp and tall canvases remain scrollable', () => {
   const stylesheet = fs.readFileSync(
-    path.join(__dirname, '../miniprogram/pages/editor/index.wxss'),
+    path.join(__dirname, '../miniprogram/pkg-editor/pages/editor/index.wxss'),
     'utf8'
   );
   const paperRule = stylesheet.match(/\.paper-shell\s*\{([^}]*)\}/);

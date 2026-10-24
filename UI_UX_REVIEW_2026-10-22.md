@@ -239,3 +239,24 @@
 ## 走查清单收口
 
 至此这一轮 UI/UX 走查的条目全部落地：误触与可见性、键盘避让、竖长标签适配、批量表格窗口化、模板 picker 重构、素材分类、死代码清理、属性面板顺序。剩下的是两条真机项（80mm 机型的光栅对齐、`wx.shareFileMessage` 对 csv/json 的支持）和包体分包。
+
+---
+
+# 第九轮：主包分包
+
+主包一度到 91.2%（剩 184 KB），再加模板或字体就会上传失败。按目录测量后（排除 `packOptions.ignore`），主包 1.82 MiB 里最大的是缩略图 660 KB、编辑器 210 KB、curated 183 KB、首页 150 KB。
+
+把**编辑器**整页挪进分包（`pkg-editor`）：
+
+- `miniprogram/pages/editor/` → `miniprogram/pkg-editor/pages/editor/`（git mv，保留历史）；
+- `app.json` 的 `pages` 去掉编辑器，新增 `subPackages: [{ root: "pkg-editor", pages: ["pages/editor/index"] }]`；
+- 编辑器里的 28 条 `require('../../…')` 改成 `../../../…`；
+- 首页的 `navigateTo` 改成 `/pkg-editor/pages/editor/index`；组件用的是绝对路径（`/components/…`），不用改；
+- `scripts/check-project.mjs` 改为按 app.json 分包统计：主包不再计入分包文件，并单独校验每个分包 2 MiB 上限、页面文件必须存在；
+- 测试与 DevTools 冒烟脚本的路径同步更新；`ui-icons` 的「已用图标」扫描改成同时读 `subPackages` 的页面。
+
+结果：**主包 1.62 MiB（81.0%）**，`pkg-editor` 0.20 MiB，85% 预警不再触发。
+
+新增 3 条测试（`tests/project-package.test.js`）：编辑器不在主包且在 `pkg-editor` 里、每个分包页面的四个文件都在、首页跳转走分包路径、编辑器的 require 多退一级。
+
+为什么要挑编辑器而不是缩略图或 curated：首页货架在主包里直接引用那些 PNG 和 curated 数据，挪进分包会导致「打开首页时图片 404」或「主包先下载分包」；编辑器只在用户点进去时才需要，是最典型的按需分包。下一步若还要腾空间，优先把 19 张缩略图转 WebP（约可再省 400 KB），那要同时更新 `catalog.js` 里的 `thumbSha256`。

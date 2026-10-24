@@ -1245,7 +1245,7 @@ Page({
   navigateEditor() {
     this.editorOpening = true;
     wx.navigateTo({
-      url: '/pages/editor/index',
+      url: '/pkg-editor/pages/editor/index',
       success: () => {
         if (this.data.showTemplatePreview) this.closeTemplatePreview();
       },
