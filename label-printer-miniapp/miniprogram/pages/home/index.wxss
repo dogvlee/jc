@@ -654,17 +654,26 @@ button.recent-print.button-hover {
 
 /* Which printers print the template; amber when the user's printer cannot. */
 .card-fit {
-  display: block;
-  margin-top: 6rpx;
+  max-width: 100%;
+  height: 40rpx;
+  margin-top: 10rpx;
+  padding: 0 14rpx;
+  box-sizing: border-box;
+  border-radius: 20rpx;
+  display: inline-flex;
+  align-items: center;
   overflow: hidden;
   color: var(--color-success-text, #137A4A);
-  font-size: var(--font-caption);
+  background: var(--color-success-soft);
+  font-size: var(--font-small, 22rpx);
+  line-height: 40rpx;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .card-fit.mismatch {
   color: var(--color-warning-text, #8A5200);
+  background: var(--color-warning-soft);
 }
 
 .card-blurb {
@@ -1121,17 +1130,194 @@ button.cat-tile.button-hover {
   opacity: 0.7;
 }
 
-.family-chip .icon {
-  margin-right: 6rpx;
+/* Clear the search in one tap. The plate is 56rpx; the ring makes it 88rpx. */
+button.search-clear {
+  position: relative;
+  width: 56rpx;
+  height: 56rpx;
+  flex: none;
+  margin-right: -12rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-3);
+  background: var(--color-fill);
   font-size: 28rpx;
 }
 
+button.search-clear::after {
+  content: '';
+  position: absolute;
+  top: -16rpx;
+  right: -16rpx;
+  bottom: -16rpx;
+  left: -16rpx;
+  border: 0;
+  border-radius: 50%;
+}
+
+/* 只看…能打印的 is an on/off setting, so it gets a switch of its own instead of
+   sitting among the single-choice chips. */
+.family-row {
+  min-height: 88rpx;
+  margin-top: 12rpx;
+  padding: 0 8rpx 0 24rpx;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  background: #fff;
+  box-shadow: 0 2rpx 4rpx rgba(21, 23, 28, 0.05);
+  font-size: var(--font-caption);
+}
+
+.family-copy {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  color: var(--color-text-1);
+}
+
+.family-copy .icon {
+  flex: none;
+  color: var(--color-success);
+  font-size: 32rpx;
+}
+
+.family-row switch {
+  transform: scale(0.82);
+  transform-origin: right center;
+}
+
+/* A handful of categories wraps onto a second line instead of hiding off the
+   edge; long scene and size rows scroll and fade out on the right. */
+.chip-wrap {
+  margin-top: 16rpx;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.filter-scroll.fade {
+  -webkit-mask-image: linear-gradient(90deg, #000 0, #000 86%, transparent 100%);
+  mask-image: linear-gradient(90deg, #000 0, #000 86%, transparent 100%);
+}
+
+.chip-count {
+  margin-left: 8rpx;
+  color: var(--color-text-3);
+  font-size: var(--font-small, 22rpx);
+  font-weight: 400;
+}
+
+.chip.active .chip-count {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+/* What the filters leave, and the way back to everything. */
+.result-bar {
+  min-height: 72rpx;
+  margin-top: 8rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.result-text {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-3);
+  font-size: var(--font-caption);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-actions {
+  flex: none;
+  display: flex;
+  gap: 8rpx;
+}
+
+.result-actions .text-button {
+  color: var(--color-text-1);
+  font-weight: 700;
+}
+
 .template-content {
-  padding-top: 24rpx;
+  padding-top: 8rpx;
+}
+
+/* Cards answer a press at once (smaller and slightly faded). */
+.template-card {
+  transition: transform 0.12s ease-out, opacity 0.12s ease-out;
+}
+
+.card-pressed {
+  transform: scale(0.97);
+  opacity: 0.85;
+}
+
+.load-more-row {
+  margin-top: 24rpx;
+  min-height: 88rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  color: var(--color-text-3);
+  font-size: var(--font-caption);
+}
+
+.load-more-row.end {
+  justify-content: center;
 }
 
 button.load-more {
-  margin-top: 24rpx;
+  flex: none;
+}
+
+.suggest-row {
+  margin-top: 16rpx;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+}
+
+.suggest-label {
+  color: var(--color-text-3);
+  font-size: var(--font-caption);
+}
+
+.suggest-chip {
+  min-height: 64rpx;
+  padding: 0 24rpx;
+  background: var(--color-fill);
+  box-shadow: none;
+}
+
+/* Brings the filters back once they scrolled away; sits above the tab bar. */
+button.back-top {
+  position: fixed;
+  z-index: 39;
+  right: var(--gutter);
+  bottom: calc(176rpx + env(safe-area-inset-bottom));
+  height: 80rpx;
+  padding: 0 28rpx;
+  border-radius: 40rpx;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  color: #fff;
+  background: var(--color-text-1);
+  box-shadow: 0 12rpx 28rpx rgba(21, 23, 28, 0.24);
+  font-size: var(--font-caption);
+  font-weight: 700;
 }
 
 /* Batch data */

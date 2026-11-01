@@ -65,6 +65,18 @@ Figma 变量名 = CSS 变量去掉 `--`，第一个 `-` 改为 `/`（`--color-te
 | Editor Header / Floating Pills / Style Bar / Tool Tile / Action Bar | `.editor-header` / `.stage-pills`（撤销重做；打印机、图层、设置）/ `.style-bar`（加粗、字号加减、对齐、复制、删除）/ `.tool-button` / `.editor-actions` |
 | Sheet Header / Save Status / Notice Card / Preset Tile / Onboarding Card | `.sheet-heading` / `.save-status`（顶部栏里）/ `.warning-card`、`.error-card`、`.print-ok` / `.preset-grid button` / `.onboarding-card` |
 
+## 模板库交互规则
+
+依据 ui-ux-pro-max 的交互规范（不把人带进空结果、筛选不藏选项、给搜不到的建议、按需加载、按下有反馈、数量变化用一句完整的话说明），代码在 `pages/home` 的 `templatesPatch` / `templateFilterPatch`，测试在 `tests/template-shelf-ux.test.js`。
+
+- 一级是图标方块（全部 / 场景模板 / 我的 / 行业分类），换一级时子分类、场景和尺寸回到「全部」，搜索词保留。
+- 子分类芯片带数量，结果为 0 的选项不出现（已选中的除外）；只剩「全部」时整行不显示。普通分类换行显示，场景和尺寸横向滑动，右边渐隐提示还能滑。
+- 筛选下方一行结果：没有筛选时写「共 N 个模板」，有筛选时写「零售 · 只看 58mm · “价签” · 找到 N 个」，旁边「清除筛选」。场景模板默认按当前纸张筛选，这一行会写出尺寸，不再悄悄过滤。在全部里搜索时，子分类数量也算上一起搜出来的场景模板。
+- 搜索框有清空按钮；在某个分类里搜索时，结果行多一个「搜全部」。搜不到时给 6 个常用词（价签、效期、40x30、二维码、姓名贴、库位），点一下就在全部模板里搜。
+- 「只看 58mm 能打印的」是独立一行的开关，不和单选芯片混在一起。
+- 滑到底自动加载下一页（`onReachBottom`），「加载更多」按钮保留；滑过筛选区后右下角出现「↑ 筛选」（`onPageScroll`，只在状态变化时 setData）。模拟器里 IntersectionObserver 不触发，所以没用它。
+- 卡片只放名称、尺寸 · 分类和「适用 58mm」小胶囊（文字写明适用或需换纸，不只靠颜色），简介留在预览里；按下缩小到 0.97。打印机打不了这个尺寸时，预览的主按钮写「仍然使用」。
+
 ## 需要真机或后续确认
 
 - 遮罩图标与渐变头部已在微信开发者工具（基础库 3.17.2、2.32.3）验证，Android / iOS 真机仍需按发布清单复核。

@@ -59,6 +59,10 @@ const DATA_WINDOW_ROWS = 60;
 const DATA_WINDOW_OVERSCAN = 8;
 // The template shelf is filtered this long after the last keystroke.
 const SEARCH_DELAY_MS = 250;
+// Searches offered when nothing matched: the words shop owners type most.
+const TEMPLATE_SUGGESTIONS = ['价签', '效期', '40x30', '二维码', '姓名贴', '库位'];
+// About where the shelf's filters end: past this the 筛选 button appears.
+const TEMPLATE_TOP_AFTER_PX = 480;
 // The history sheet lists the newest records; storage keeps up to 80.
 const HISTORY_SHEET_LIMIT = 20;
 const HOME_TEMPLATE_COUNT = 6;
@@ -449,6 +453,19 @@ Page({
     librarySizes: curatedSizeChips(),
     libraryTotal: curatedStats().total,
     templateQuery: '',
+    // Sub-filters with how many cards each would show; options that would
+    // show none are left out so a tap never lands on an empty shelf.
+    categoryChips: [],
+    sceneChips: [],
+    sizeChips: [],
+    // One line under the filters: what is filtered and how many cards remain.
+    templateSummary: '',
+    templateFiltersActive: false,
+    // A search inside one tile offers to look through all templates.
+    templateSearchScope: false,
+    templateSuggestions: TEMPLATE_SUGGESTIONS,
+    // The 筛选 button that appears once the filters scrolled out of sight.
+    showTemplateTop: false,
     templateVisibleCount: PAGE_SIZE,
     templateTotal: templates.length,
     visibleTemplates: [],
@@ -788,8 +805,12 @@ Page({
     this.setData(this.familyViewsPatch());
   },
 
-  toggleFamilyFilter() {
-    this.setData({ familyFilterOn: !this.data.familyFilterOn, templateVisibleCount: PAGE_SIZE }, () => {
+  // The 只看…能打印的 switch sends its new value; a plain tap flips it.
+  toggleFamilyFilter(event) {
+    const value = event && event.detail && typeof event.detail.value === 'boolean'
+      ? event.detail.value
+      : !this.data.familyFilterOn;
+    this.setData({ familyFilterOn: value, templateVisibleCount: PAGE_SIZE }, () => {
       this.refreshFamilyViews();
       this.refreshTemplates();
     });
@@ -841,12 +862,40 @@ Page({
     const visibleCount = view.templateVisibleCount;
     if (industry === '场景模板') {
       const page = this.queryCuratedPage(0, visibleCount, view);
-      return {
+      return Object.assign({
         templateTotal: page.total,
         visibleTemplates: page.items.map((item) => curatedCardView(item, family))
-      };
+      }, this.templateFilterPatch(view, page.total));
     }
-    const systemItems = templates.slice();
+    const filtered = this.templatePool(view);
+    const views = filtered.slice(0, visibleCount)
+      .map((item) => withPreview(templateView(item, family), item.document, previewBoxes().card));
+    // A search on 全部 also lists the matching scene templates, after these.
+    let curatedTotal = 0;
+    if (industry === '全部' && query) {
+      const room = visibleCount - views.length;
+      const curated = queryCuratedMeta({ category, query, family: active, limit: Math.max(1, room) });
+      curatedTotal = curated.total;
+      if (room > 0) curated.items.forEach((item) => views.push(curatedCardView(item, family)));
+    }
+    const total = filtered.length + curatedTotal;
+    return Object.assign({
+      templateTotal: total,
+      visibleTemplates: views
+    }, this.templateFilterPatch(view, total));
+  },
+
+  /**
+   * System and user templates that pass the tile, the printer filter and the
+   * search; the sub-category too unless options.ignoreCategory.
+   */
+  templatePool(state, options) {
+    const view = state || this.data;
+    const ignoreCategory = Boolean(options && options.ignoreCategory);
+    const active = this.activeFamily(view);
+    const category = view.templateCategory;
+    const industry = view.templateIndustry;
+    const query = normalizeSearchText(view.templateQuery);
     const userItems = (this.userTemplates || []).map((item) => ({
       id: item.id,
       name: item.name,
@@ -859,12 +908,12 @@ Page({
       document: item.document
     }));
     const source = industry === '我的'
-        ? userItems
-        : systemItems.concat(userItems);
-    const filtered = source.filter((item) => {
+      ? userItems
+      : templates.slice().concat(userItems);
+    return source.filter((item) => {
       // 我的 has no categories: a category picked on another tab must not
       // hide every user template.
-      if (industry !== '我的' && category !== '全部' && item.category !== category) {
+      if (!ignoreCategory && industry !== '我的' && category !== '全部' && item.category !== category) {
         return false;
       }
       if (industry !== '全部' && industry !== '我的' && item.industry !== industry) return false;
@@ -873,19 +922,53 @@ Page({
       return [item.name, item.category, item.industry, item.blurb, item.sceneLabel, item.size && `${item.size[0]}×${item.size[1]}`]
         .some((value) => normalizeSearchText(value).includes(query));
     });
-    const views = filtered.slice(0, visibleCount)
-      .map((item) => withPreview(templateView(item, family), item.document, previewBoxes().card));
-    // A search on 全部 also lists the matching scene templates, after these.
-    let curatedTotal = 0;
-    if (industry === '全部' && query) {
-      const room = visibleCount - views.length;
-      const curated = queryCuratedMeta({ category, query, family: active, limit: Math.max(1, room) });
-      curatedTotal = curated.total;
-      if (room > 0) curated.items.forEach((item) => views.push(curatedCardView(item, family)));
+  },
+
+  /**
+   * The sub-filter chips with their counts, and the result line. A chip that
+   * would show nothing is left out, unless it is the one already chosen.
+   */
+  templateFilterPatch(state, total) {
+    const view = state || this.data;
+    const industry = view.templateIndustry;
+    const active = this.activeFamily(view);
+    const query = String(view.templateQuery || '').trim();
+    const keep = (chosen) => (chip) => chip.count > 0 || chip.value === '全部' || chip.value === chosen;
+    const parts = [];
+    let categoryChips = [];
+    let sceneChips = [];
+    let sizeChips = [];
+    if (industry === '场景模板') {
+      const count = (scene, size) => queryCuratedMeta({ category: scene, size, query, family: active, limit: 1 }).total;
+      sceneChips = (view.libraryScenes || []).map((value) => ({ value, count: count(value, view.librarySize) }))
+        .filter(keep(view.libraryScene));
+      sizeChips = (view.librarySizes || []).map((value) => ({ value, count: count(view.libraryScene, value) }))
+        .filter(keep(view.librarySize));
+      if (view.libraryScene && view.libraryScene !== '全部') parts.push(view.libraryScene);
+      if (view.librarySize && view.librarySize !== '全部') parts.push(view.librarySize);
+    } else if (industry !== '我的') {
+      const pool = this.templatePool(view, { ignoreCategory: true });
+      // A search on 全部 also lists the scene templates it matches, so each
+      // chip counts those too and 全部 equals the result line.
+      const withScenes = industry === '全部' && query;
+      const scenes = (value) => (withScenes
+        ? queryCuratedMeta({ category: value, query, family: active, limit: 1 }).total
+        : 0);
+      categoryChips = (view.categories || categories).map((value) => ({
+        value,
+        count: (value === '全部' ? pool.length : pool.filter((item) => item.category === value).length) + scenes(value)
+      })).filter(keep(view.templateCategory));
+      if (view.templateCategory && view.templateCategory !== '全部') parts.push(view.templateCategory);
     }
+    if (active) parts.push(`只看 ${FAMILY_LABELS[active] || '能打印的'}`);
+    if (query) parts.push(`“${query}”`);
     return {
-      templateTotal: filtered.length + curatedTotal,
-      visibleTemplates: views
+      categoryChips,
+      sceneChips,
+      sizeChips,
+      templateSummary: parts.length ? `${parts.join(' · ')} · 找到 ${total} 个` : `共 ${total} 个模板`,
+      templateFiltersActive: parts.length > 0,
+      templateSearchScope: Boolean(query) && industry !== '全部'
     };
   },
 
@@ -894,6 +977,7 @@ Page({
     if (!ROUTE_TITLES[route]) return;
     if (this.data.route === 'data' && route !== 'data') this.commitDataRows(true);
     const patch = { route, routeTitle: ROUTE_TITLES[route] };
+    if (route !== 'templates') patch.showTemplateTop = false;
     // The table goes to the page only when its route opens, from the top: the
     // scroll-view starts at the top again, so the rendered window must too.
     if (route === 'data' && this.data.route !== 'data') {
@@ -908,12 +992,13 @@ Page({
       if (route === 'templates' && this.templatesSignature() !== this.shownTemplatesSignature) {
         this.refreshTemplates();
       }
+
       if (route === 'projects') this.setData({ allProjects: this.filteredProjectViews(this.projects) });
     });
   },
 
   openIndustry() {
-    this.setData({ route: 'templates', routeTitle: ROUTE_TITLES.templates, templateIndustry: '全部' }, () => {
+    this.setData({ route: 'templates', routeTitle: ROUTE_TITLES.templates, templateIndustry: '全部', templateCategory: '全部' }, () => {
       this.refreshTemplates();
     });
   },
@@ -985,6 +1070,62 @@ Page({
       this.refreshFamilyViews();
       this.refreshTemplates();
     });
+  },
+
+  clearTemplateSearch() {
+    if (this.templateSearchTimer) clearTimeout(this.templateSearchTimer);
+    this.templateSearchTimer = null;
+    this.setData({ templateQuery: '', templateVisibleCount: PAGE_SIZE }, () => this.refreshTemplates());
+  },
+
+  // Offered on the result line when a search only looked inside one tile.
+  searchAllTemplates() {
+    this.setData({
+      templateIndustry: '全部',
+      templateCategory: '全部',
+      libraryScene: '全部',
+      librarySize: '全部',
+      templateVisibleCount: PAGE_SIZE
+    }, () => this.refreshTemplates());
+  },
+
+  // A suggested word from the empty shelf searches all templates at once.
+  useTemplateSuggestion(event) {
+    if (this.templateSearchTimer) clearTimeout(this.templateSearchTimer);
+    this.templateSearchTimer = null;
+    this.setData({
+      templateQuery: event.currentTarget.dataset.value,
+      templateIndustry: '全部',
+      templateCategory: '全部',
+      libraryScene: '全部',
+      librarySize: '全部',
+      templateVisibleCount: PAGE_SIZE
+    }, () => this.refreshTemplates());
+  },
+
+  // Reaching the end of the shelf loads the next cards; the button stays for
+  // anyone who would rather tap.
+  onReachBottom() {
+    if (this.data.route !== 'templates' || this.loadingMoreTemplates) return;
+    if ((this.data.visibleTemplates || []).length >= this.data.templateTotal) return;
+    this.loadingMoreTemplates = true;
+    try {
+      this.loadMoreTemplates();
+    } finally {
+      this.loadingMoreTemplates = false;
+    }
+  },
+
+  // Once the shelf's filters have scrolled away, a small 筛选 button brings
+  // them back. Only a change of state reaches setData; other routes never
+  // show it.
+  onPageScroll(event) {
+    const away = this.data.route === 'templates' && Number(event && event.scrollTop) > TEMPLATE_TOP_AFTER_PX;
+    if (away !== Boolean(this.data.showTemplateTop)) this.setData({ showTemplateTop: away });
+  },
+
+  scrollTemplatesTop() {
+    if (typeof wx.pageScrollTo === 'function') wx.pageScrollTo({ scrollTop: 0, duration: 200 });
   },
 
   queryCuratedPage(offset, limit, state) {

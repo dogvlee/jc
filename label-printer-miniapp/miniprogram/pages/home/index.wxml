@@ -113,7 +113,7 @@
       <view class="section-block">
         <view class="section-heading"><view class="heading-copy"><text class="section-title">商跃模板</text><text wx:if="{{recommendedSubtitle}}" class="section-note">{{recommendedSubtitle}}</text></view><button class="text-button" data-route="templates" bindtap="navigate">更多<text class="icon icon-chevron-right" aria-hidden="true"></text></button></view>
         <view class="template-grid home-template-grid">
-          <button wx:for="{{recommendedTemplates}}" wx:key="id" class="template-card" data-id="{{item.id}}" bindtap="previewTemplate">
+          <button wx:for="{{recommendedTemplates}}" wx:key="id" class="template-card" hover-class="card-pressed" data-id="{{item.id}}" bindtap="previewTemplate" aria-label="{{item.name}}，{{item.sizeText}}，{{item.fitText}}">
             <view class="template-thumb">
               <image wx:if="{{item.thumbSrc}}" src="{{item.thumbSrc}}" mode="aspectFit" lazy-load="true" />
               <block wx:elif="{{item.preview}}"><template is="miniLabel" data="{{...item.preview}}" /></block>
@@ -132,55 +132,74 @@
       <button class="outline-button btn-s" bindtap="importTemplateFile"><text class="icon icon-file-input" aria-hidden="true"></text>导入模板</button>
     </view>
     <view class="page-toolbar">
-      <view class="search-box"><text class="icon icon-search" aria-hidden="true"></text><input value="{{templateQuery}}" bindinput="onTemplateSearch" placeholder="搜名称、用途或尺寸，如 40x30" placeholder-class="search-placeholder" confirm-type="search" /></view>
+      <view class="search-box"><text class="icon icon-search" aria-hidden="true"></text><input value="{{templateQuery}}" bindinput="onTemplateSearch" placeholder="搜名称、用途或尺寸，如 40x30" placeholder-class="search-placeholder" confirm-type="search" /><button wx:if="{{templateQuery}}" class="search-clear" bindtap="clearTemplateSearch" aria-label="清除搜索"><text class="icon icon-x" aria-hidden="true"></text></button></view>
       <scroll-view class="filter-scroll tab-scroll" scroll-x="true" enhanced="true" show-scrollbar="{{false}}">
         <view class="filter-row tab-row">
-          <button class="cat-tile tone-amber {{templateIndustry == '全部' ? 'active' : ''}}" data-value="全部" bindtap="setTemplateIndustry"><view class="cat-icon"><text class="icon icon-layout-grid" aria-hidden="true"></text></view><text class="cat-label">全部</text></button>
-          <button class="cat-tile tone-red {{templateIndustry == '场景模板' ? 'active' : ''}}" data-value="场景模板" bindtap="setTemplateIndustry"><view class="cat-icon"><text class="icon icon-sparkles" aria-hidden="true"></text></view><text class="cat-label">场景模板</text></button>
-          <button class="cat-tile tone-violet {{templateIndustry == '我的' ? 'active' : ''}}" data-value="我的" bindtap="setTemplateIndustry"><view class="cat-icon"><text class="icon icon-user-round" aria-hidden="true"></text></view><text class="cat-label">我的 {{userTemplateCount}}</text></button>
-          <block wx:for="{{industries}}" wx:key="*this"><button wx:if="{{item != '全部'}}" class="cat-tile tone-{{industryTones[item] || 'neutral'}} {{templateIndustry == item ? 'active' : ''}}" data-value="{{item}}" bindtap="setTemplateIndustry"><view class="cat-icon"><text class="icon {{industryIcons[item] || 'icon-tags'}}" aria-hidden="true"></text></view><text class="cat-label">{{item}}</text></button></block>
+          <button class="cat-tile tone-amber {{templateIndustry == '全部' ? 'active' : ''}}" data-value="全部" bindtap="setTemplateIndustry" aria-role="tab" aria-selected="{{templateIndustry == '全部'}}"><view class="cat-icon"><text class="icon icon-layout-grid" aria-hidden="true"></text></view><text class="cat-label">全部</text></button>
+          <button class="cat-tile tone-red {{templateIndustry == '场景模板' ? 'active' : ''}}" data-value="场景模板" bindtap="setTemplateIndustry" aria-role="tab" aria-selected="{{templateIndustry == '场景模板'}}"><view class="cat-icon"><text class="icon icon-sparkles" aria-hidden="true"></text></view><text class="cat-label">场景模板</text></button>
+          <button class="cat-tile tone-violet {{templateIndustry == '我的' ? 'active' : ''}}" data-value="我的" bindtap="setTemplateIndustry" aria-role="tab" aria-selected="{{templateIndustry == '我的'}}"><view class="cat-icon"><text class="icon icon-user-round" aria-hidden="true"></text></view><text class="cat-label">我的 {{userTemplateCount}}</text></button>
+          <block wx:for="{{industries}}" wx:key="*this"><button wx:if="{{item != '全部'}}" class="cat-tile tone-{{industryTones[item] || 'neutral'}} {{templateIndustry == item ? 'active' : ''}}" data-value="{{item}}" bindtap="setTemplateIndustry" aria-role="tab" aria-selected="{{templateIndustry == item}}"><view class="cat-icon"><text class="icon {{industryIcons[item] || 'icon-tags'}}" aria-hidden="true"></text></view><text class="cat-label">{{item}}</text></button></block>
         </view>
       </scroll-view>
-      <scroll-view wx:if="{{printerFamily || templateIndustry != '我的'}}" class="filter-scroll" scroll-x="true" enhanced="true" show-scrollbar="{{false}}">
-        <view class="filter-row">
-          <button wx:if="{{printerFamily}}" class="chip filter-chip family-chip {{familyFilterOn ? 'active' : ''}}" bindtap="toggleFamilyFilter"><text class="icon {{familyFilterOn ? 'icon-check' : 'icon-printer'}}" aria-hidden="true"></text>只看 {{printerFamilyLabel}} 能打印的</button>
-          <block wx:if="{{templateIndustry == '场景模板'}}">
-            <button wx:for="{{libraryScenes}}" wx:key="*this" class="chip filter-chip {{libraryScene == item ? 'active' : ''}}" data-value="{{item}}" bindtap="setLibraryScene">{{item}}</button>
-          </block>
-          <block wx:elif="{{templateIndustry != '我的'}}">
-            <button wx:for="{{categories}}" wx:key="*this" class="chip filter-chip {{templateCategory == item ? 'active' : ''}}" data-value="{{item}}" bindtap="setTemplateCategory">{{item}}</button>
-          </block>
+      <view wx:if="{{printerFamily}}" class="family-row">
+        <view class="family-copy"><text class="icon icon-printer" aria-hidden="true"></text><text>只看 {{printerFamilyLabel}} 能打印的</text></view>
+        <switch checked="{{familyFilterOn}}" bindchange="toggleFamilyFilter" color="#E02D26" aria-label="只看 {{printerFamilyLabel}} 能打印的" />
+      </view>
+      <block wx:if="{{templateIndustry == '场景模板'}}">
+        <scroll-view wx:if="{{sceneChips.length > 1}}" class="filter-scroll fade" scroll-x="true" enhanced="true" show-scrollbar="{{false}}">
+          <view class="filter-row">
+            <button wx:for="{{sceneChips}}" wx:key="value" class="chip filter-chip {{libraryScene == item.value ? 'active' : ''}}" data-value="{{item.value}}" bindtap="setLibraryScene" aria-role="radio" aria-checked="{{libraryScene == item.value}}">{{item.value == '全部' ? '全部场景' : item.value}}<text class="chip-count">{{item.count}}</text></button>
+          </view>
+        </scroll-view>
+        <scroll-view wx:if="{{sizeChips.length > 1}}" class="filter-scroll fade" scroll-x="true" enhanced="true" show-scrollbar="{{false}}">
+          <view class="filter-row">
+            <button wx:for="{{sizeChips}}" wx:key="value" class="chip filter-chip {{librarySize == item.value ? 'active' : ''}}" data-value="{{item.value}}" bindtap="setLibrarySize" aria-role="radio" aria-checked="{{librarySize == item.value}}">{{item.value == '全部' ? '全部尺寸' : item.value}}<text class="chip-count">{{item.count}}</text></button>
+          </view>
+        </scroll-view>
+      </block>
+      <block wx:elif="{{templateIndustry != '我的'}}">
+        <view wx:if="{{categoryChips.length > 1}}" class="chip-wrap">
+          <button wx:for="{{categoryChips}}" wx:key="value" class="chip filter-chip {{templateCategory == item.value ? 'active' : ''}}" data-value="{{item.value}}" bindtap="setTemplateCategory" aria-role="radio" aria-checked="{{templateCategory == item.value}}">{{item.value}}<text class="chip-count">{{item.count}}</text></button>
         </view>
-      </scroll-view>
-      <scroll-view wx:if="{{templateIndustry == '场景模板'}}" class="filter-scroll" scroll-x="true" enhanced="true" show-scrollbar="{{false}}">
-        <view class="filter-row">
-          <button wx:for="{{librarySizes}}" wx:key="*this" class="chip filter-chip {{librarySize == item ? 'active' : ''}}" data-value="{{item}}" bindtap="setLibrarySize">{{item}}</button>
+      </block>
+      <view class="result-bar">
+        <text class="result-text" aria-live="polite">{{templateSummary}}</text>
+        <view class="result-actions">
+          <button wx:if="{{templateSearchScope}}" class="text-button" bindtap="searchAllTemplates">搜全部</button>
+          <button wx:if="{{templateFiltersActive}}" class="text-button" bindtap="resetTemplateFilters">清除筛选</button>
         </view>
-      </scroll-view>
+      </view>
     </view>
     <view class="route-content template-content">
       <view wx:if="{{visibleTemplates.length}}" class="template-grid library-grid">
-        <button wx:for="{{visibleTemplates}}" wx:key="id" class="template-card library-card" data-id="{{item.id}}" bindtap="previewTemplate">
+        <button wx:for="{{visibleTemplates}}" wx:key="id" class="template-card library-card" hover-class="card-pressed" data-id="{{item.id}}" bindtap="previewTemplate" aria-label="{{item.name}}，{{item.sizeText}}，{{item.fitText}}">
           <view class="template-thumb library-thumb">
             <image wx:if="{{item.thumbSrc}}" src="{{item.thumbSrc}}" mode="aspectFit" lazy-load="true" />
             <block wx:elif="{{item.preview}}"><template is="miniLabel" data="{{...item.preview}}" /></block>
-              <view wx:else class="abstract-preview kind-{{item.kind}}"><view class="preview-line wide"></view><view class="preview-line"></view><view class="preview-code"></view></view>
+            <view wx:else class="abstract-preview kind-{{item.kind}}"><view class="preview-line wide"></view><view class="preview-line"></view><view class="preview-code"></view></view>
           </view>
-          <view class="template-copy"><text class="card-title">{{item.name}}</text><view class="template-meta"><text wx:if="{{item.badge}}" class="template-badge">{{item.badge}}</text><text class="card-meta">{{item.sizeText}} · {{item.category}}</text></view><text class="card-fit {{item.fitMismatch ? 'mismatch' : ''}}">{{item.fitText}}</text><text class="card-blurb">{{item.blurb}}</text></view>
+          <view class="template-copy"><text class="card-title">{{item.name}}</text><view class="template-meta"><text wx:if="{{item.badge}}" class="template-badge">{{item.badge}}</text><text class="card-meta">{{item.sizeText}} · {{item.category}}</text></view><text class="card-fit {{item.fitMismatch ? 'mismatch' : ''}}">{{item.fitText}}</text></view>
         </button>
       </view>
-      <view wx:elif="{{templateIndustry == '我的' && !userTemplateCount}}" class="friendly-empty card">
+      <view wx:elif="{{templateIndustry == '我的' && !userTemplateCount && !templateQuery}}" class="friendly-empty card">
         <view class="glyph-badge neutral"><text class="icon icon-layout-grid" aria-hidden="true"></text></view>
         <text class="empty-title">还没有我的模板</text><text class="muted">在编辑器「模板」里点「将当前标签保存为模板」，或点右上角「导入模板」</text>
       </view>
       <view wx:else class="friendly-empty card">
         <view class="glyph-badge neutral"><text class="icon icon-search-x" aria-hidden="true"></text></view>
-        <text class="empty-title">没有找到匹配模板</text><text class="muted">换个关键词，或恢复全部筛选</text>
-        <text wx:if="{{printerFamily && familyFilterOn}}" class="muted">现在只显示 {{printerFamilyLabel}} 能打印的模板，点上方「只看…」可以看全部</text>
-        <button class="primary-button" bindtap="resetTemplateFilters">恢复全部</button>
+        <text class="empty-title">{{templateQuery ? '没有找到「' + templateQuery + '」' : '没有找到匹配模板'}}</text>
+        <text class="muted">{{templateSearchScope ? '只在当前分类里找了，可以到全部模板里再找找' : '换个词试试，或清除筛选看全部'}}</text>
+        <text wx:if="{{printerFamily && familyFilterOn}}" class="muted">现在只显示 {{printerFamilyLabel}} 能打印的模板，关掉上面的开关可以看全部</text>
+        <view class="suggest-row"><text class="suggest-label">试试</text><button wx:for="{{templateSuggestions}}" wx:key="*this" class="chip suggest-chip" data-value="{{item}}" bindtap="useTemplateSuggestion">{{item}}</button></view>
+        <view class="empty-actions"><button wx:if="{{templateSearchScope}}" class="outline-button btn-m" bindtap="searchAllTemplates">搜全部模板</button><button class="primary-button btn-m" bindtap="resetTemplateFilters">恢复全部</button></view>
       </view>
-      <button wx:if="{{visibleTemplates.length < templateTotal}}" class="load-more outline-button btn-l full-button" bindtap="loadMoreTemplates">显示更多（剩余 {{templateTotal - visibleTemplates.length}}）</button>
+      <view wx:if="{{visibleTemplates.length && visibleTemplates.length < templateTotal}}" class="load-more-row">
+        <text>已显示 {{visibleTemplates.length}} / {{templateTotal}}，往上滑会自动加载</text>
+        <button class="load-more outline-button btn-s" bindtap="loadMoreTemplates">加载更多</button>
+      </view>
+      <view wx:elif="{{visibleTemplates.length > 6}}" class="load-more-row end"><text>已经到底了 · 共 {{templateTotal}} 个</text></view>
     </view>
+    <button wx:if="{{showTemplateTop}}" class="back-top" bindtap="scrollTemplatesTop" aria-label="回到顶部的筛选"><text class="icon icon-arrow-up" aria-hidden="true"></text>筛选</button>
   </block>
 
   <block wx:if="{{route == 'projects'}}">
@@ -303,7 +322,7 @@
     <text class="preview-blurb">{{previewTemplate.blurb}}</text>
     <view class="preview-meta"><text wx:if="{{previewTemplate.badge}}" class="meta-badge">{{previewTemplate.badge}}</text><text wx:if="{{previewTemplate.copyright}}">{{previewTemplate.copyright}}</text><text>{{previewTemplate.fitLabel ? '适用打印机：' + previewTemplate.fitLabel : previewTemplate.fitText}}</text><text>纸张 {{previewTemplate.sizeText}}</text></view>
     <view wx:if="{{previewTemplate.fitNotice}}" class="fit-notice" role="alert"><text class="icon icon-triangle-alert" aria-hidden="true"></text><text>{{previewTemplate.fitNotice}}</text></view>
-    <view class="sheet-actions"><button wx:if="{{previewTemplate.source == 'user'}}" class="danger-button" bindtap="deletePreviewTemplate">删除</button><button class="outline-button" bindtap="closeTemplatePreview">取消</button><button class="primary-button" bindtap="usePreviewTemplate" loading="{{remoteAssetLoading}}" disabled="{{remoteAssetLoading}}">{{remoteAssetLoading ? '正在准备图片' : '使用此模板'}}</button></view>
+    <view class="sheet-actions"><button wx:if="{{previewTemplate.source == 'user'}}" class="danger-button" bindtap="deletePreviewTemplate">删除</button><button class="outline-button" bindtap="closeTemplatePreview">取消</button><button class="primary-button" bindtap="usePreviewTemplate" loading="{{remoteAssetLoading}}" disabled="{{remoteAssetLoading}}">{{remoteAssetLoading ? '正在准备图片' : previewTemplate.fitMismatch ? '仍然使用' : '使用此模板'}}</button></view>
   </view>
 </view>
 

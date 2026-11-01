@@ -887,7 +887,7 @@ test('without a remembered printer the shelf shows everything with fit labels', 
   assert.equal(page.data.templateTotal, templates.length);
   assert.ok(page.data.visibleTemplates.every((item) => item.fitLabel && !item.fitMismatch));
   const markup = readHome('index.wxml');
-  assert.match(markup, /<button wx:if="\{\{printerFamily\}\}" class="chip filter-chip family-chip/);
+  assert.match(markup, /<view wx:if="\{\{printerFamily\}\}" class="family-row">/);
   assert.match(markup, /只看 \{\{printerFamilyLabel\}\} 能打印的/);
   assert.equal((markup.match(/class="card-fit \{\{item\.fitMismatch \? 'mismatch' : ''\}\}">\{\{item\.fitText\}\}/g) || []).length, 2);
   assert.match(markup, /\{\{stockName \|\| '选择标签纸'\}\}/);
