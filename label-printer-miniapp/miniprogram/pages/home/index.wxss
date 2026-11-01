@@ -3,14 +3,8 @@
 
 .app-shell {
   min-height: 100vh;
-  padding-bottom: calc(140rpx + env(safe-area-inset-bottom));
+  padding-bottom: calc(200rpx + env(safe-area-inset-bottom));
   box-sizing: border-box;
-}
-
-/* Soft brand wash behind the header, fading into the page background. */
-.route-home,
-.route-profile {
-  background: linear-gradient(180deg, #FFE4E0 0, #FFF2F0 280rpx, var(--color-bg) 560rpx);
 }
 
 /* Fixed strip over the status bar and capsule row. At rest it matches what is
@@ -26,40 +20,348 @@
 }
 
 .route-home .top-cover,
-.route-profile .top-cover {
-  background: linear-gradient(180deg, #FFE4E0 0, #FFF2F0 280rpx);
+.route-profile .top-cover,
+.route-templates .top-cover,
+.route-projects .top-cover,
+.route-data .top-cover {
+  background: var(--color-bg);
 }
 
-.brand-row,
-.brand-lockup,
-.hero-actions,
 .section-heading,
 .inline-actions,
-.stock-card,
-.data-toolbar,
-.profile-hero {
+.data-toolbar {
   display: flex;
   align-items: center;
 }
 
-.brand-row,
 .section-heading {
   justify-content: space-between;
 }
 
-/* Header */
-.home-hero {
-  padding-left: var(--gutter);
-  padding-right: var(--gutter);
-  padding-bottom: 8rpx;
+/* Home bar: the greeting sits beside the WeChat capsule and stays put while
+   the page scrolls under the top cover. */
+.home-bar {
+  position: fixed;
+  z-index: 31;
+  left: var(--gutter);
+  right: var(--gutter);
+  height: 88rpx;
+  display: flex;
+  align-items: center;
+  /* The capsule is about 174rpx wide with a 14rpx edge; the help button sits
+     just to its left. */
+  padding-right: 202rpx;
+  justify-content: space-between;
 }
 
-.brand-lockup {
+.home-greet {
   min-width: 0;
-  gap: 20rpx;
 }
 
-.brand-mark {
+.home-hello {
+  display: block;
+  color: var(--color-text-3);
+  font-size: var(--font-small, 22rpx);
+  line-height: 1.3;
+}
+
+.home-name {
+  display: block;
+  color: var(--color-text-1);
+  font-size: 40rpx;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+button.circle-button {
+  width: 72rpx;
+  height: 72rpx;
+  flex: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-1);
+  background: #fff;
+  box-shadow: 0 2rpx 6rpx rgba(21, 23, 28, 0.1);
+  font-size: 40rpx;
+  /* The plate stays 72rpx; the invisible ring gives the thumb a 44px target. */
+  position: relative;
+}
+
+button.circle-button::after {
+  content: '';
+  position: absolute;
+  top: -8rpx;
+  right: -8rpx;
+  bottom: -8rpx;
+  left: -8rpx;
+  border-radius: 50%;
+}
+
+/* Printer card: always the first thing on the page. White and green when
+   connected; a dark card with a red button when it still needs a link. */
+button.printer-card {
+  position: relative;
+  width: 100%;
+  min-height: 168rpx;
+  padding: 0 28rpx;
+  border-radius: 44rpx;
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+  overflow: hidden;
+  text-align: left;
+  color: var(--color-text-1);
+  background: #fff;
+  box-shadow: var(--shadow-card);
+}
+
+.printer-card.off {
+  color: #fff;
+  background: linear-gradient(135deg, #2A2F3B 0%, #15171C 100%);
+  box-shadow: 0 16rpx 40rpx rgba(21, 23, 28, 0.22);
+}
+
+.printer-orb {
+  position: absolute;
+  top: -88rpx;
+  right: -60rpx;
+  width: 260rpx;
+  height: 260rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.printer-card:not(.off) .printer-orb {
+  display: none;
+}
+
+.printer-icon {
+  position: relative;
+  width: 104rpx;
+  height: 104rpx;
+  flex: none;
+  border-radius: 36rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-success);
+  background: var(--color-success-soft);
+  font-size: 52rpx;
+}
+
+.printer-card.wait .printer-icon {
+  color: var(--color-info);
+  background: var(--color-info-soft);
+}
+
+.printer-card.off .printer-icon {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.printer-dot {
+  position: absolute;
+  top: -6rpx;
+  right: -6rpx;
+  width: 28rpx;
+  height: 28rpx;
+  border: 4rpx solid #fff;
+  border-radius: 50%;
+  background: var(--color-success);
+  box-sizing: border-box;
+}
+
+.printer-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.printer-line {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.printer-title {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 34rpx;
+  font-weight: 700;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.printer-pill {
+  flex: none;
+  height: 44rpx;
+  padding: 0 16rpx;
+  border-radius: 22rpx;
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+  font-size: var(--font-small, 22rpx);
+  font-weight: 500;
+  line-height: 44rpx;
+}
+
+.printer-pill.ok {
+  color: var(--color-success-text);
+  background: var(--color-success-soft);
+}
+
+.printer-pill.wait {
+  color: var(--color-info-text);
+  background: var(--color-info-soft);
+}
+
+.printer-sub {
+  display: block;
+  margin-top: 4rpx;
+  overflow: hidden;
+  color: var(--color-text-3);
+  font-size: var(--font-small, 22rpx);
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.printer-card.off .printer-sub {
+  color: #B4B9C6;
+}
+
+.printer-action {
+  flex: none;
+  height: 68rpx;
+  padding: 0 24rpx;
+  border-radius: 34rpx;
+  display: flex;
+  align-items: center;
+  gap: 4rpx;
+  color: var(--color-text-1);
+  background: var(--color-fill);
+  font-size: var(--font-caption);
+  font-weight: 500;
+}
+
+.printer-card.off .printer-action {
+  color: #fff;
+  background: var(--color-primary);
+  font-weight: 700;
+}
+
+.printer-action .icon {
+  font-size: 1.15em;
+}
+
+/* Bento tiles: new label is the big red one. */
+.bento {
+  margin-top: 24rpx;
+  display: flex;
+  gap: 24rpx;
+}
+
+button.bento-new {
+  position: relative;
+  width: calc(50% - 12rpx);
+  height: 320rpx;
+  flex: none;
+  border-radius: 44rpx;
+  overflow: hidden;
+  text-align: left;
+  color: #fff;
+  background: linear-gradient(155deg, #F04A3E 0%, #D92A22 55%, #C21D17 100%);
+  box-shadow: 0 16rpx 40rpx rgba(224, 45, 38, 0.25);
+}
+
+.bento-plus {
+  position: absolute;
+  top: 32rpx;
+  left: 32rpx;
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-primary);
+  background: #fff;
+  font-size: 48rpx;
+}
+
+image.bento-deco {
+  position: absolute;
+  top: 40rpx;
+  left: 160rpx;
+  width: 168rpx;
+  height: 124rpx;
+  transform: rotate(10deg);
+  filter: drop-shadow(0 12rpx 20rpx rgba(80, 0, 0, 0.25));
+}
+
+.bento-new-copy {
+  position: absolute;
+  left: 32rpx;
+  right: 24rpx;
+  bottom: 32rpx;
+}
+
+.bento-new-title {
+  display: block;
+  font-size: 40rpx;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.bento-new-note {
+  display: block;
+  margin-top: 4rpx;
+  overflow: hidden;
+  font-size: var(--font-small, 22rpx);
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bento-side {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
+
+.bento-row {
+  margin-top: 24rpx;
+  display: flex;
+  gap: 24rpx;
+}
+
+button.tile {
+  min-width: 0;
+  flex: 1;
+  height: 148rpx;
+  padding: 0 24rpx;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  text-align: left;
+  background: #fff;
+  box-shadow: var(--shadow-card);
+}
+
+button.tile.wide {
+  height: 128rpx;
+}
+
+button.tile.button-hover {
+  background: var(--color-fill);
+}
+
+.tile-icon {
   width: 80rpx;
   height: 80rpx;
   flex: none;
@@ -67,37 +369,115 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
-  background: var(--color-primary);
-  box-shadow: var(--shadow-primary);
+  font-size: 40rpx;
+}
+
+.tile-icon.small {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 22rpx;
   font-size: 36rpx;
-  font-weight: 600;
 }
 
-.brand-copy {
+.tile-icon.info {
+  color: var(--color-info);
+  background: var(--color-info-soft);
+}
+
+.tile-icon.warn {
+  color: var(--color-warning);
+  background: var(--color-warning-soft);
+}
+
+.tile-icon.violet {
+  color: var(--color-violet);
+  background: var(--color-violet-soft);
+}
+
+.tile-icon.neutral {
+  color: var(--color-text-3);
+  background: var(--color-fill);
+}
+
+.tile-copy {
   min-width: 0;
+  flex: 1;
 }
 
-.brand-title {
+.tile-title {
   display: block;
   color: var(--color-text-1);
-  font-size: 36rpx;
-  font-weight: 600;
+  font-size: 28rpx;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
-.brand-subtitle {
+.tile-note {
   display: block;
-  margin-top: 4rpx;
+  overflow: hidden;
   color: var(--color-text-3);
+  font-size: var(--font-small, 22rpx);
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stock-warning {
+  margin-top: 16rpx;
+  padding: 20rpx 24rpx;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: flex-start;
+  gap: 12rpx;
+  color: var(--color-warning-text);
+  background: var(--color-warning-soft);
   font-size: var(--font-caption);
+  line-height: 1.5;
 }
 
-.hero-actions {
+.stock-warning .icon {
   flex: none;
-  gap: 16rpx;
+  margin-top: 4rpx;
 }
 
-button.circle-button {
+/* Continue-editing bar */
+.draft-bar {
+  margin-top: 24rpx;
+  height: 144rpx;
+  padding: 0 24rpx;
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.draft-bar .draft-icon {
+  width: 88rpx;
+  height: 72rpx;
+  border-radius: 20rpx;
+}
+
+.draft-title {
+  display: block;
+  overflow: hidden;
+  font-size: 28rpx;
+  font-weight: 700;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.draft-meta {
+  display: block;
+  overflow: hidden;
+  color: var(--color-text-3);
+  font-size: var(--font-small, 22rpx);
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button.draft-discard {
+  position: relative;
   width: 64rpx;
   height: 64rpx;
   flex: none;
@@ -105,72 +485,110 @@ button.circle-button {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-text-2);
-  background: rgba(255, 255, 255, 0.78);
-  font-size: 36rpx;
-  /* The plate stays 64rpx so the header keeps its rhythm; the invisible ring
-     around it gives the 44px touch target a thumb needs (same idea as
-     .sheet-close in app.wxss). */
-  position: relative;
-}
-
-button.circle-button::after {
-  content: '';
-  position: absolute;
-  top: -12rpx;
-  right: -12rpx;
-  bottom: -12rpx;
-  left: -12rpx;
-  border-radius: 50%;
-}
-
-button.device-pill {
-  min-height: 64rpx;
-  padding: 0 16rpx 0 20rpx;
-  border-radius: var(--radius-full);
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-  /* The pill is already wider than 44px; growing it vertically keeps it a
-     32px-tall visual but an 88rpx (44px) target. */
-  position: relative;
-  color: var(--color-text-1);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
-  font-size: var(--font-caption);
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-/* The extra 12rpx above and below the pill are part of the button, not layout. */
-button.device-pill::after {
-  content: '';
-  position: absolute;
-  top: -12rpx;
-  right: 0;
-  bottom: -12rpx;
-  left: 0;
-}
-
-.device-pill .icon {
   color: var(--color-text-3);
+  background: var(--color-fill);
   font-size: 32rpx;
 }
 
-.device-pill .device-chevron {
-  color: var(--color-text-4);
-  font-size: 24rpx;
+button.draft-discard::after {
+  content: '';
+  position: absolute;
+  top: -12rpx;
+  right: -6rpx;
+  bottom: -12rpx;
+  left: -6rpx;
 }
 
-.device-pill.connected,
-.device-pill.connected .icon {
-  color: var(--color-success-text, #137A4A);
+button.draft-go {
+  height: 68rpx;
+  padding: 0 28rpx;
+  flex: none;
+  border-radius: 34rpx;
+  display: flex;
+  align-items: center;
+  color: #fff;
+  background: var(--color-text-1);
+  font-size: var(--font-caption);
+  font-weight: 700;
 }
 
-.device-label {
-  max-width: 220rpx;
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* Recent labels scroll sideways */
+.recent-scroll {
+  width: calc(100% + var(--gutter));
+  white-space: nowrap;
+}
+
+.recent-row {
+  display: inline-flex;
+  gap: 24rpx;
+  padding-right: var(--gutter);
+}
+
+.recent-card {
+  width: 300rpx;
+  flex: none;
+  padding: 12rpx;
+  border-radius: var(--radius-lg);
+  background: #fff;
+  box-shadow: var(--shadow-card);
+}
+
+button.recent-open {
+  width: 100%;
+  display: block;
+  text-align: left;
+}
+
+.recent-thumb {
+  height: 192rpx;
+  border-radius: 28rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-fill);
+}
+
+.recent-foot {
+  padding: 8rpx 0 4rpx 12rpx;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.recent-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+/* A round printer button: reopen this label and print it again. The plate is
+   68rpx; the invisible ring around it makes the 44px touch target. */
+button.recent-print {
+  position: relative;
+  width: 68rpx;
+  height: 68rpx;
+  flex: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-primary-pressed);
+  background: var(--color-primary-soft);
+  font-size: 32rpx;
+}
+
+button.recent-print::after {
+  content: '';
+  position: absolute;
+  top: -10rpx;
+  right: -10rpx;
+  bottom: -10rpx;
+  left: -10rpx;
+  border: 0;
+  border-radius: 50%;
+}
+
+button.recent-print.button-hover {
+  background: var(--color-primary-line);
 }
 
 /* Content */
@@ -543,134 +961,16 @@ button.project-delete.button-hover {
   min-height: 560rpx;
 }
 
-/* Current paper */
-.stock-card {
-  margin-top: 24rpx;
-  padding: 24rpx;
-  gap: 24rpx;
-}
-
-.stock-preview {
-  width: 112rpx;
-  height: 88rpx;
-  flex: none;
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-fill);
-}
-
-.stock-paper {
-  width: 72rpx;
-  height: 40rpx;
-  border-radius: 6rpx;
-  background: #fff;
-  box-shadow: 0 2rpx 8rpx rgba(31, 35, 41, 0.16);
-}
-
-.stock-copy {
-  min-width: 0;
-  flex: 1;
-}
-
-.stock-name {
-  display: block;
-  margin: 4rpx 0;
-  overflow: hidden;
-  color: var(--color-text-1);
-  font-size: var(--font-subtitle);
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.stock-hint {
-  display: block;
-  color: var(--color-warning-text, #8A5200);
-  font-size: var(--font-caption);
-  line-height: 1.5;
-}
-
-.stock-actions {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  gap: 20rpx;
-}
-
-/* Scan-to-label strip */
-button.scan-banner {
-  width: 100%;
-  margin-top: 24rpx;
-  padding: 24rpx;
-  border-radius: var(--radius-lg);
-  display: flex;
-  align-items: center;
-  gap: 20rpx;
-  text-align: left;
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
-}
-
-.scan-symbol {
-  width: 80rpx;
-  height: 80rpx;
-  flex: none;
-  border-radius: 22rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-primary);
-  background: var(--color-primary-soft);
-  font-size: 40rpx;
-}
-
-.scan-copy {
-  min-width: 0;
-  flex: 1;
-}
-
-.scan-title {
-  display: block;
-  color: var(--color-text-1);
-  font-size: var(--font-subtitle);
-  font-weight: 600;
-}
-
-.scan-note {
-  display: block;
-  margin-top: 6rpx;
-  color: var(--color-text-3);
-  font-size: var(--font-caption);
-  line-height: 1.45;
-}
-
-.scan-cta {
-  flex: none;
-  padding: 12rpx 24rpx;
-  border-radius: var(--radius-full);
-  /* Same 4.18:1 problem as the template badge: use the pressed red. */
-  color: var(--color-primary-pressed);
-  background: var(--color-primary-soft);
-  font-size: var(--font-caption);
-  font-weight: 500;
-}
-
 /* Secondary route header and toolbar */
 .plain-header {
   padding-left: var(--gutter);
   padding-right: var(--gutter);
-  padding-bottom: 20rpx;
+  padding-bottom: 24rpx;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24rpx;
-  background: var(--color-surface);
-}
-
-.route-data .plain-header {
-  border-bottom: 1rpx solid var(--color-divider);
+  background: var(--color-bg);
 }
 
 .header-copy {
@@ -706,8 +1006,9 @@ button.back-button {
 .plain-title {
   display: block;
   color: var(--color-text-1);
-  font-size: var(--font-display);
-  font-weight: 600;
+  font-size: 52rpx;
+  font-weight: 700;
+  line-height: 1.3;
 }
 
 .plain-subtitle {
@@ -718,21 +1019,21 @@ button.back-button {
 }
 
 .page-toolbar {
-  padding: 4rpx var(--gutter) 16rpx;
-  background: var(--color-surface);
-  border-bottom: 1rpx solid var(--color-divider);
+  padding: 0 var(--gutter) 16rpx;
+  background: var(--color-bg);
 }
 
 .search-box {
-  height: 72rpx;
-  padding: 0 24rpx;
-  border-radius: var(--radius-full);
+  height: 88rpx;
+  padding: 0 28rpx;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
-  gap: 12rpx;
+  gap: 16rpx;
   color: var(--color-text-4);
-  background: var(--color-fill);
-  font-size: 32rpx;
+  background: #fff;
+  box-shadow: 0 2rpx 4rpx rgba(21, 23, 28, 0.05);
+  font-size: 36rpx;
 }
 
 .search-box input {
@@ -764,35 +1065,60 @@ button.back-button {
 }
 
 .tab-row {
-  gap: 32rpx;
+  align-items: flex-start;
+  gap: 12rpx;
 }
 
-/* First-level filter: text tabs with a short brand underline. ::before is
-   used because buttons already draw their border with ::after. */
-button.filter-tab {
-  position: relative;
-  min-height: 72rpx;
-  display: inline-flex;
+/* First-level filter: a row of icon tiles. The chosen one fills with red. */
+button.cat-tile {
+  width: 104rpx;
+  flex: none;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  color: var(--color-text-3);
-  font-size: var(--font-body);
-}
-
-button.filter-tab.active {
+  gap: 8rpx;
   color: var(--color-text-1);
-  font-weight: 600;
+  font-size: var(--font-small, 22rpx);
 }
 
-button.filter-tab.active::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: 6rpx;
-  width: 32rpx;
-  height: 6rpx;
-  margin-left: -16rpx;
-  border-radius: var(--radius-full);
+.cat-icon {
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 32rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 44rpx;
+}
+
+.cat-label {
+  max-width: 104rpx;
+  overflow: hidden;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button.cat-tile.tone-amber .cat-icon { color: var(--color-warning); background: var(--color-warning-soft); }
+button.cat-tile.tone-red .cat-icon { color: var(--color-primary-pressed); background: var(--color-primary-soft); }
+button.cat-tile.tone-violet .cat-icon { color: var(--color-violet); background: var(--color-violet-soft); }
+button.cat-tile.tone-blue .cat-icon { color: var(--color-info); background: var(--color-info-soft); }
+button.cat-tile.tone-green .cat-icon { color: var(--color-success); background: var(--color-success-soft); }
+button.cat-tile.tone-neutral .cat-icon { color: var(--color-text-3); background: var(--color-fill-strong); }
+
+button.cat-tile.active {
+  font-weight: 700;
+}
+
+/* Chosen: filled red with a white glyph (the shape and weight change too). */
+button.cat-tile.active .cat-icon {
+  color: #fff;
   background: var(--color-primary);
+  box-shadow: var(--shadow-primary);
+}
+
+button.cat-tile.button-hover {
+  opacity: 0.7;
 }
 
 .family-chip .icon {
@@ -928,15 +1254,31 @@ button.row-remove {
   width: 112rpx;
   height: 112rpx;
   flex: none;
-  border-radius: 32rpx;
+  border-radius: 40rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
-  background: var(--color-primary);
-  box-shadow: var(--shadow-primary);
+  background: linear-gradient(155deg, #F04A3E, #C21D17);
   font-size: 48rpx;
-  font-weight: 600;
+  font-weight: 700;
+}
+
+.profile-card {
+  padding: 32rpx 28rpx;
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+}
+
+.profile-card .plain-title {
+  font-size: 36rpx;
+}
+
+button.profile-account-button.outline-button {
+  color: #fff;
+  background: var(--color-text-1);
+  font-weight: 700;
 }
 
 .profile-copy {
@@ -989,27 +1331,30 @@ button.profile-account-button {
 }
 
 .stats-row {
-  padding: 28rpx 0;
+  padding: 0;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24rpx;
+  background: transparent;
+  box-shadow: none;
 }
 
 .stats-row view {
+  padding: 24rpx;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 6rpx;
-  border-right: 1rpx solid var(--color-divider);
-}
-
-.stats-row view:last-child {
-  border-right: 0;
+  align-items: flex-start;
+  gap: 2rpx;
+  border-radius: var(--radius-lg);
+  background: #fff;
+  box-shadow: var(--shadow-card);
 }
 
 .stats-row view text:first-child {
   color: var(--color-text-1);
-  font-size: 40rpx;
-  font-weight: 600;
+  font-size: 48rpx;
+  font-weight: 700;
+  line-height: 1.25;
 }
 
 .stats-row view text:last-child {
@@ -1040,7 +1385,7 @@ button.profile-account-button {
   content: "";
   position: absolute;
   top: 0;
-  left: 96rpx;
+  left: 128rpx;
   right: 0;
   height: 1rpx;
   background: var(--color-divider);
@@ -1055,8 +1400,27 @@ button.profile-account-button {
   display: block;
 }
 
+.menu-section button > view.menu-tile {
+  width: 76rpx;
+  height: 76rpx;
+  min-width: 76rpx;
+  flex: none;
+  border-radius: 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-3);
+  background: var(--color-fill);
+}
+
+.menu-section button > view.menu-tile.tile-printer { color: var(--color-success); background: var(--color-success-soft); }
+.menu-section button > view.menu-tile.tile-sliders-horizontal,
+.menu-section button > view.menu-tile.tile-circle-help { color: var(--color-info); background: var(--color-info-soft); }
+.menu-section button > view.menu-tile.tile-history { color: var(--color-violet); background: var(--color-violet-soft); }
+.menu-section button > view.menu-tile.tile-sheet { color: var(--color-warning); background: var(--color-warning-soft); }
+
 .menu-icon {
-  color: var(--color-text-2);
+  color: inherit;
   font-size: 40rpx;
 }
 
@@ -1084,30 +1448,32 @@ button.profile-account-button {
   text-align: center;
 }
 
-/* Bottom navigation */
+/* Bottom navigation: a floating pill with the four places. New labels start
+   from the home page's red tile, so there is no centre button. */
 .bottom-nav {
   position: fixed;
   z-index: 40;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: calc(108rpx + env(safe-area-inset-bottom));
-  padding: 0 16rpx env(safe-area-inset-bottom);
+  left: var(--gutter);
+  right: var(--gutter);
+  bottom: calc(24rpx + env(safe-area-inset-bottom));
+  height: 128rpx;
+  padding: 0 24rpx;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: center;
-  background: rgba(255, 255, 255, 0.97);
-  border-top: 1rpx solid var(--color-divider);
+  border-radius: 64rpx;
+  background: #fff;
+  box-shadow: 0 20rpx 60rpx rgba(21, 23, 28, 0.12), 0 2rpx 4rpx rgba(21, 23, 28, 0.06);
   box-sizing: border-box;
 }
 
 .bottom-nav button {
-  min-height: 92rpx;
+  min-height: 104rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6rpx;
+  gap: 4rpx;
   color: var(--color-text-3);
   font-size: var(--font-small, 22rpx);
 }
@@ -1119,32 +1485,11 @@ button.profile-account-button {
 
 .bottom-nav button.active {
   color: var(--color-primary);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .nav-icon {
   font-size: 44rpx;
-}
-
-.bottom-nav .create-nav {
-  width: 96rpx;
-  height: 96rpx;
-  min-height: 96rpx;
-  margin-top: -28rpx;
-  align-self: start;
-  justify-self: center;
-  border: 8rpx solid #fff;
-  border-radius: 50%;
-  color: #fff;
-  background: var(--color-primary);
-  box-shadow: var(--shadow-primary);
-  box-sizing: border-box;
-  font-size: 44rpx;
-}
-
-.bottom-nav .create-nav.button-hover {
-  opacity: 1;
-  background: var(--color-primary-pressed);
 }
 
 /* Modal layers: sheets and backdrop are fixed (app.wxss); the layer only

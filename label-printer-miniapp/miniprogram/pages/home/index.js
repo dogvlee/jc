@@ -303,6 +303,17 @@ function rememberedProfile(manager, settings) {
   return savedPrinterProfile(saved) || getProfile(settings && settings.defaultProfileId);
 }
 
+/** 早上好 / 上午好 / 中午好 / 下午好 / 晚上好 for the home bar. */
+function greetingText(date) {
+  const hour = date.getHours();
+  if (hour < 5) return '夜深了';
+  if (hour < 9) return '早上好';
+  if (hour < 12) return '上午好';
+  if (hour < 14) return '中午好';
+  if (hour < 18) return '下午好';
+  return '晚上好';
+}
+
 // An automatic reconnect runs quietly in the background, so it reads as
 // 未连接 until it succeeds; only a connection the user asked for shows 连接中.
 function connectionView(state) {
@@ -414,6 +425,9 @@ Page({
     routeTitle: ROUTE_TITLES.home,
     safeTop: 24,
     headerTop: 68,
+    // Top of the fixed greeting bar: level with the WeChat capsule.
+    heroTop: 18,
+    greeting: '你好',
     connected: false,
     connectionLabel: '未连接',
     showDevices: false,
@@ -423,6 +437,10 @@ Page({
     familyFilterOn: true,
     categories,
     industries,
+    // Icon and tint of each industry tile on the template page; a new
+    // industry falls back to a grey tag.
+    industryIcons: { 行业标识: 'icon-signpost', 内容设计: 'icon-palette', 实用功能: 'icon-wrench' },
+    industryTones: { 行业标识: 'blue', 内容设计: 'green', 实用功能: 'neutral' },
     templateCategory: '全部',
     templateIndustry: '全部',
     libraryScene: '全部',
@@ -495,11 +513,15 @@ Page({
     const safeTop = Number(info.safeArea && info.safeArea.top) || Number(info.statusBarHeight) || 24;
     // Put the whole header below the native capsule, preserving its full width.
     let headerTop = safeTop + 44;
+    let heroTop = safeTop - 6;
     try {
       const menu = wx.getMenuButtonBoundingClientRect && wx.getMenuButtonBoundingClientRect();
       const menuBottom = Number(menu && menu.bottom);
       if (Number.isFinite(menuBottom) && menuBottom > 0) {
         headerTop = Math.max(safeTop + 12, menuBottom + 12);
+        const menuTop = Number(menu.top);
+        // The 44px bar is centred on the capsule.
+        heroTop = Number.isFinite(menuTop) && menuTop > 0 ? menuTop + (menuBottom - menuTop) / 2 - 22 : headerTop - 56;
       }
     } catch (error) {
       // Older clients can throw here; reserve a navigation row below the status bar.
@@ -509,7 +531,7 @@ Page({
     this.authService = app && app.globalData && app.globalData.authService || null;
     this.bindAuthState();
     this.editorSession = new EditorSession(this.repository);
-    this.setData({ safeTop, headerTop });
+    this.setData({ safeTop, headerTop, heroTop, greeting: greetingText(new Date()) });
     this.enableSharing();
     this.bindConnectionState();
     this.refresh();
@@ -519,6 +541,7 @@ Page({
 
   onShow() {
     this.editorOpening = false;
+    this.setData({ greeting: greetingText(new Date()) });
     this.syncAuthState();
     if (!this.repository) return;
     this.consumePendingRoute();
@@ -1186,6 +1209,12 @@ Page({
     if (project) this.openEditor(project.document, project.id);
   },
 
+  /** 再打一张: opens the saved label with the print sheet up (1 copy); nothing prints until 开始打印. */
+  reprintProject(event) {
+    const project = (this.projects || []).find((item) => item.id === event.currentTarget.dataset.id);
+    if (project) this.openEditor(project.document, project.id, { print: true });
+  },
+
   /** Opens `document` in the editor; options.batch ({ rows, source }) prints every row. */
   openEditor(document, projectId, options) {
     if (this.editorOpening) return;
@@ -1208,7 +1237,7 @@ Page({
         return;
       }
       this.editorSession.stage(document, projectId, options);
-      this.navigateEditor();
+      this.navigateEditor(options);
     } catch (error) {
       wx.showModal({ title: '无法打开编辑器', content: error.message || '本地存储空间不足', showCancel: false });
     }
@@ -1242,10 +1271,11 @@ Page({
     });
   },
 
-  navigateEditor() {
+  /** `options.print` opens the editor with its print sheet already up. */
+  navigateEditor(options) {
     this.editorOpening = true;
     wx.navigateTo({
-      url: '/pkg-editor/pages/editor/index',
+      url: '/pkg-editor/pages/editor/index' + (options && options.print ? '?print=1' : ''),
       success: () => {
         if (this.data.showTemplatePreview) this.closeTemplatePreview();
       },

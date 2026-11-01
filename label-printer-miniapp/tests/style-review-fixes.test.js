@@ -49,24 +49,26 @@ test('small buttons and text buttons are tall enough to tap', () => {
   assert.equal(value(rule(app, '.text-button'), 'min-height'), '72rpx');
 });
 
-test('the editor toolbar has 80 x 88rpx buttons that still fit beside the capsule on a 375px phone', () => {
-  const button = rule(editor, 'button.icon-button');
-  assert.equal(value(button, 'height'), '88rpx');
-  assert.equal(value(button, 'flex'), '0 1 80rpx');
-  assert.equal(value(button, 'min-width'), '64rpx');
-  const history = rule(editor, '.history-actions');
-  assert.equal(value(history, 'margin-left'), '24rpx', '关闭 stays clear of 撤销');
-  assert.equal(value(history, 'gap'), '8rpx');
-  assert.equal(value(rule(editor, '.header-main > .icon-button + .icon-button'), 'margin-left'), '8rpx');
+test('the editor header and floating pills keep 44px touch targets and fit a 375px phone', () => {
+  const back = rule(editor, 'button.icon-button');
+  assert.equal(value(back, 'width'), '80rpx');
+  assert.equal(value(back, 'height'), '80rpx');
+  // 80rpx plate + 4rpx of transparent growth on each side = 88rpx (44px).
+  const ring = rule(editor, 'button.icon-button::after');
+  assert.equal(value(ring, 'top'), '-4rpx');
+  assert.equal(value(ring, 'left'), '-4rpx');
+  assert.equal(80 + 2 * 4, 88);
+  assert.equal(value(rule(editor, '.stage-pill'), 'height'), '88rpx');
+  assert.equal(value(rule(editor, 'button.pill-button'), 'height'), '88rpx');
+  assert.equal(value(rule(editor, 'button.pill-button'), 'width'), '80rpx');
 
-  // 375px phone: the capsule starts at 280px and the header keeps 8px clear
-  // of it (headerRightInset = 103px); 1rpx = 0.5px.
-  const available = (375 - 103) * 2 - rpx(value(rule(editor, '.header-main'), 'padding-left'));
-  const needed = 6 * 80 + 24 + 8 + 8 + 8;
-  assert.ok(needed <= available, `${needed}rpx of ${available}rpx`);
-  // 320px phone: the buttons may shrink to 64rpx and must still fit.
-  const narrow = Math.floor((320 - 102) / (320 / 750)) - rpx(value(rule(editor, '.header-main'), 'padding-left'));
-  assert.ok(6 * 64 + 24 + 8 + 8 + 8 <= narrow);
+  // 1rpx = 0.5px on a 375px phone. Left pill: undo, divider, redo. Right pill:
+  // the printer chip (padding, dot, gap, name up to its cap), divider, layers,
+  // settings. Both sit between two 32rpx gutters.
+  const cap = rpx(value(rule(editor, '.connection-text'), 'max-width'));
+  const left = 2 * 80 + 2 + 2 * 8;
+  const right = (24 + 16 + 12 + cap + 20) + 2 + 2 * 80 + 2 * 8;
+  assert.ok(left + right + 2 * 32 <= 640, `${left + right + 64}rpx must fit a 320px phone (640rpx)`);
 });
 
 test('inspector actions and steppers are 72rpx tall', () => {
@@ -99,7 +101,7 @@ test('readable text does not use the faintest grey, and coloured words use their
     .filter((match) => /(?:^|[;\s])color:\s*var\(--color-text-4\)/.test(match[2]))
     .map((match) => match[1].trim());
   // Only the pencil icon beside the label name.
-  assert.deepEqual(faint, ['.document-name']);
+  assert.deepEqual(faint, ['.document-line']);
   assert.equal(value(rule(editor, '.connection-status.connected'), 'color'), 'var(--color-success-text)');
   assert.equal(value(rule(editor, '.connection-status.connecting'), 'color'), 'var(--color-warning-text)');
   assert.equal(value(rule(editor, '.template-attention'), 'color'), 'var(--color-warning-text)');
@@ -111,15 +113,10 @@ test('readable text does not use the faintest grey, and coloured words use their
 test('red words on the soft red fills use the pressed red', () => {
   for (const [source, selector] of [
     [app, '.danger-button,\n.danger-outline'],
-    [app, '.chip.active'],
     [editor, '.error-card'],
-    [editor, 'button.draft-save-status.error'],
+    [editor, 'button.save-status.error'],
     [editor, '.layer-actions .danger-text'],
-    [editor, 'button.layer-item.active'],
-    [editor, '.style-actions button.active'],
-    [picker, '.device-item.connecting .device-status'],
     [home, '.template-badge'],
-    [home, '.scan-cta'],
     [home, '.history-status.failed,\n.history-status.error']
   ]) {
     assert.equal(value(rule(source, selector), 'color'), 'var(--color-primary-pressed)', selector);
@@ -152,15 +149,13 @@ test('the selection tip wraps instead of running past its pill', () => {
 test('the hero buttons keep their look but reach the 44px touch target', () => {
   const home = read('pages/home/index.wxss');
   const circle = rule(home, 'button.circle-button');
-  assert.equal(value(circle, 'width'), '64rpx', 'the plate keeps the header rhythm');
+  assert.equal(value(circle, 'width'), '72rpx', 'the plate keeps the header rhythm');
   assert.equal(value(circle, 'position'), 'relative');
-  // 64rpx plate + 12rpx of transparent growth on each side = 88rpx (44px).
+  // 72rpx plate + 8rpx of transparent growth on each side = 88rpx (44px).
   const ring = rule(home, 'button.circle-button::after');
-  assert.equal(value(ring, 'top'), '-12rpx');
-  assert.equal(value(ring, 'left'), '-12rpx');
-  const pill = rule(home, 'button.device-pill');
-  assert.equal(value(pill, 'min-height'), '64rpx');
-  const pillRing = rule(home, 'button.device-pill::after');
-  assert.equal(value(pillRing, 'top'), '-12rpx');
-  assert.equal(Number(value(pill, 'min-height').replace('rpx', '')) + 2 * 12, 88);
+  assert.equal(value(ring, 'top'), '-8rpx');
+  assert.equal(value(ring, 'left'), '-8rpx');
+  // The printer card is the whole target: far taller than 44px.
+  const card = rule(home, 'button.printer-card');
+  assert.ok(Number(value(card, 'min-height').replace('rpx', '')) >= 88);
 });

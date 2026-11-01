@@ -31,41 +31,45 @@
 
 .device-item {
   width: 100%;
-  min-height: 112rpx;
-  padding: 16rpx 4rpx;
+  min-height: 128rpx;
+  margin-bottom: 16rpx;
+  padding: 0 24rpx;
+  border: 4rpx solid transparent;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
-  gap: 20rpx;
+  gap: 24rpx;
   text-align: left;
-  border-bottom: 1rpx solid var(--color-divider);
+  background: var(--color-fill);
+  box-sizing: border-box;
 }
 
+/* The row being linked turns blue; the others fade until it finishes. */
 .device-item.connecting {
-  border-radius: var(--radius-md);
-  background: var(--color-primary-soft);
+  border-color: var(--color-info);
+  background: var(--color-info-soft);
 }
 
-/* Red words on the soft red row need the pressed red to stay readable. */
 .device-item.connecting .device-status {
-  color: var(--color-primary-pressed);
+  color: var(--color-info-text);
 }
 
 .device-icon {
-  width: 72rpx;
-  height: 72rpx;
+  width: 80rpx;
+  height: 80rpx;
   flex: none;
-  border-radius: var(--radius-md);
+  border-radius: 26rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-text-1);
-  background: var(--color-fill);
-  font-size: 36rpx;
+  color: var(--color-text-3);
+  background: var(--color-fill-strong);
+  font-size: 40rpx;
 }
 
 .device-icon.printer {
-  color: var(--color-primary);
-  background: var(--color-primary-soft);
+  color: var(--color-success);
+  background: var(--color-success-soft);
 }
 
 .device-copy {
@@ -78,7 +82,7 @@
   overflow: hidden;
   color: var(--color-text-1);
   font-size: var(--font-body);
-  font-weight: 500;
+  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -104,7 +108,7 @@
 
 .device-status {
   flex: none;
-  color: var(--color-primary);
+  color: var(--color-info-text);
   font-size: var(--font-small);
   font-weight: 500;
 }
@@ -115,8 +119,8 @@
 }
 
 .connected-card {
-  margin-bottom: 8rpx;
-  padding: 20rpx 24rpx;
+  margin-bottom: 16rpx;
+  padding: 28rpx 24rpx;
   border-radius: var(--radius-lg);
   display: flex;
   align-items: center;

@@ -17,70 +17,60 @@ page {
   overflow: hidden;
 }
 
-/* Toolbar */
+/* Header: back and the label's name beside the WeChat capsule. Undo, layers
+   and the rest float on the canvas (see .stage-pills). */
 .editor-header {
   flex: none;
   z-index: 4;
-  background: var(--color-surface);
-  border-bottom: 1rpx solid var(--color-divider);
+  background: var(--color-stage);
 }
 
-/* Six 80 x 88rpx buttons fit beside the WeChat capsule on a 375px phone.
-   On narrower phones they shrink together (down to 64rpx) instead of
-   running under the capsule; 关闭 always stays 24rpx clear of 撤销. */
 .header-main {
-  height: 88rpx;
-  padding-left: 4rpx;
+  height: 104rpx;
+  padding-left: 16rpx;
   box-sizing: border-box;
   display: flex;
   align-items: center;
-}
-
-.header-spacer {
-  flex: 1;
-}
-
-.history-actions {
-  margin-left: 24rpx;
-  display: flex;
   gap: 8rpx;
 }
 
-.header-main > .icon-button + .icon-button {
-  margin-left: 8rpx;
-}
-
 button.icon-button {
-  min-width: 64rpx;
-  height: 88rpx;
-  flex: 0 1 80rpx;
-  border-radius: var(--radius-md);
+  position: relative;
+  width: 80rpx;
+  height: 80rpx;
+  flex: none;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--color-text-1);
-  font-size: 40rpx;
-}
-
-button.icon-button.button-hover {
-  background: var(--color-fill);
-}
-
-.icon-button.close {
+  background: #fff;
+  box-shadow: 0 2rpx 6rpx rgba(21, 23, 28, 0.1);
   font-size: 44rpx;
 }
 
-.document-row {
-  height: 64rpx;
-  padding: 0 24rpx 12rpx var(--gutter);
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
+/* 80rpx plate + 4rpx of invisible growth on each side = 88rpx (44px). */
+button.icon-button::after {
+  content: '';
+  position: absolute;
+  top: -4rpx;
+  right: -4rpx;
+  bottom: -4rpx;
+  left: -4rpx;
+  border: 0;
+  border-radius: 50%;
+}
+
+button.icon-button.button-hover {
+  background: var(--color-fill-strong);
 }
 
 .document-name {
   min-width: 0;
   flex: 1;
+}
+
+.document-line {
   display: flex;
   align-items: center;
   gap: 8rpx;
@@ -91,28 +81,101 @@ button.icon-button.button-hover {
 .document-title {
   min-width: 0;
   flex: 1;
-  height: 48rpx;
+  height: 44rpx;
   color: var(--color-text-1);
-  font-size: var(--font-body);
-  font-weight: 500;
+  font-size: 32rpx;
+  font-weight: 700;
+}
+
+.document-sub {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  min-height: 36rpx;
 }
 
 .size-label {
   flex: none;
-  padding: 4rpx 14rpx;
-  border-radius: var(--radius-full);
   color: var(--color-text-3);
-  background: var(--color-fill);
   font-size: var(--font-small);
 }
 
-.connection-status {
+button.save-status {
+  min-height: 36rpx;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 4rpx;
+  color: var(--color-success-text);
+  font-size: var(--font-small);
+  white-space: nowrap;
+}
+
+button.save-status.error {
+  color: var(--color-primary-pressed);
+  font-weight: 700;
+}
+
+/* Floating pills over the canvas: undo and redo on the left; the printer,
+   layers and settings on the right. */
+.stage-pills {
+  position: absolute;
+  z-index: 5;
+  top: 12rpx;
+  left: var(--gutter);
+  right: var(--gutter);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.stage-pill {
+  height: 88rpx;
+  padding: 0 8rpx;
+  border-radius: 44rpx;
+  display: flex;
+  align-items: center;
+  background: #fff;
+  box-shadow: 0 4rpx 16rpx rgba(21, 23, 28, 0.1);
+}
+
+button.pill-button {
+  width: 80rpx;
+  height: 88rpx;
   flex: none;
   display: flex;
   align-items: center;
-  gap: 8rpx;
+  justify-content: center;
+  color: var(--color-text-1);
+  font-size: 40rpx;
+}
+
+button.pill-button.button-hover {
+  background: transparent;
+  opacity: 0.6;
+}
+
+button.pill-button[disabled] {
+  opacity: 0.3;
+}
+
+.pill-divider {
+  width: 2rpx;
+  height: 36rpx;
+  flex: none;
+  background: var(--color-border);
+}
+
+.connection-status {
+  height: 88rpx;
+  padding: 0 20rpx 0 24rpx;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
   color: var(--color-text-3);
   font-size: var(--font-caption);
+  font-weight: 500;
 }
 
 .connection-status.connected {
@@ -123,16 +186,23 @@ button.icon-button.button-hover {
   color: var(--color-warning-text);
 }
 
+.connection-text {
+  max-width: 140rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .connection-dot {
-  width: 12rpx;
-  height: 12rpx;
+  width: 16rpx;
+  height: 16rpx;
   border-radius: 50%;
   background: var(--color-text-4);
 }
 
 .connection-dot.connected {
   background: var(--color-success);
-  box-shadow: 0 0 0 6rpx rgba(30, 158, 98, 0.14);
+  box-shadow: 0 0 0 6rpx rgba(22, 163, 74, 0.16);
 }
 
 .connection-dot.connecting {
@@ -197,7 +267,7 @@ button.batch-exit {
   position: relative;
   flex: 1;
   min-height: 250rpx;
-  padding: 72rpx var(--gutter) 80rpx;
+  padding: 112rpx var(--gutter) 152rpx;
   overflow: auto;
   display: flex;
   align-items: flex-start;
@@ -247,7 +317,7 @@ button.batch-exit {
 .preview-fit-note {
   position: absolute;
   z-index: 3;
-  top: 16rpx;
+  top: 120rpx;
   left: var(--gutter);
   min-height: 48rpx;
   padding: 0 16rpx;
@@ -278,44 +348,94 @@ button.batch-exit {
 /* As wide as its words, up to the gutters; a long tip wraps onto a second
    line instead of running past its pill. */
 .selection-tip {
-  position: absolute;
-  bottom: 20rpx;
-  left: 50%;
   width: max-content;
   max-width: calc(100% - 2 * var(--gutter));
   box-sizing: border-box;
-  transform: translateX(-50%);
-  padding: 10rpx 24rpx;
-  border-radius: var(--radius-lg);
-  color: var(--color-text-2);
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 4rpx 16rpx rgba(31, 35, 41, 0.08);
-  font-size: var(--font-caption);
+  color: var(--color-text-3);
+  font-size: var(--font-small);
   line-height: 1.5;
   text-align: center;
 }
 
-button.draft-save-status {
+/* Quick actions under the label: dark, like the chosen chip and tab. */
+.style-bar-wrap {
   position: absolute;
-  z-index: 3;
-  top: 20rpx;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 8rpx 20rpx;
-  border-radius: var(--radius-full);
+  z-index: 4;
+  left: var(--gutter);
+  right: var(--gutter);
+  bottom: 12rpx;
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 8rpx;
-  color: var(--color-success-text);
-  background: var(--color-surface);
-  box-shadow: 0 4rpx 16rpx rgba(31, 35, 41, 0.08);
-  font-size: var(--font-caption);
-  white-space: nowrap;
 }
 
-button.draft-save-status.error {
-  color: var(--color-primary-pressed);
-  background: var(--color-danger-soft);
+.style-bar {
+  min-height: 96rpx;
+  max-width: 100%;
+  padding: 0 12rpx;
+  box-sizing: border-box;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  gap: 4rpx;
+  background: var(--color-ink);
+  box-shadow: 0 16rpx 40rpx rgba(21, 23, 28, 0.25);
+}
+
+button.bar-button {
+  min-width: 80rpx;
+  height: 80rpx;
+  padding: 0 8rpx;
+  border-radius: 20rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  color: #fff;
+  font-size: 36rpx;
+}
+
+button.bar-button.wide {
+  padding: 0 24rpx;
+  font-size: var(--font-caption);
+  font-weight: 500;
+}
+
+button.bar-button.wide .icon {
+  font-size: 36rpx;
+}
+
+button.bar-button.button-hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+button.bar-button.on {
+  background: var(--color-info);
+}
+
+button.bar-button.danger {
+  color: #FF8A83;
+}
+
+button.bar-button[disabled] {
+  opacity: 0.4;
+}
+
+.bar-divider {
+  width: 2rpx;
+  height: 36rpx;
+  margin: 0 4rpx;
+  flex: none;
+  background: #3A3F4B;
+}
+
+.bar-value {
+  min-width: 56rpx;
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 700;
+  text-align: center;
 }
 
 /* Bottom panel. Tabs (88rpx) and the action bar (120rpx) are fixed; the
@@ -335,40 +455,40 @@ button.draft-save-status.error {
 
 .panel-tabs {
   height: 88rpx;
+  padding: 12rpx var(--gutter);
+  box-sizing: border-box;
   display: flex;
-  border-bottom: 1rpx solid var(--color-divider);
 }
 
 .panel-tabs button {
   position: relative;
+  height: 64rpx;
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--color-text-3);
-  font-size: var(--font-body);
+  background: var(--color-fill);
+  font-size: var(--font-caption);
+}
+
+.panel-tabs button:first-child {
+  border-radius: 20rpx 0 0 20rpx;
+}
+
+.panel-tabs button:last-child {
+  border-radius: 0 20rpx 20rpx 0;
 }
 
 .panel-tabs button.button-hover {
-  background: transparent;
+  background: var(--color-fill-strong);
 }
 
+/* The open tab turns dark, like the chosen chip on the home page. */
 .panel-tabs button.active {
-  color: var(--color-text-1);
-  font-weight: 600;
-}
-
-/* ::before because buttons draw their border with ::after. */
-.panel-tabs button.active::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: 0;
-  width: 40rpx;
-  height: 6rpx;
-  margin-left: -20rpx;
-  border-radius: var(--radius-full);
-  background: var(--color-primary);
+  color: #fff;
+  background: var(--color-text-1);
+  font-weight: 700;
 }
 
 .panel-scroll {
@@ -414,6 +534,13 @@ button.tool-button.button-hover .tool-icon {
   color: var(--color-primary);
   background: var(--color-primary-soft);
 }
+
+/* Each kind of element keeps its own tint so the grid reads at a glance. */
+button.tool-button:nth-child(1) .tool-icon { color: var(--color-info); background: var(--color-info-soft); }
+button.tool-button:nth-child(2) .tool-icon { color: var(--color-success); background: var(--color-success-soft); }
+button.tool-button:nth-child(3) .tool-icon { color: var(--color-warning); background: var(--color-warning-soft); }
+button.tool-button:nth-child(4) .tool-icon { color: var(--color-violet); background: var(--color-violet-soft); }
+button.tool-button:nth-child(8) .tool-icon { color: var(--color-primary-pressed); background: var(--color-primary-soft); }
 
 /* With an element selected the add tools shrink to one scrollable row, so the
    inspector and its content field start near the top of the panel. */
@@ -482,6 +609,8 @@ button.tool-chip.button-hover .icon {
 /* Inspector */
 .inspector {
   padding: 0 var(--gutter) 40rpx;
+  display: flex;
+  flex-direction: column;
 }
 
 /* One row: name on the left, actions on the right. On short phones only about
@@ -755,9 +884,9 @@ button.tool-chip.button-hover .icon {
 }
 
 .style-actions button.active {
-  border-color: var(--color-primary-line);
-  color: var(--color-primary-pressed);
-  background: var(--color-primary-soft);
+  border-color: transparent;
+  color: #fff;
+  background: var(--color-text-1);
 }
 
 .style-actions.wide button {
@@ -1103,13 +1232,41 @@ button.template-pick.button-hover {
   opacity: 0.5;
 }
 
+.print-summary {
+  padding: 0 28rpx;
+  border-radius: var(--radius-md);
+  background: var(--color-fill);
+}
+
+.print-summary view:last-child {
+  border-bottom: 0;
+}
+
+.print-ok {
+  margin: 8rpx 0 16rpx;
+  padding: 20rpx 24rpx;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  color: var(--color-success-text);
+  background: var(--color-success-soft);
+  font-size: var(--font-caption);
+  font-weight: 500;
+}
+
+.print-ok .icon {
+  flex: none;
+  font-size: 32rpx;
+}
+
 .print-summary view {
-  min-height: 80rpx;
+  min-height: 88rpx;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24rpx;
-  border-bottom: 1rpx solid var(--color-divider);
+  border-bottom: 1rpx solid var(--color-border);
   font-size: var(--font-body);
 }
 
@@ -1168,23 +1325,26 @@ button.template-pick.button-hover {
 
 .progress-card {
   margin-top: 16rpx;
+  padding: 24rpx;
+  border-radius: var(--radius-md);
   color: var(--color-text-2);
+  background: var(--color-info-soft);
   font-size: 26rpx;
   text-align: center;
 }
 
 .progress-track {
-  height: 10rpx;
-  margin-bottom: 12rpx;
+  height: 12rpx;
+  margin-bottom: 16rpx;
   overflow: hidden;
   border-radius: var(--radius-full);
-  background: var(--color-fill);
+  background: #CFDCFB;
 }
 
 .progress-fill {
   height: 100%;
   border-radius: var(--radius-full);
-  background: var(--color-primary);
+  background: var(--color-info);
   transition: width 0.2s;
 }
 
@@ -1242,8 +1402,9 @@ button.layer-item {
 }
 
 button.layer-item.active {
-  color: var(--color-primary-pressed);
-  background: var(--color-primary-soft);
+  color: var(--color-info-text);
+  background: var(--color-info-soft);
+  box-shadow: inset 0 0 0 3rpx var(--color-info);
 }
 
 .layer-type {
@@ -1259,7 +1420,7 @@ button.layer-item.active {
 }
 
 .layer-item.active .layer-type {
-  color: var(--color-primary-pressed);
+  color: var(--color-info-text);
   background: var(--color-surface);
 }
 
@@ -1427,9 +1588,17 @@ button.layer-item.active {
     height: 540rpx;
     min-height: 420rpx;
   }
-  .canvas-stage {
-    padding-top: 56rpx;
-    padding-bottom: 56rpx;
+  /* On a short phone the content field (文字内容, 编码内容…) stays on the
+     panel's first screen: the position fields, turning and the style block
+     follow it. The stage keeps the padding the floating pills and the style
+     bar need. */
+  .position-section,
+  .arrange-section,
+  .style-section {
+    order: 1;
+  }
+  .inspector > .property-section {
+    padding-top: 8rpx;
   }
   button.tool-button {
     height: 124rpx;

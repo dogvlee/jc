@@ -335,16 +335,20 @@ test('opening the template shelf does not request the remote NIIM catalog', () =
 
 test('home first screen follows the decided main-path order', () => {
   const markup = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'home', 'index.wxml'), 'utf8');
+  const printer = markup.indexOf('class="printer-card');
+  const create = markup.indexOf('class="bento-new"');
+  const scan = markup.indexOf('bindtap="scanToLabel"');
   const recent = markup.indexOf('最近标签');
-  const stock = markup.indexOf('当前纸张');
   const shelf = markup.indexOf('商跃模板</text>');
-  const scanBanner = markup.indexOf('scan-banner');
-  assert.ok(recent > 0 && stock > 0 && shelf > 0 && scanBanner > 0);
-  assert.ok(recent < stock, '最近标签必须排在当前纸张之前');
-  assert.ok(stock < shelf, '当前纸张必须排在商跃模板之前');
-  assert.ok(scanBanner > shelf, '扫码建标只能作为更下方的次要动作');
+  assert.ok(printer > 0 && create > 0 && scan > 0 && recent > 0 && shelf > 0);
+  assert.ok(printer < create, '打印机卡片必须排在最上面，先于新建标签');
+  assert.ok(create < scan, '新建标签先于扫码建标');
+  assert.ok(scan < recent, '扫码建标和批量入口排在最近标签之前');
+  assert.ok(recent < shelf, '最近标签必须排在商跃模板之前');
   assert.equal(markup.includes('quick-panel'), false);
-  assert.match(markup, /class="scan-banner" bindtap="scanToLabel"/);
+  assert.equal(markup.includes('scan-banner'), false);
+  assert.match(markup, /class="tile" bindtap="scanToLabel"/);
+  assert.match(markup, /class="printer-card[^"]*"[^>]*bindtap="openDevices"/);
 });
 
 test('a pending route stored by the editor is consumed once on show', () => {
@@ -846,7 +850,7 @@ test('share menu offers chats and Moments, and 我的 has a feedback entry', (t)
   assert.deepEqual(page.onShareAppMessage(), { title: '商跃标签：手机设计标签，蓝牙直接打印', path: '/pages/home/index' });
   assert.equal(page.onShareTimeline().title, '商跃标签：手机设计标签，蓝牙直接打印');
   const markup = readHome('index.wxml');
-  assert.match(markup, /<button open-type="feedback"><text class="menu-icon icon icon-pencil"[^>]*><\/text><view><text>意见反馈<\/text><text class="menu-note">打印机连不上、模板不合适都可以告诉我们<\/text>/);
+  assert.match(markup, /<button open-type="feedback"><view class="menu-tile tile-pencil"><text class="menu-icon icon icon-pencil"[^>]*><\/text><\/view><view><text>意见反馈<\/text><text class="menu-note">打印机连不上、模板不合适都可以告诉我们<\/text>/);
 });
 
 test('settings copy says what the black-and-white threshold affects', () => {
@@ -886,7 +890,7 @@ test('without a remembered printer the shelf shows everything with fit labels', 
   assert.match(markup, /<button wx:if="\{\{printerFamily\}\}" class="chip filter-chip family-chip/);
   assert.match(markup, /只看 \{\{printerFamilyLabel\}\} 能打印的/);
   assert.equal((markup.match(/class="card-fit \{\{item\.fitMismatch \? 'mismatch' : ''\}\}">\{\{item\.fitText\}\}/g) || []).length, 2);
-  assert.match(markup, /<text class="stock-name">\{\{stockName\}\}<\/text>/);
+  assert.match(markup, /\{\{stockName \|\| '选择标签纸'\}\}/);
   assert.doesNotMatch(markup, /203 空白标签|>T\{\{/);
 });
 

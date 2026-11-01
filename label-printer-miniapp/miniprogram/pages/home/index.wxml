@@ -20,20 +20,51 @@
 <view class="app-shell route-{{route}}">
   <view class="top-cover" style="height: {{headerTop - 12}}px;"></view>
   <block wx:if="{{route == 'home'}}">
-    <view class="home-hero" style="padding-top: {{headerTop}}px;">
-      <view class="brand-row">
-        <view class="brand-lockup">
-          <view class="brand-mark">商</view>
-          <view class="brand-copy"><text class="brand-title">商跃标签</text><text class="brand-subtitle">选纸 · 改字 · 连机 · 打印</text></view>
-        </view>
-        <view class="hero-actions">
-          <button class="circle-button" bindtap="openHelp" aria-label="帮助"><text class="icon icon-circle-help" aria-hidden="true"></text></button>
-          <button class="device-pill {{connected ? 'connected' : ''}}" bindtap="openDevices"><text class="icon {{connected ? 'icon-bluetooth-connected' : 'icon-bluetooth'}}" aria-hidden="true"></text><text class="device-label">{{connectionLabel}}</text><text class="icon icon-chevron-right device-chevron" aria-hidden="true"></text></button>
-        </view>
-      </view>
+    <view class="home-bar" style="top: {{heroTop}}px;">
+      <view class="home-greet"><text class="home-hello">{{greeting}}</text><text class="home-name">商跃标签</text></view>
+      <button class="circle-button" bindtap="openHelp" aria-label="帮助"><text class="icon icon-circle-help" aria-hidden="true"></text></button>
     </view>
 
-    <view class="home-content">
+    <view class="home-content" style="padding-top: {{headerTop}}px;">
+      <button class="printer-card {{connected ? 'on' : connectionLabel == '连接中…' ? 'wait' : 'off'}}" hover-class="pressed-fade" bindtap="openDevices" aria-label="{{connected ? '打印机 ' + connectionLabel + '，已连接，点一下换机' : '连接打印机，当前' + connectionLabel}}">
+        <view class="printer-orb"></view>
+        <view class="printer-icon"><text class="icon {{connected ? 'icon-printer' : connectionLabel == '连接中…' ? 'icon-bluetooth-searching' : 'icon-bluetooth'}}" aria-hidden="true"></text><view wx:if="{{connected}}" class="printer-dot"></view></view>
+        <view class="printer-copy">
+          <view class="printer-line"><text class="printer-title">{{connected ? connectionLabel : connectionLabel == '连接中…' ? '正在连接打印机' : '还没连接打印机'}}</text><text wx:if="{{connected}}" class="printer-pill ok"><text class="icon icon-check" aria-hidden="true"></text>已连接</text><text wx:elif="{{connectionLabel == '连接中…'}}" class="printer-pill wait">连接中…</text></view>
+          <text class="printer-sub">{{connected ? (printerFamilyLabel || '58mm') + ' 纸宽 · ' + labelTypeNames[(settings.labelType || 1) - 1] + (densityAdjustable ? ' · 浓度 ' + settings.density : '') : connectionLabel == '连接中…' ? '请把打印机放在手机旁边' : '开机后点「连接」就能连'}}</text>
+        </view>
+        <view class="printer-action"><text wx:if="{{!connected && connectionLabel != '连接中…'}}" class="icon icon-bluetooth-searching" aria-hidden="true"></text><text>{{connected ? '换机' : connectionLabel == '连接中…' ? '查看' : '连接'}}</text><text wx:if="{{connected}}" class="icon icon-chevron-right" aria-hidden="true"></text></view>
+      </button>
+
+      <view class="bento">
+        <button class="bento-new" bindtap="createBlank" aria-label="新建标签，{{stockName || '空白标签'}}">
+          <view class="bento-plus"><text class="icon icon-plus" aria-hidden="true"></text></view>
+          <image class="bento-deco" src="/assets/shangyue-thumbs/shangyue-price-tag-v1.png" mode="aspectFit" aria-hidden="true" />
+          <view class="bento-new-copy"><text class="bento-new-title">新建标签</text><text class="bento-new-note">{{stockName || '空白标签'}}</text></view>
+        </button>
+        <view class="bento-side">
+          <button class="tile" bindtap="scanToLabel" loading="{{codeScanning}}" disabled="{{codeScanning}}">
+            <view class="tile-icon info"><text class="icon icon-scan-barcode" aria-hidden="true"></text></view>
+            <view class="tile-copy"><text class="tile-title">扫码建标</text><text class="tile-note">扫条码出标签</text></view>
+          </button>
+          <button class="tile" data-route="data" bindtap="navigate">
+            <view class="tile-icon warn"><text class="icon icon-sheet" aria-hidden="true"></text></view>
+            <view class="tile-copy"><text class="tile-title">批量打印</text><text class="tile-note">导入表格</text></view>
+          </button>
+        </view>
+      </view>
+      <view class="bento-row">
+        <button class="tile wide" bindtap="openStockSheet">
+          <view class="tile-icon neutral small"><text class="icon icon-ruler" aria-hidden="true"></text></view>
+          <view class="tile-copy"><text class="tile-title">换纸</text><text class="tile-note">{{stockName || '选择标签纸'}}</text></view>
+        </button>
+        <button class="tile wide" bindtap="openHistorySheet">
+          <view class="tile-icon violet small"><text class="icon icon-history" aria-hidden="true"></text></view>
+          <view class="tile-copy"><text class="tile-title">打印记录</text><text class="tile-note">{{historyTotal ? '共 ' + historyTotal + ' 条' : '还没有记录'}}</text></view>
+        </button>
+      </view>
+      <view wx:if="{{stockFitHint}}" class="stock-warning" role="alert"><text class="icon icon-triangle-alert" aria-hidden="true"></text><text>{{stockFitHint}}</text></view>
+
       <view wx:if="{{recoveryDraft && recoveryDraft.damaged}}" class="draft-recovery card" role="alert">
         <view class="draft-head">
           <view class="draft-icon"><text class="icon icon-triangle-alert" aria-hidden="true"></text></view>
@@ -41,46 +72,42 @@
         </view>
         <view class="draft-actions"><button class="outline-button btn-s" bindtap="discardDraft">放弃草稿</button></view>
       </view>
-      <view wx:elif="{{recoveryDraft}}" class="draft-recovery card" role="status">
-        <view class="draft-head">
-          <view class="draft-icon"><text class="icon icon-rotate-ccw" aria-hidden="true"></text></view>
-          <view class="draft-copy"><text class="card-title">继续上次未完成的标签</text><text class="card-meta">{{recoveryDraft.name}} · {{recoveryDraft.updatedText}}</text></view>
-        </view>
-        <view class="draft-actions"><button class="outline-button btn-s" bindtap="discardDraft">放弃草稿</button><button class="primary-button btn-s" bindtap="resumeDraft">继续编辑</button></view>
+      <view wx:elif="{{recoveryDraft}}" class="draft-bar card" role="status">
+        <view class="draft-icon"><text class="icon icon-rotate-ccw" aria-hidden="true"></text></view>
+        <view class="draft-copy"><text class="draft-title">继续编辑「{{recoveryDraft.name}}」</text><text class="draft-meta">{{recoveryDraft.updatedText}} · 草稿已自动保存</text></view>
+        <button class="draft-discard" bindtap="discardDraft" aria-label="放弃草稿"><text class="icon icon-x" aria-hidden="true"></text></button>
+        <button class="draft-go" bindtap="resumeDraft">继续</button>
       </view>
       <view wx:if="{{damagedRecords}}" class="damage-notice card" role="alert">
         <text class="icon icon-triangle-alert" aria-hidden="true"></text>
         <text class="damage-copy">有 {{damagedRecords}} 条标签或模板的数据坏了，已先隐藏。清理后才能正常保存。</text>
         <button class="outline-button btn-s" bindtap="cleanDamagedRecords">清理</button>
       </view>
+
       <view class="section-block">
         <view class="section-heading">
           <text class="section-title">最近标签</text>
-          <view class="inline-actions">
-            <button class="text-button" bindtap="openHistorySheet"><text class="icon icon-history" aria-hidden="true"></text>打印历史</button>
-            <button class="text-button" data-route="projects" bindtap="navigate">全部<text class="icon icon-chevron-right" aria-hidden="true"></text></button>
-          </view>
+          <button class="text-button" data-route="projects" bindtap="navigate">全部<text class="icon icon-chevron-right" aria-hidden="true"></text></button>
         </view>
-        <view wx:if="{{recentProjects.length}}" class="project-grid compact-grid">
-          <view wx:for="{{recentProjects}}" wx:key="id" class="project-card">
-            <button class="project-open" data-id="{{item.id}}" bindtap="openProject">
-              <view class="project-thumb"><block wx:if="{{item.preview}}"><template is="miniLabel" data="{{...item.preview}}" /></block><view wx:else class="abstract-preview kind-{{item.kind}}"><view class="preview-line wide"></view><view class="preview-line"></view><view class="preview-code"></view></view></view>
-              <view class="project-card-copy"><text class="card-title">{{item.name}}</text><text class="card-meta">{{item.sizeText}} · {{item.updatedText}}</text></view>
-            </button>
+        <scroll-view wx:if="{{recentProjects.length}}" class="recent-scroll" scroll-x="true" enhanced="true" show-scrollbar="{{false}}">
+          <view class="recent-row">
+            <view wx:for="{{recentProjects}}" wx:key="id" class="recent-card">
+              <button class="recent-open" data-id="{{item.id}}" bindtap="openProject" aria-label="打开 {{item.name}}">
+                <view class="recent-thumb"><block wx:if="{{item.preview}}"><template is="miniLabel" data="{{...item.preview}}" /></block><view wx:else class="abstract-preview kind-{{item.kind}}"><view class="preview-line wide"></view><view class="preview-line"></view><view class="preview-code"></view></view></view>
+              </button>
+              <view class="recent-foot">
+                <view class="recent-copy" data-id="{{item.id}}" bindtap="openProject"><text class="card-title">{{item.name}}</text><text class="card-meta">{{item.updatedText}}</text></view>
+                <button class="recent-print" data-id="{{item.id}}" bindtap="reprintProject" aria-label="再打一张 {{item.name}}"><text class="icon icon-printer" aria-hidden="true"></text></button>
+              </view>
+            </view>
           </view>
-        </view>
+        </scroll-view>
         <view wx:else class="friendly-empty card">
           <view class="glyph-badge"><text class="icon icon-tags" aria-hidden="true"></text></view>
           <text class="empty-title">还没有标签</text>
           <text class="muted">从模板开始，或新建一张空白标签</text>
-          <view class="empty-actions"><button class="outline-button" bindtap="openIndustry">选模板</button><button class="outline-button" bindtap="scanToLabel" loading="{{codeScanning}}" disabled="{{codeScanning}}">扫码建标</button><button class="primary-button" bindtap="createBlank">空白新建</button></view>
+          <view class="empty-actions"><button class="outline-button btn-m" bindtap="openIndustry">选模板</button><button class="primary-button btn-m" bindtap="createBlank">空白新建</button></view>
         </view>
-      </view>
-
-      <view class="stock-card card">
-        <view class="stock-preview"><view class="stock-paper"></view></view>
-        <view class="stock-copy"><text class="eyebrow">当前纸张</text><text class="stock-name">{{stockName}}</text><text wx:if="{{stockFitHint}}" class="stock-hint">{{stockFitHint}}</text><text wx:else class="muted">新建标签将默认使用此尺寸</text></view>
-        <view class="stock-actions"><button class="outline-button btn-s" bindtap="openStockSheet">换纸</button><button class="primary-small" bindtap="createBlank">新建</button></view>
       </view>
 
       <view class="section-block">
@@ -96,13 +123,6 @@
           </button>
         </view>
       </view>
-
-      <button class="scan-banner" bindtap="scanToLabel" loading="{{codeScanning}}" disabled="{{codeScanning}}">
-        <view class="scan-symbol"><text class="icon icon-scan-line" aria-hidden="true"></text></view>
-        <view class="scan-copy"><text class="scan-title">扫码建标</text><text class="scan-note">扫描商品条码或二维码，直接生成可编辑的标签</text></view>
-        <text class="scan-cta">去扫码</text>
-      </button>
-
     </view>
   </block>
 
@@ -115,10 +135,10 @@
       <view class="search-box"><text class="icon icon-search" aria-hidden="true"></text><input value="{{templateQuery}}" bindinput="onTemplateSearch" placeholder="搜名称、用途或尺寸，如 40x30" placeholder-class="search-placeholder" confirm-type="search" /></view>
       <scroll-view class="filter-scroll tab-scroll" scroll-x="true" enhanced="true" show-scrollbar="{{false}}">
         <view class="filter-row tab-row">
-          <button class="filter-tab {{templateIndustry == '全部' ? 'active' : ''}}" data-value="全部" bindtap="setTemplateIndustry">全部</button>
-          <button class="filter-tab {{templateIndustry == '场景模板' ? 'active' : ''}}" data-value="场景模板" bindtap="setTemplateIndustry">场景模板</button>
-          <button class="filter-tab {{templateIndustry == '我的' ? 'active' : ''}}" data-value="我的" bindtap="setTemplateIndustry">我的 {{userTemplateCount}}</button>
-          <block wx:for="{{industries}}" wx:key="*this"><button wx:if="{{item != '全部'}}" class="filter-tab {{templateIndustry == item ? 'active' : ''}}" data-value="{{item}}" bindtap="setTemplateIndustry">{{item}}</button></block>
+          <button class="cat-tile tone-amber {{templateIndustry == '全部' ? 'active' : ''}}" data-value="全部" bindtap="setTemplateIndustry"><view class="cat-icon"><text class="icon icon-layout-grid" aria-hidden="true"></text></view><text class="cat-label">全部</text></button>
+          <button class="cat-tile tone-red {{templateIndustry == '场景模板' ? 'active' : ''}}" data-value="场景模板" bindtap="setTemplateIndustry"><view class="cat-icon"><text class="icon icon-sparkles" aria-hidden="true"></text></view><text class="cat-label">场景模板</text></button>
+          <button class="cat-tile tone-violet {{templateIndustry == '我的' ? 'active' : ''}}" data-value="我的" bindtap="setTemplateIndustry"><view class="cat-icon"><text class="icon icon-user-round" aria-hidden="true"></text></view><text class="cat-label">我的 {{userTemplateCount}}</text></button>
+          <block wx:for="{{industries}}" wx:key="*this"><button wx:if="{{item != '全部'}}" class="cat-tile tone-{{industryTones[item] || 'neutral'}} {{templateIndustry == item ? 'active' : ''}}" data-value="{{item}}" bindtap="setTemplateIndustry"><view class="cat-icon"><text class="icon {{industryIcons[item] || 'icon-tags'}}" aria-hidden="true"></text></view><text class="cat-label">{{item}}</text></button></block>
         </view>
       </scroll-view>
       <scroll-view wx:if="{{printerFamily || templateIndustry != '我的'}}" class="filter-scroll" scroll-x="true" enhanced="true" show-scrollbar="{{false}}">
@@ -234,29 +254,29 @@
   </block>
 
   <block wx:if="{{route == 'profile'}}">
-    <view class="profile-hero" style="padding-top: {{headerTop}}px;">
+    <view class="profile-hero" style="padding-top: {{headerTop}}px;"><view class="profile-card card">
       <view class="avatar">商</view>
       <view class="profile-copy"><view class="profile-title-row"><text class="plain-title">{{authStatus == 'authenticated' ? '商跃用户' : '登录商跃标签'}}</text></view><text class="plain-subtitle">{{authStatus == 'authenticated' ? accountPhone : (authStatus == 'restoring' ? '正在确认登录状态…' : '登录后查看账号，标签仍保存在本机')}}</text></view>
       <button wx:if="{{authStatus != 'authenticated' && authStatus != 'restoring'}}" class="outline-button profile-account-button" bindtap="openLogin">登录</button>
       <button wx:else class="text-button profile-account-button" bindtap="logoutAccount">退出</button>
-    </view>
+    </view></view>
     <view class="route-content profile-content">
       <view wx:if="{{authStatus == 'authenticated'}}" class="account-device-note"><text class="icon icon-shield-check" aria-hidden="true"></text><text>退出仍保留本机标签。共用手机时，请留意标签中的个人信息。</text></view>
       <view class="stats-row card"><view><text>{{projectTotal}}</text><text>我的标签</text></view><view><text>{{userTemplateCount}}</text><text>我的模板</text></view><view><text>{{historyTotal}}</text><text>打印记录</text></view></view>
       <view class="menu-section card">
-        <button bindtap="openDevices"><text class="menu-icon icon icon-printer" aria-hidden="true"></text><view><text>我的打印机</text><text class="menu-note">{{connectionLabel}}</text></view><text class="menu-chevron icon icon-chevron-right" aria-hidden="true"></text></button>
-        <button bindtap="openSettingsSheet"><text class="menu-icon icon icon-sliders-horizontal" aria-hidden="true"></text><view><text>默认打印设置</text><text class="menu-note">{{densityAdjustable ? '浓度 ' + settings.density + ' · ' : ''}}黑白阈值 {{settings.threshold}}</text></view><text class="menu-chevron icon icon-chevron-right" aria-hidden="true"></text></button>
-        <button bindtap="openHistorySheet"><text class="menu-icon icon icon-history" aria-hidden="true"></text><view><text>打印历史</text><text class="menu-note">共 {{historyTotal}} 条</text></view><text class="menu-chevron icon icon-chevron-right" aria-hidden="true"></text></button>
-        <button data-route="data" bindtap="navigate"><text class="menu-icon icon icon-sheet" aria-hidden="true"></text><view><text>批量制标</text><text class="menu-note">导入 CSV，每一行打印一张标签</text></view><text class="menu-chevron icon icon-chevron-right" aria-hidden="true"></text></button>
-        <button bindtap="createWifiLabel"><text class="menu-icon icon icon-wifi" aria-hidden="true"></text><view><text>创建 Wi-Fi 码</text><text class="menu-note">打开可编辑的 Wi-Fi 标签</text></view><text class="menu-chevron icon icon-chevron-right" aria-hidden="true"></text></button>
+        <button bindtap="openDevices"><view class="menu-tile tile-printer"><text class="menu-icon icon icon-printer" aria-hidden="true"></text></view><view><text>我的打印机</text><text class="menu-note">{{connectionLabel}}</text></view><text class="menu-chevron icon icon-chevron-right" aria-hidden="true"></text></button>
+        <button bindtap="openSettingsSheet"><view class="menu-tile tile-sliders-horizontal"><text class="menu-icon icon icon-sliders-horizontal" aria-hidden="true"></text></view><view><text>默认打印设置</text><text class="menu-note">{{densityAdjustable ? '浓度 ' + settings.density + ' · ' : ''}}黑白阈值 {{settings.threshold}}</text></view><text class="menu-chevron icon icon-chevron-right" aria-hidden="true"></text></button>
+        <button bindtap="openHistorySheet"><view class="menu-tile tile-history"><text class="menu-icon icon icon-history" aria-hidden="true"></text></view><view><text>打印历史</text><text class="menu-note">共 {{historyTotal}} 条</text></view><text class="menu-chevron icon icon-chevron-right" aria-hidden="true"></text></button>
+        <button data-route="data" bindtap="navigate"><view class="menu-tile tile-sheet"><text class="menu-icon icon icon-sheet" aria-hidden="true"></text></view><view><text>批量制标</text><text class="menu-note">导入 CSV，每一行打印一张标签</text></view><text class="menu-chevron icon icon-chevron-right" aria-hidden="true"></text></button>
+        <button bindtap="createWifiLabel"><view class="menu-tile tile-wifi"><text class="menu-icon icon icon-wifi" aria-hidden="true"></text></view><view><text>创建 Wi-Fi 码</text><text class="menu-note">打开可编辑的 Wi-Fi 标签</text></view><text class="menu-chevron icon icon-chevron-right" aria-hidden="true"></text></button>
       </view>
       <view class="menu-section card">
-        <button bindtap="exportBackup"><text class="menu-icon icon icon-upload" aria-hidden="true"></text><view><text>导出备份</text><text class="menu-note">标签、模板、数据和设置，不含图片</text></view><text class="menu-chevron icon icon-chevron-right" aria-hidden="true"></text></button>
-        <button bindtap="importBackup"><text class="menu-icon icon icon-download" aria-hidden="true"></text><view><text>恢复备份</text><text class="menu-note">从 JSON 文件恢复本机数据</text></view><text class="menu-chevron icon icon-chevron-right" aria-hidden="true"></text></button>
+        <button bindtap="exportBackup"><view class="menu-tile tile-upload"><text class="menu-icon icon icon-upload" aria-hidden="true"></text></view><view><text>导出备份</text><text class="menu-note">标签、模板、数据和设置，不含图片</text></view><text class="menu-chevron icon icon-chevron-right" aria-hidden="true"></text></button>
+        <button bindtap="importBackup"><view class="menu-tile tile-download"><text class="menu-icon icon icon-download" aria-hidden="true"></text></view><view><text>恢复备份</text><text class="menu-note">从 JSON 文件恢复本机数据</text></view><text class="menu-chevron icon icon-chevron-right" aria-hidden="true"></text></button>
       </view>
       <view class="menu-section card">
-        <button bindtap="openHelp"><text class="menu-icon icon icon-circle-help" aria-hidden="true"></text><view><text>使用帮助</text><text class="menu-note">商跃独立标签制作工具</text></view><text class="menu-chevron icon icon-chevron-right" aria-hidden="true"></text></button>
-        <button open-type="feedback"><text class="menu-icon icon icon-pencil" aria-hidden="true"></text><view><text>意见反馈</text><text class="menu-note">打印机连不上、模板不合适都可以告诉我们</text></view><text class="menu-chevron icon icon-chevron-right" aria-hidden="true"></text></button>
+        <button bindtap="openHelp"><view class="menu-tile tile-circle-help"><text class="menu-icon icon icon-circle-help" aria-hidden="true"></text></view><view><text>使用帮助</text><text class="menu-note">商跃独立标签制作工具</text></view><text class="menu-chevron icon icon-chevron-right" aria-hidden="true"></text></button>
+        <button open-type="feedback"><view class="menu-tile tile-pencil"><text class="menu-icon icon icon-pencil" aria-hidden="true"></text></view><view><text>意见反馈</text><text class="menu-note">打印机连不上、模板不合适都可以告诉我们</text></view><text class="menu-chevron icon icon-chevron-right" aria-hidden="true"></text></button>
       </view>
       <text class="privacy-note">登录时经你授权获取微信手机号，用于创建和识别账号。标签正文、图片、模板和打印记录仍保存在本机，不会因登录自动上传。首次连接打印机、扫码和选择图片由你主动开启；已记忆的打印机会在启动或蓝牙恢复时尝试重连，可在「我的打印机」里忘记它。</text>
     </view>
@@ -265,7 +285,6 @@
   <view class="bottom-nav" aria-label="主导航">
     <button class="{{route == 'home' ? 'active' : ''}}" data-route="home" bindtap="navigate"><text class="nav-icon icon icon-house" aria-hidden="true"></text><text>首页</text></button>
     <button class="{{route == 'templates' ? 'active' : ''}}" data-route="templates" bindtap="navigate"><text class="nav-icon icon icon-layout-grid" aria-hidden="true"></text><text>模板</text></button>
-    <button class="create-nav" bindtap="createBlank" aria-label="新建标签"><text class="icon icon-plus" aria-hidden="true"></text></button>
     <button class="{{route == 'projects' ? 'active' : ''}}" data-route="projects" bindtap="navigate"><text class="nav-icon icon icon-tags" aria-hidden="true"></text><text>标签</text></button>
     <button class="{{route == 'profile' || route == 'data' ? 'active' : ''}}" data-route="profile" bindtap="navigate"><text class="nav-icon icon icon-circle-user-round" aria-hidden="true"></text><text>我的</text></button>
   </view>
@@ -329,7 +348,7 @@
       <view class="help-copy">
         <text>商跃标签用来在手机上设计标签，再通过蓝牙连接 58mm、80mm 热敏打印机直接打印。</text>
         <text class="help-heading">怎么用</text>
-        <text>1. 打开打印机和手机蓝牙，点首页右上角的「未连接」，选你的打印机连上。</text>
+        <text>1. 打开打印机和手机蓝牙，点首页最上面的打印机卡片，选你的打印机连上。</text>
         <text>2. 选一个适合你打印机的模板，或者新建一张空白标签。</text>
         <text>3. 点标签上的文字、条码等内容，改成你要的。</text>
         <text>4. 点「打印」，按提示装好标签纸就能打出来。</text>

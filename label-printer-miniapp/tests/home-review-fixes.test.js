@@ -552,7 +552,7 @@ test('home copy says 标签 and 打印机, and the guide ends with a single butt
   assert.doesNotMatch(markup, /标签机|机型|本地项目/);
   assert.match(markup, /纸张和打印机是否匹配/);
   assert.match(markup, /<button wx:if="\{\{onboardingStep < 2\}\}" class="outline-button btn-l" bindtap="skipOnboarding">跳过<\/button>/);
-  assert.match(markup, /点首页右上角的「未连接」/);
+  assert.match(markup, /点首页最上面的打印机卡片/);
   assert.match(markup, /<text class="sheet-subtitle">\{\{previewTemplate\.sizeText\}\} · \{\{previewTemplate\.category\}\}<\/text>/);
   assert.match(markup, /<text>使用帮助<\/text>/);
   const source = read('index.js');

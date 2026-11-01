@@ -94,12 +94,13 @@ const TAP_MAX_MS = 350;
 
 const MILLIMETERS_PER_INCH = 25.4;
 const PREVIEW_WIDTH_RPX = 672;
-// Chrome around the canvas, in rpx; they mirror editor/index.wxss (header 88 +
-// document row 64, stage padding 72 + 80, panel 440…640 capped at 48vh). A CSS
+// Chrome around the canvas, in rpx; they mirror editor/index.wxss (header 88,
+// stage padding 112 for the floating pills + 152 for the style bar, panel
+// 440…640 capped at 48vh). A CSS
 // change here only makes the fitted preview slightly smaller or larger.
 const PREVIEW_CHROME = Object.freeze({
-  headerRpx: 152,
-  stagePaddingRpx: 152,
+  headerRpx: 88,
+  stagePaddingRpx: 264,
   panelMinRpx: 440,
   panelMaxRpx: 640,
   panelViewportRatio: 0.48,
@@ -729,6 +730,13 @@ Page({
         if (this.pageActive) this.openDevices();
       }, 350);
     }
+    // 再打一张 from the home page: the print sheet comes up over the label,
+    // one copy, and nothing prints until the owner taps 开始打印.
+    if (options && options.print === '1') {
+      this.printOpenTimer = setTimeout(() => {
+        if (this.pageActive && !this.data.loadError) this.openPrintSheet();
+      }, 350);
+    }
   },
 
   onReady() {
@@ -763,6 +771,7 @@ Page({
     this.printCancelRequested = true;
     this.printTaskGeneration = (this.printTaskGeneration || 0) + 1;
     clearTimeout(this.deviceOpenTimer);
+    clearTimeout(this.printOpenTimer);
     clearTimeout(this.resizeTimer);
     if (this.removeConnectionListener) {
       this.removeConnectionListener();
@@ -2007,6 +2016,36 @@ Page({
       if (selected) {
         selected.align = value;
       }
+    });
+  },
+
+  // 字号 +/- on the style bar: half a millimetre per tap, kept inside the
+  // same range the inspector's number field allows.
+  stepFontSize(event) {
+    const delta = Number(event.currentTarget.dataset.delta) || 0;
+    const current = this.selectedElement();
+    if (!current || !delta) return;
+    const base = Number(current.fontSize);
+    if (!Number.isFinite(base)) return;
+    const next = fieldValueInRange('fontSize', Math.round((base + delta * 0.5) * 10) / 10);
+    if (next === base) {
+      wx.showToast({ title: delta > 0 ? '字号已经是最大' : '字号已经是最小', icon: 'none' });
+      return;
+    }
+    this.commit(() => {
+      const selected = this.selectedElement();
+      if (selected) selected.fontSize = next;
+    });
+  },
+
+  // 对齐 on the style bar: left, centre, right, then left again.
+  cycleAlignment() {
+    const order = ['left', 'center', 'right'];
+    this.commit(() => {
+      const selected = this.selectedElement();
+      if (!selected) return;
+      const at = order.indexOf(selected.align);
+      selected.align = order[(at + 1) % order.length];
     });
   },
 

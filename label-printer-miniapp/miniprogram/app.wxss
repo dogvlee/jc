@@ -7,28 +7,37 @@ page {
   --color-primary-pressed: #C4231D;
   --color-primary-soft: #FFF1F0;
   --color-primary-line: #FFCCC7;
-  --color-bg: #F5F6F8;
+  --color-bg: #F2F3F7;
   --color-surface: #FFFFFF;
-  --color-fill: #F2F3F5;
-  --color-fill-strong: #E8EAED;
-  --color-border: #E5E6EB;
-  --color-divider: #F0F1F3;
-  --color-text-1: #1F2329;
-  --color-text-2: #51565D;
-  --color-text-3: #646A73;
+  --color-fill: #F2F3F7;
+  --color-fill-strong: #E6E8EE;
+  --color-border: #E1E4EB;
+  --color-divider: #E7E9EF;
+  --color-text-1: #15171C;
+  --color-text-2: #3F4552;
+  --color-text-3: #5D6473;
   /* 5:1 on white, so hints and notes in text-4 stay readable. */
   --color-text-4: #6B7079;
-  --color-success: #1E9E62;
-  --color-success-soft: #E8F7EF;
+  --color-success: #16A34A;
+  --color-success-soft: #E8F7EE;
   /* Success and warning text: the base colours are too light for words,
      especially on their soft backgrounds. Icons and dots keep the base. */
   --color-success-text: #137A4A;
-  --color-warning: #B86E00;
-  --color-warning-soft: #FFF6E5;
+  --color-warning: #C27803;
+  --color-warning-soft: #FFF4DB;
   --color-warning-text: #8A5200;
   --color-danger: #E02D26;
   --color-danger-soft: #FFF1F0;
-  --color-mask: rgba(15, 17, 20, 0.5);
+  /* Bento tile accents: scan blue, record violet; ink is the dark printer card. */
+  --color-info: #2F6BFF;
+  --color-info-soft: #EAF0FF;
+  /* Blue words on the soft blue fill: the base blue reaches only about 4.3:1 there. */
+  --color-info-text: #1E4FD0;
+  --color-violet: #6E56F8;
+  --color-violet-soft: #F0EDFF;
+  --color-ink: #1C1F26;
+  --color-gradient-primary: linear-gradient(155deg, #EE4237 0%, #D2231C 100%);
+  --color-mask: rgba(21, 23, 28, 0.5);
   /* The editor's canvas stage: a shade darker than --color-bg so the
      white label stands out. */
   --color-stage: #EEF0F3;
@@ -49,14 +58,14 @@ page {
   --space-6: 48rpx;
   --gutter: 32rpx;
   --radius-xs: 8rpx;
-  --radius-sm: 12rpx;
-  --radius-md: 16rpx;
-  --radius-lg: 24rpx;
-  --radius-xl: 32rpx;
+  --radius-sm: 20rpx;
+  --radius-md: 28rpx;
+  --radius-lg: 40rpx;
+  --radius-xl: 52rpx;
   --radius-full: 999rpx;
-  --shadow-card: 0 2rpx 8rpx rgba(31, 35, 41, 0.04);
-  --shadow-float: 0 12rpx 40rpx rgba(31, 35, 41, 0.12);
-  --shadow-primary: 0 8rpx 20rpx rgba(224, 45, 38, 0.28);
+  --shadow-card: 0 2rpx 4rpx rgba(21, 23, 28, 0.04), 0 8rpx 24rpx rgba(21, 23, 28, 0.05);
+  --shadow-float: 0 20rpx 60rpx rgba(21, 23, 28, 0.14);
+  --shadow-primary: 0 12rpx 28rpx rgba(224, 45, 38, 0.28);
 
   min-height: 100%;
   background: var(--color-bg);
@@ -128,7 +137,7 @@ button[disabled] {
 .danger-outline {
   min-height: 72rpx;
   padding: 0 32rpx;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -142,6 +151,8 @@ button[disabled] {
 .primary-small {
   color: #fff;
   background: var(--color-primary);
+  background-image: var(--color-gradient-primary);
+  box-shadow: var(--shadow-primary);
 }
 
 /* The built-in press and disabled styles are element-qualified, so these are
@@ -150,6 +161,7 @@ button.primary-button.button-hover,
 button.primary-small.button-hover {
   color: #fff;
   background: var(--color-primary-pressed);
+  background-image: none;
 }
 
 button.primary-button[disabled],
@@ -159,13 +171,13 @@ button.primary-small[disabled] {
 }
 
 .outline-button {
-  border: 1rpx solid var(--color-border);
+  border: 0;
   color: var(--color-text-1);
-  background: var(--color-surface);
+  background: var(--color-fill-strong);
 }
 
 button.outline-button.button-hover {
-  background: var(--color-fill);
+  background: var(--color-border);
 }
 
 /* Red words on the soft red fill use the pressed red: the brand red only
@@ -184,10 +196,17 @@ button.outline-button.button-hover {
   font-size: var(--font-caption);
 }
 
-.btn-l {
+.btn-m {
   min-height: 88rpx;
+  border-radius: var(--radius-md);
+}
+
+.btn-l {
+  min-height: 100rpx;
   padding: 0 40rpx;
+  border-radius: var(--radius-md);
   font-size: var(--font-subtitle);
+  font-weight: 700;
 }
 
 .primary-button .icon,
@@ -223,22 +242,25 @@ button.full-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-text-2);
-  background: var(--color-fill);
+  color: var(--color-text-1);
+  background: var(--color-surface);
+  box-shadow: 0 2rpx 4rpx rgba(21, 23, 28, 0.08);
   font-size: var(--font-caption);
   white-space: nowrap;
 }
 
 .chip.active {
-  border-color: var(--color-primary-line);
-  color: var(--color-primary-pressed);
-  background: var(--color-primary-soft);
-  font-weight: 600;
+  border-color: transparent;
+  color: #fff;
+  background: var(--color-text-1);
+  box-shadow: none;
+  font-weight: 700;
 }
 
 .card {
   border-radius: var(--radius-lg);
   background: var(--color-surface);
+  box-shadow: var(--shadow-card);
 }
 
 .picker-field {
