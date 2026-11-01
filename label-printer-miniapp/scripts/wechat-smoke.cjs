@@ -170,6 +170,15 @@ async function editText(page, value) {
   await element.trigger('blur', { value });
   await until(async () => (await page.data('selected.text')) === value, '文本更新');
 }
+// The editor keeps its elements on the page instance; only the name and size
+// reach page data, so read the label from the instance itself.
+async function editorElements() {
+  return mini.evaluate(() => {
+    const pages = getCurrentPages();
+    const editor = pages[pages.length - 1];
+    return editor && editor.document ? editor.document.elements.map((item) => ({ type: item.type, text: item.text })) : [];
+  });
+}
 async function canvasGeometry(page, stage) {
   const document = await page.data('document');
   const paper = await page.$('.paper-shell');
@@ -238,6 +247,13 @@ async function canvasScreenshot(stage, file) {
   }
 }
 
+// The automator SDK can reject a request long after our own timeout gave up on
+// it ("timeout waiting for automator response"). That late rejection has no
+// listener, so without this it would end the run before the report is saved.
+process.on('unhandledRejection', (error) => {
+  report.lateRejections = (report.lateRejections || []).concat(String(error && error.message || error));
+});
+
 (async () => {
   const watchdog = setTimeout(() => {
     report.status = 'failed';
@@ -253,7 +269,14 @@ async function canvasScreenshot(stage, file) {
     mini = await launch();
     mini.on('exception', (event) => report.exceptions.push(event));
     mini.on('console', (event) => { if (report.consoleEvents.length < 200) report.consoleEvents.push(event); });
-    report.system = await mini.systemInfo();
+    // A new project compiles from scratch: the first answers can take far longer
+    // than the SDK waits, so ask again until the simulator is up.
+    report.system = await until(async () => {
+      try { return await mini.systemInfo(); } catch (error) {
+        if (/timeout waiting for automator response/.test(error.message)) return null;
+        throw error;
+      }
+    }, '模拟器就绪', 90000);
     report.menuRect = await mini.evaluate(() => wx.getMenuButtonBoundingClientRect());
     assert.equal(report.system.SDKVersion, requestedLibrary);
     assert.equal(report.system.platform, 'devtools', '此脚本只可运行在专用模拟器项目');
@@ -272,17 +295,21 @@ async function canvasScreenshot(stage, file) {
     await check('首页导航与小屏布局', async () => {
       await fit(home, '.bottom-nav button', width);
       await fit(home, '.circle-button', width);
-      await fit(home, '.device-pill', width);
-      const brand = await home.$('.brand-row');
-      assert.ok((await brand.offset()).top >= report.menuRect.bottom, '品牌行与原生胶囊重叠');
-      assert.equal(await home.data('settings.stockWidthMm'), 40);
-      assert.equal(await home.data('settings.stockHeightMm'), 12);
+      await fit(home, '.printer-card', width);
+      // The greeting bar sits beside the capsule; its help button must end before it.
+      const help = await home.$('.home-bar .circle-button');
+      const helpSize = await help.size();
+      assert.ok((await help.offset()).left + helpSize.width <= report.menuRect.left, '帮助按钮与原生胶囊重叠');
+      const printer = await home.$('.printer-card');
+      assert.ok((await printer.offset()).top >= report.menuRect.bottom, '打印机卡片与原生胶囊重叠');
+      assert.equal(await home.data('settings.stockWidthMm'), 50);
+      assert.equal(await home.data('settings.stockHeightMm'), 30);
       await shot('02-home');
     });
     let editor;
     let projectId;
     await check('新建、Canvas、真实输入与保存', async () => {
-      await tap(home, '.create-nav');
+      await tap(home, '.bento-new');
       editor = await current('pkg-editor/pages/editor/index');
       await until(() => editor.data('canvasReady'), 'Canvas ready');
       assert.equal(await editor.data('loadError'), '');
@@ -290,7 +317,7 @@ async function canvasScreenshot(stage, file) {
       await editText(editor, '验收标签 A');
       await tap(editor, '.save-button');
       projectId = await until(() => editor.data('projectId'), '保存到项目');
-      assert.equal(await editor.data('saveState'), '已保存到标签');
+      assert.equal(await editor.data('saveState'), '已保存为标签');
       await canvasGeometry(editor, 'blank-saved');
       await fit(editor, '.header-main button', width);
       await fit(editor, '.save-button', width);
@@ -303,10 +330,10 @@ async function canvasScreenshot(stage, file) {
       home = await current('pages/home/index');
       assert.ok(await home.data('recoveryDraft'));
       await shot('04-draft-recovery');
-      await tap(home, '.draft-recovery .primary-button');
+      await tap(home, '.draft-bar .draft-go');
       editor = await current('pkg-editor/pages/editor/index');
       await until(() => editor.data('canvasReady'), '恢复 Canvas');
-      assert.equal((await editor.data('document.elements'))[0].text, '未保存的验收修改 B');
+      assert.equal((await editorElements())[0].text, '未保存的验收修改 B');
       assert.equal(await editor.data('projectId'), projectId);
       await tap(editor, '.save-button');
       await tap(editor, '.icon-button.close');
@@ -315,10 +342,10 @@ async function canvasScreenshot(stage, file) {
       assert.equal((await home.data('allProjects')).length, 1);
     });
     await check('保存重开、打印预检与原稿一致', async () => {
-      await tap(home, '.project-open');
+      await tap(home, '.recent-open');
       editor = await current('pkg-editor/pages/editor/index');
       await until(() => editor.data('canvasReady'), '重开 Canvas');
-      assert.equal((await editor.data('document.elements'))[0].text, '未保存的验收修改 B');
+      assert.equal((await editorElements())[0].text, '未保存的验收修改 B');
       await tap(editor, '.print-button');
       await until(() => editor.data('showPrintSheet'), '打开打印预检');
       assert.equal((await editor.data()).printBlock, null);
@@ -340,7 +367,7 @@ async function canvasScreenshot(stage, file) {
       await tap(home, '.preview-sheet .primary-button');
       editor = await current('pkg-editor/pages/editor/index');
       await until(() => editor.data('canvasReady'), '模板 Canvas');
-      assert.ok((await editor.data('document.elements')).length > 0);
+      assert.ok((await editorElements()).length > 0);
       await canvasGeometry(editor, 'template');
       await canvasScreenshot('template', await shot('07-template-editor'));
     });
