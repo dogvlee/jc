@@ -5,7 +5,7 @@ const { sweepOrphanImages } = require('../../../services/image-files');
 const { templates: catalogTemplates } = require('../../../app/catalog');
 const { assertBatchCompatible, buildBatchDocuments } = require('../../../app/data-bind');
 const { buildTemplateDocument } = require('../../../app/template-layouts');
-const { buildCuratedDocument, normalizeSearchText, queryCuratedMeta } = require('../../../app/curated');
+const { buildCuratedDocument, normalizeSearchText, queryCuratedMeta } = require('../../../app/curated/index');
 const {
   clampElement,
   cloneDocument,
