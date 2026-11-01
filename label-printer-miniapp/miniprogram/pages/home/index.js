@@ -929,6 +929,9 @@ Page({
     const industry = event.currentTarget.dataset.value;
     this.setData({
       templateIndustry: industry,
+      // A sub-category belongs to the tile it was picked on: 仓储 under 行业标识
+      // left 内容设计 opening on an empty shelf.
+      templateCategory: '全部',
       libraryScene: '全部',
       // Scene templates open on the user's paper size when there are some;
       // 全部 is one tap away.

@@ -1208,3 +1208,14 @@ test('a print history row shows two lines of the reason and opens the whole text
     delete global.wx;
   }
 });
+
+test('switching the template tile drops the sub-category picked on the previous tile', () => {
+  const { page } = storedHome();
+  page.refresh();
+  page.setTemplateIndustry(tap({ value: '行业标识' }));
+  page.setTemplateCategory(tap({ value: '仓储' }));
+  assert.equal(page.data.templateCategory, '仓储');
+  page.setTemplateIndustry(tap({ value: '内容设计' }));
+  assert.equal(page.data.templateCategory, '全部');
+  assert.ok(page.data.visibleTemplates.length > 0, '内容设计 must not open on an empty shelf');
+});
