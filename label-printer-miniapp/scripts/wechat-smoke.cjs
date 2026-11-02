@@ -358,9 +358,14 @@ process.on('unhandledRejection', (error) => {
     });
     await check('模板浏览、预览与进入编辑器', async () => {
       await tap(home, '.bottom-nav button[data-route="templates"]');
-      const heading = await until(() => home.$('.plain-header'), '模板页标题');
-      const importButton = await heading.$('button');
-      assert.ok((await importButton.offset()).top >= report.menuRect.bottom, '导入按钮与原生胶囊重叠');
+      // The title sits beside the capsule, centred on it; its buttons sit below it.
+      const heading = await until(() => home.$('.route-bar .route-title'), '模板页标题');
+      const headingBox = Object.assign({}, await heading.offset(), await heading.size());
+      const menu = report.menuRect;
+      assert.ok(headingBox.left + headingBox.width <= menu.left, '模板页标题与原生胶囊重叠');
+      assert.ok(Math.abs(headingBox.top + headingBox.height / 2 - (menu.top + menu.bottom) / 2) <= 6, '模板页标题没有和胶囊对齐');
+      const importButton = await home.$('.search-row .search-side');
+      assert.ok((await importButton.offset()).top >= menu.bottom, '导入按钮与原生胶囊重叠');
       await tap(home, '.library-card');
       await until(() => home.data('showTemplatePreview'), '打开模板预览');
       await shot('06-template-preview');

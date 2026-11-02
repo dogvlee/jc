@@ -97,11 +97,18 @@ function headerMetrics(api) {
   const areaTop = info.safeArea && info.safeArea.top;
   const safeTop = validTop(areaTop) ? Number(areaTop) : validTop(info.statusBarHeight) ? Number(info.statusBarHeight) : 24;
   let headerTop = safeTop + 44;
+  // The back button's 44px row, centred on the capsule like the home title bars.
+  let barTop = safeTop;
   try {
     const menu = typeof api.getMenuButtonBoundingClientRect === 'function' ? api.getMenuButtonBoundingClientRect() : null;
-    if (menu && validTop(menu.bottom)) headerTop = Math.max(safeTop + 12, Number(menu.bottom) + 12);
+    if (menu && validTop(menu.bottom)) {
+      headerTop = Math.max(safeTop + 12, Number(menu.bottom) + 12);
+      if (validTop(menu.top) && Number(menu.top) < Number(menu.bottom)) {
+        barTop = Math.round(Number(menu.top) + (Number(menu.bottom) - Number(menu.top)) / 2 - 22);
+      }
+    }
   } catch (_) { /* Reserve a navigation row when the capsule cannot be read. */ }
-  return { safeTop, headerTop };
+  return { safeTop, headerTop, barTop };
 }
 
 Page({
@@ -110,6 +117,7 @@ Page({
     version: AGREEMENT_VERSION,
     safeTop: 24,
     headerTop: 68,
+    barTop: 24,
     ...DOCUMENTS.privacy
   },
 

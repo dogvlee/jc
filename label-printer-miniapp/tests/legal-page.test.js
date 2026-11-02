@@ -98,6 +98,31 @@ test('legal header clears the capsule and survives missing or malformed platform
   assert.equal(page.data.headerTop, 68);
 });
 
+test('legal 返回 sits on the capsule row and stays clear of the capsule', (t) => {
+  const api = {
+    getWindowInfo: () => ({ safeArea: { top: 47 } }),
+    getMenuButtonBoundingClientRect: () => ({ top: 51, bottom: 83 })
+  };
+  const page = legalPage(t, api);
+  assert.equal(page.data.barTop, 45, 'the 44px row is centred on the capsule: 51 + 16 - 22');
+  assert.equal(page.data.headerTop, 95, 'the document starts under the capsule');
+  api.getMenuButtonBoundingClientRect = () => ({ bottom: 83 });
+  page.onResize();
+  assert.equal(page.data.barTop, 47, 'without the capsule top, the row sits under the status bar');
+  api.getMenuButtonBoundingClientRect = () => { throw new Error('not available'); };
+  page.onResize();
+  assert.equal(page.data.barTop, 47);
+  const markup = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'legal', 'index.wxml'), 'utf8');
+  assert.match(markup, /<view class="legal-header" style="top: \{\{barTop\}\}px;">/);
+  assert.match(markup, /<view class="legal-content" style="padding-top: \{\{headerTop\}\}px;">/);
+  const header = markup.slice(markup.indexOf('<view class="legal-header"'), markup.indexOf('<view class="legal-content"'));
+  assert.equal((header.match(/<button|<text class="legal-brand"/g) || []).length, 1, 'only 返回 in the row, nothing on the capsule side');
+  const style = fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'pages', 'legal', 'index.wxss'), 'utf8');
+  const rule = style.slice(style.indexOf('.legal-header {'), style.indexOf('}', style.indexOf('.legal-header {')));
+  assert.match(rule, /position: fixed;/);
+  assert.match(rule, /height: 44px;/);
+});
+
 test('both agreements describe account-only identity and retained local data without fabricated contacts', (t) => {
   const page = legalPage(t, {}, { type: 'privacy' });
   for (const type of ['privacy', 'terms']) {

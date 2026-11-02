@@ -1,10 +1,9 @@
 <view class="legal-page">
   <view class="legal-top-cover" style="height: {{headerTop - 12}}px;"></view>
-  <view class="legal-header" style="padding-top: {{headerTop}}px;">
+  <view class="legal-header" style="top: {{barTop}}px;">
     <button class="legal-back" bindtap="goBack" aria-label="返回上一页"><text class="icon icon-chevron-right legal-back-icon" aria-hidden="true"></text><text>返回</text></button>
-    <text class="legal-brand">商跃标签</text>
   </view>
-  <view class="legal-content">
+  <view class="legal-content" style="padding-top: {{headerTop}}px;">
     <view class="legal-intro">
       <text class="legal-title">{{title}}</text>
       <text class="legal-version">版本 {{version}}</text>

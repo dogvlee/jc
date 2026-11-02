@@ -640,7 +640,7 @@ test('the data route explains where CSV files come from and leads back to 我的
   const markup = readHome('index.wxml');
   const data = markup.slice(markup.indexOf("route == 'data'"), markup.indexOf("route == 'profile'"));
   assert.match(data, /先把 CSV 文件发到微信聊天（如文件传输助手），再点「导入 CSV」/);
-  assert.match(data, /class="back-button" data-route="profile" bindtap="navigate"/);
+  assert.match(data, /class="circle-button back-button" data-route="profile" bindtap="navigate"/);
   assert.equal((data.match(/bindinput="onDataCellInput" bindblur="updateDataCell"/g) || []).length, 4);
   const page = homePage();
   page.data.route = 'data';

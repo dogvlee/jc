@@ -57,11 +57,11 @@ Figma 变量名 = CSS 变量去掉 `--`，第一个 `-` 改为 `/`（`--color-te
 | Button（Primary / Secondary / Danger / Text × Large / Medium / Small） | `.primary-button` `.outline-button` `.danger-button` `.text-button` + `.btn-l` `.btn-s` |
 | Icon Button（Plain / Soft / Glass） | `.icon-button`、`.close-button` / `.sheet-close`、`.circle-button` |
 | Chip / Tab（选中变深色） | `.chip.active`、`.filter-tab`、`.panel-tabs button` |
-| Search Field / Picker Field | `.search-box` / `.picker-field` |
+| Search Field / Picker Field | `.search-box`（和「导入」「新建」同在一行 `.search-row`）/ `.picker-field` |
 | Segmented Control / Switch Row / Stepper / Field Tile | `.segment-row` / `.switch-row` / `.stepper` / `.field-grid label` |
 | Template Card / Project Card / Recent Card | `.template-card` / `.project-card` / `.recent-card` |
 | List Cell / Section Header / Empty State / Bento Tile | `.menu-section button` / `.section-heading` / `.friendly-empty` / `.tile`、`.bento-new` |
-| Tab Bar / Home Bar / Page Header / Printer Card | `.bottom-nav`（悬浮四项）/ `.home-bar` / `.plain-header` / `.printer-card`（`on` `wait` `off`） |
+| Tab Bar / Home Bar / Page Header / Printer Card | `.bottom-nav`（悬浮四项）/ `.home-bar` / `.route-bar`（标题和胶囊同一行；批量数据用 `.route-bar.sub`）+ `.route-intro`（副标题）/ `.printer-card`（`on` `wait` `off`） |
 | Editor Header / Floating Pills / Style Bar / Tool Tile / Action Bar | `.editor-header` / `.stage-pills`（撤销重做；打印机、图层、设置）/ `.style-bar`（加粗、字号加减、对齐、复制、删除）/ `.tool-button` / `.editor-actions` |
 | Sheet Header / Save Status / Notice Card / Preset Tile / Onboarding Card | `.sheet-heading` / `.save-status`（顶部栏里）/ `.warning-card`、`.error-card`、`.print-ok` / `.preset-grid button` / `.onboarding-card` |
 
@@ -83,7 +83,7 @@ Figma 变量名 = CSS 变量去掉 `--`，第一个 `-` 改为 `/`（`--color-te
 - 开发者工具会把 2D Canvas 画在弹层之上。编辑器在任一弹层打开时给 `.paper-shell` 加 `under-sheet`，把画布平移出屏幕（不能用 `display:none`，否则 `initCanvas` 量到 0×0）；基础库 2.32.x 的开发者工具不跟随平移，弹层仍能正常盖住画布，只是遮罩不压暗画布。
 - 素材库内置矢量素材暂无缩略图（53 个素材由 Canvas 指令绘制，没有 SVG 源），列表显示统一占位图标。
 - 编辑器返回按钮和悬浮胶囊的点击区都是 88rpx（44px）；检查面板里的小按钮仍是 72rpx，需要在真机可用性测试中确认。
-- 方案 B 的页面标题在 Figma 里和胶囊同一行；代码里只有首页的问候栏这样放，其余页面的标题仍在胶囊下面（这样更稳，测试也固定了这个位置）。
+- 每个页面的标题都和胶囊在同一行：首页是问候栏 `.home-bar`；模板、标签、我的是大标题 `.route-bar`；批量数据是返回 + 两行小标题（`.route-bar.sub`，和编辑器顶部一样）；协议页和登录页是「‹ 返回」。这一行固定不动，右边按胶囊位置留空（`capsuleInset`），所以这一行不放其他按钮：「导入」「新建」在搜索框旁边，「添加行」在 CSV 工具栏里。副标题在胶囊下面，随页面滑走。测试在 `tests/route-title-bars.test.js`，开发者工具验收会量模板页标题是否和胶囊对齐。
 - 「最近标签」卡片右下角的小打印机按钮（`.recent-print`）= 再打一张：打开那张已保存的标签并直接弹出打印窗口（份数 1，点「开始打印」才出纸）。入口是 `reprintProject`，编辑器靠 URL 参数 `print=1` 识别。
 - 模板库一级分类是图标方块（`.cat-tile`，选中变红色实心）；行业分类的图标和底色在首页数据 `industryIcons` / `industryTones`，新分类没配时用灰色标签图标。
 - 编辑器检查面板：「位置与尺寸」四个数字框排在最上面；矮屏手机（高度 ≤ 700px）用 CSS `order` 让内容字段仍在第一屏，位置、旋转与样式排在后面。

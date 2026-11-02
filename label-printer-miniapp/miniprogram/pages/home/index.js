@@ -431,6 +431,8 @@ Page({
     headerTop: 68,
     // Top of the fixed greeting bar: level with the WeChat capsule.
     heroTop: 18,
+    // Room the route title bars leave on the right for the capsule (px).
+    capsuleInset: 102,
     greeting: '你好',
     connected: false,
     connectionLabel: '未连接',
@@ -531,6 +533,8 @@ Page({
     // Put the whole header below the native capsule, preserving its full width.
     let headerTop = safeTop + 44;
     let heroTop = safeTop - 6;
+    // A standard capsule is 87 px wide and 7 px from the edge; keep 8 px clear.
+    let capsuleInset = 102;
     try {
       const menu = wx.getMenuButtonBoundingClientRect && wx.getMenuButtonBoundingClientRect();
       const menuBottom = Number(menu && menu.bottom);
@@ -540,6 +544,11 @@ Page({
         // The 44px bar is centred on the capsule.
         heroTop = Number.isFinite(menuTop) && menuTop > 0 ? menuTop + (menuBottom - menuTop) / 2 - 22 : headerTop - 56;
       }
+      const menuLeft = Number(menu && menu.left);
+      const windowWidth = Number(info.windowWidth);
+      if (Number.isFinite(menuLeft) && Number.isFinite(windowWidth) && menuLeft > 0 && menuLeft < windowWidth) {
+        capsuleInset = Math.ceil(windowWidth - menuLeft + 8);
+      }
     } catch (error) {
       // Older clients can throw here; reserve a navigation row below the status bar.
     }
@@ -548,7 +557,7 @@ Page({
     this.authService = app && app.globalData && app.globalData.authService || null;
     this.bindAuthState();
     this.editorSession = new EditorSession(this.repository);
-    this.setData({ safeTop, headerTop, heroTop, greeting: greetingText(new Date()) });
+    this.setData({ safeTop, headerTop, heroTop, capsuleInset, greeting: greetingText(new Date()) });
     this.enableSharing();
     this.bindConnectionState();
     this.refresh();

@@ -127,12 +127,10 @@
   </block>
 
   <block wx:if="{{route == 'templates'}}">
-    <view class="plain-header" style="padding-top: {{headerTop}}px;">
-      <view class="header-copy"><text class="plain-title">{{templateIndustry == '场景模板' ? '场景模板' : templateIndustry == '我的' ? '我的模板' : '商跃模板'}}</text><text class="plain-subtitle">{{templateIndustry == '场景模板' ? libraryTotal + ' 套商跃原创，按行业和纸张挑选，改字即可打印' : templateIndustry == '我的' ? '你保存或导入的模板' : '商跃原创模板和我的模板'}}</text></view>
-      <button class="outline-button btn-s" bindtap="importTemplateFile"><text class="icon icon-file-input" aria-hidden="true"></text>导入模板</button>
-    </view>
+    <view class="route-bar" style="top: {{heroTop}}px; padding-right: {{capsuleInset}}px;"><text class="route-title">{{templateIndustry == '场景模板' ? '场景模板' : templateIndustry == '我的' ? '我的模板' : '商跃模板'}}</text></view>
+    <view class="route-intro" style="padding-top: {{headerTop - 8}}px;"><text class="plain-subtitle">{{templateIndustry == '场景模板' ? libraryTotal + ' 套商跃原创，按行业和纸张挑选，改字即可打印' : templateIndustry == '我的' ? '你保存或导入的模板' : '商跃原创模板和我的模板'}}</text></view>
     <view class="page-toolbar">
-      <view class="search-box"><text class="icon icon-search" aria-hidden="true"></text><input value="{{templateQuery}}" bindinput="onTemplateSearch" placeholder="搜名称、用途或尺寸，如 40x30" placeholder-class="search-placeholder" confirm-type="search" /><button wx:if="{{templateQuery}}" class="search-clear" bindtap="clearTemplateSearch" aria-label="清除搜索"><text class="icon icon-x" aria-hidden="true"></text></button></view>
+      <view class="search-row"><view class="search-box"><text class="icon icon-search" aria-hidden="true"></text><input value="{{templateQuery}}" bindinput="onTemplateSearch" placeholder="搜名称、用途或尺寸，如 40x30" placeholder-class="search-placeholder" confirm-type="search" /><button wx:if="{{templateQuery}}" class="search-clear" bindtap="clearTemplateSearch" aria-label="清除搜索"><text class="icon icon-x" aria-hidden="true"></text></button></view><button class="outline-button search-side" bindtap="importTemplateFile" aria-label="导入模板"><text class="icon icon-file-input" aria-hidden="true"></text>导入</button></view>
       <scroll-view class="filter-scroll tab-scroll" scroll-x="true" enhanced="true" show-scrollbar="{{false}}">
         <view class="filter-row tab-row">
           <button class="cat-tile tone-amber {{templateIndustry == '全部' ? 'active' : ''}}" data-value="全部" bindtap="setTemplateIndustry" aria-role="tab" aria-selected="{{templateIndustry == '全部'}}"><view class="cat-icon"><text class="icon icon-layout-grid" aria-hidden="true"></text></view><text class="cat-label">全部</text></button>
@@ -183,7 +181,8 @@
       </view>
       <view wx:elif="{{templateIndustry == '我的' && !userTemplateCount && !templateQuery}}" class="friendly-empty card">
         <view class="glyph-badge neutral"><text class="icon icon-layout-grid" aria-hidden="true"></text></view>
-        <text class="empty-title">还没有我的模板</text><text class="muted">在编辑器「模板」里点「将当前标签保存为模板」，或点右上角「导入模板」</text>
+        <text class="empty-title">还没有我的模板</text><text class="muted">在编辑器「模板」里点「将当前标签保存为模板」，或导入别人发给你的模板文件</text>
+        <view class="empty-actions"><button class="outline-button btn-m" bindtap="importTemplateFile"><text class="icon icon-file-input" aria-hidden="true"></text>导入模板</button></view>
       </view>
       <view wx:else class="friendly-empty card">
         <view class="glyph-badge neutral"><text class="icon icon-search-x" aria-hidden="true"></text></view>
@@ -203,8 +202,9 @@
   </block>
 
   <block wx:if="{{route == 'projects'}}">
-    <view class="plain-header" style="padding-top: {{headerTop}}px;"><view class="header-copy"><text class="plain-title">我的标签</text><text class="plain-subtitle">{{projectQuery ? '找到 ' + allProjects.length + ' 个，共 ' + projectTotal + ' 个标签' : '共 ' + projectTotal + ' 个标签'}}</text></view><button class="primary-small" bindtap="createBlank"><text class="icon icon-plus" aria-hidden="true"></text>新建</button></view>
-    <view class="page-toolbar"><view class="search-box"><text class="icon icon-search" aria-hidden="true"></text><input value="{{projectQuery}}" bindinput="onProjectSearch" placeholder="搜索标签名称" placeholder-class="search-placeholder" /></view></view>
+    <view class="route-bar" style="top: {{heroTop}}px; padding-right: {{capsuleInset}}px;"><text class="route-title">我的标签</text></view>
+    <view class="route-intro" style="padding-top: {{headerTop - 8}}px;"><text class="plain-subtitle">{{projectQuery ? '找到 ' + allProjects.length + ' 个，共 ' + projectTotal + ' 个标签' : '共 ' + projectTotal + ' 个标签'}}</text></view>
+    <view class="page-toolbar"><view class="search-row"><view class="search-box"><text class="icon icon-search" aria-hidden="true"></text><input value="{{projectQuery}}" bindinput="onProjectSearch" placeholder="搜索标签名称" placeholder-class="search-placeholder" /></view><button class="primary-small search-side" bindtap="createBlank"><text class="icon icon-plus" aria-hidden="true"></text>新建</button></view></view>
     <view class="route-content">
       <view wx:if="{{damagedRecords}}" class="damage-notice card" role="alert">
         <text class="icon icon-triangle-alert" aria-hidden="true"></text>
@@ -238,12 +238,9 @@
   </block>
 
   <block wx:if="{{route == 'data'}}">
-    <view class="plain-header" style="padding-top: {{headerTop}}px;">
-      <view class="header-lead"><button class="back-button" data-route="profile" bindtap="navigate" aria-label="返回我的"><text class="icon icon-chevron-right back-icon" aria-hidden="true"></text></button><view class="header-copy"><text class="plain-title">批量数据</text><text class="plain-subtitle">填好表格，每一行打印一张标签</text></view></view>
-      <button class="outline-button btn-s" bindtap="addDataRow"><text class="icon icon-plus" aria-hidden="true"></text>添加行</button>
-    </view>
-    <view class="route-content data-content">
-      <view class="data-toolbar"><button class="outline-button btn-s" bindtap="importCsv"><text class="icon icon-file-input" aria-hidden="true"></text>导入 CSV</button><button class="outline-button btn-s" bindtap="exportCsv"><text class="icon icon-upload" aria-hidden="true"></text>导出 CSV</button></view>
+    <view class="route-bar sub" style="top: {{heroTop}}px; padding-right: {{capsuleInset}}px;"><button class="circle-button back-button" data-route="profile" bindtap="navigate" aria-label="返回我的"><text class="icon icon-chevron-left" aria-hidden="true"></text></button><view class="route-copy"><text class="route-name">批量数据</text><text class="route-note">填好表格，每一行打印一张标签</text></view></view>
+    <view class="route-content data-content" style="padding-top: {{headerTop}}px;">
+      <view class="data-toolbar"><button class="outline-button btn-s" bindtap="importCsv"><text class="icon icon-file-input" aria-hidden="true"></text>导入 CSV</button><button class="outline-button btn-s" bindtap="exportCsv"><text class="icon icon-upload" aria-hidden="true"></text>导出 CSV</button><button class="outline-button btn-s" bindtap="addDataRow"><text class="icon icon-plus" aria-hidden="true"></text>添加行</button></view>
       <text class="data-hint">先把 CSV 文件发到微信聊天（如文件传输助手），再点「导入 CSV」</text>
       <view wx:if="{{dataSaveFailed}}" class="save-failed card" role="alert"><text class="icon icon-triangle-alert" aria-hidden="true"></text><text class="damage-copy">有修改还没保存，手机存储可能满了</text><button class="outline-button btn-s" bindtap="retryDataSave">重试</button></view>
       <scroll-view wx:if="{{dataRows.length}}" class="data-table-scroll" scroll-x="true" scroll-y="true" enhanced show-scrollbar="{{false}}" scroll-into-view="{{dataScrollIntoView}}" bindscroll="onDataTableScroll">
@@ -273,6 +270,7 @@
   </block>
 
   <block wx:if="{{route == 'profile'}}">
+    <view class="route-bar" style="top: {{heroTop}}px; padding-right: {{capsuleInset}}px;"><text class="route-title">我的</text></view>
     <view class="profile-hero" style="padding-top: {{headerTop}}px;"><view class="profile-card card">
       <view class="avatar">商</view>
       <view class="profile-copy"><view class="profile-title-row"><text class="plain-title">{{authStatus == 'authenticated' ? '商跃用户' : '登录商跃标签'}}</text></view><text class="plain-subtitle">{{authStatus == 'authenticated' ? accountPhone : (authStatus == 'restoring' ? '正在确认登录状态…' : '登录后查看账号，标签仍保存在本机')}}</text></view>

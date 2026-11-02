@@ -24,11 +24,17 @@
   box-sizing: border-box;
 }
 
+/* 返回 sits beside the WeChat capsule and stays there while the document
+   scrolls under the top cover. Only the left of the row is used, so the
+   capsule never covers it. */
 .legal-header {
+  position: fixed;
+  z-index: 11;
+  right: 0;
+  left: 0;
+  height: 44px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
 }
 
 button.legal-back {
@@ -49,11 +55,6 @@ button.legal-back {
 .legal-back-icon {
   transform: rotate(180deg);
   font-size: var(--font-subtitle);
-}
-
-.legal-brand {
-  color: var(--color-text-3);
-  font-size: var(--font-caption);
 }
 
 .legal-intro {

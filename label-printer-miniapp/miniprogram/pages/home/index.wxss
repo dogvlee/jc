@@ -970,46 +970,71 @@ button.project-delete.button-hover {
   min-height: 560rpx;
 }
 
-/* Secondary route header and toolbar */
-.plain-header {
+/* Route bars: like the home greeting, a page's title sits beside the WeChat
+   capsule and stays there while the page scrolls under the top cover. The
+   inline padding-right ends the bar before the capsule, so nothing in it can
+   be covered; a page's buttons live in its toolbar instead. */
+.route-bar {
+  position: fixed;
+  z-index: 31;
+  left: 0;
+  right: 0;
+  height: 44px;
   padding-left: var(--gutter);
-  padding-right: var(--gutter);
-  padding-bottom: 24rpx;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 24rpx;
-  background: var(--color-bg);
+  gap: 20rpx;
 }
 
-.header-copy {
+.route-title {
   min-width: 0;
-}
-
-.header-lead {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-}
-
-/* Back to 我的: the data route is entered from there and is not a page of
-   its own, so the system back gesture would leave the mini program. */
-button.back-button {
-  width: 64rpx;
-  height: 64rpx;
-  flex: none;
-  margin-left: -16rpx;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  overflow: hidden;
   color: var(--color-text-1);
-  font-size: 40rpx;
+  font-size: 52rpx;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-.back-icon {
-  transform: rotate(180deg);
+/* Batch data is a page inside 我的: back plus a two-line title, like the
+   editor header. The back button is the home bar's help plate (.circle-button):
+   the data route is not a page of its own, so the system back gesture would
+   leave the mini program. */
+.route-bar.sub {
+  padding-left: 24rpx;
+}
+
+.route-copy {
+  min-width: 0;
+}
+
+.route-name,
+.route-note {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.route-name {
+  color: var(--color-text-1);
+  font-size: 32rpx;
+  font-weight: 700;
+  line-height: 44rpx;
+}
+
+.route-note {
+  color: var(--color-text-3);
+  font-size: var(--font-caption);
+  line-height: 32rpx;
+}
+
+/* A tab page's subtitle, just under the capsule row. */
+.route-intro {
+  padding: 0 var(--gutter) var(--space-3);
+  background: var(--color-bg);
 }
 
 .plain-title {
@@ -1050,6 +1075,36 @@ button.back-button {
   height: 100%;
   color: var(--color-text-1);
   font-size: var(--font-body);
+}
+
+/* The search field and its page's one action (导入 / 新建) share a row. */
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.search-row .search-box {
+  flex: 1;
+  min-width: 0;
+}
+
+button.search-side {
+  min-height: 88rpx;
+  padding: 0 28rpx;
+  flex: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-body);
+}
+
+/* 导入 matches the white field beside it. */
+button.search-side.outline-button {
+  background: var(--color-surface);
+  box-shadow: 0 2rpx 4rpx rgba(21, 23, 28, 0.05);
+}
+
+button.search-side.outline-button.button-hover {
+  background: var(--color-fill-strong);
 }
 
 .search-placeholder {
@@ -1322,6 +1377,7 @@ button.back-top {
 
 /* Batch data */
 .data-toolbar {
+  flex-wrap: wrap;
   gap: 16rpx;
 }
 
@@ -2116,7 +2172,7 @@ button.history-action {
   .home-content,
   .route-content,
   .brand-row,
-  .plain-header,
+  .route-intro,
   .page-toolbar,
   .profile-hero {
     max-width: 980rpx;
